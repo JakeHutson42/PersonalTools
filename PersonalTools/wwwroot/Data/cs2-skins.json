@@ -1,0 +1,23 @@
+[
+  {
+    "name": "AK-47 | Redline",
+    "weapon": "AK-47",
+    "exterior": "Field-Tested",
+    "marketHashName": "AK-47 | Redline (Field-Tested)",
+    "image": "https://community.cloudflare.steamstatic.com/economy/image/class/730/3604679973"
+  },
+  {
+    "name": "AWP | Asiimov",
+    "weapon": "AWP",
+    "exterior": "Field-Tested",
+    "marketHashName": "AWP | Asiimov (Field-Tested)",
+    "image": "https://community.cloudflare.steamstatic.com/economy/image/class/730/3604680002"
+  },
+  {
+    "name": "M4A1-S | Printstream",
+    "weapon": "M4A1-S",
+    "exterior": "Factory New",
+    "marketHashName": "M4A1-S | Printstream (Factory New)",
+    "image": ""
+  }
+]

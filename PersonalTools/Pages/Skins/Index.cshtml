@@ -1,0 +1,628 @@
+﻿@page
+@model PersonalTools.Pages.Skins.IndexModel
+@using System.Text.Encodings.Web
+@{
+    ViewData["Title"] = "CS2 Skin Tracker";
+
+    string successMessage = TempData["SuccessMessage"]?.ToString() ?? string.Empty;
+    string errorMessage = TempData["ErrorMessage"]?.ToString() ?? Model.ErrorMessage;
+}
+
+<div class="container px-3 px-lg-4">
+    <div class="row align-items-start gy-3 section-spacing">
+        <div class="col-12 col-lg">
+            <h1 class="page-title">CS2 Skin Tracker</h1>
+            <p class="page-subtitle">
+                Track skins, purchase prices, current prices and notes.
+            </p>
+        </div>
+
+        <div class="col-12 col-lg-auto">
+            <div class="d-flex flex-column flex-sm-row gap-2">
+                <form method="get" class="d-flex gap-2">
+                    <select name="SortBy" class="form-select">
+                        <option value="currentPrice" selected="@(Model.SortBy == "currentPrice")">Current price</option>
+                        <option value="purchasePrice" selected="@(Model.SortBy == "purchasePrice")">Purchase price</option>
+                        <option value="name" selected="@(Model.SortBy == "name")">Alphabetical</option>
+                    </select>
+
+                    <select name="SortDirection" class="form-select">
+                        @if (Model.SortBy == "name")
+                        {
+                            <option value="asc" selected="@(Model.SortDirection == "asc")">A-Z</option>
+                            <option value="desc" selected="@(Model.SortDirection == "desc")">Z-A</option>
+                        }
+                        else
+                        {
+                            <option value="desc" selected="@(Model.SortDirection == "desc")">Highest first</option>
+                            <option value="asc" selected="@(Model.SortDirection == "asc")">Lowest first</option>
+                        }
+                    </select>
+
+                    <button class="btn btn-outline-primary" type="submit">
+                        Sort
+                    </button>
+                </form>
+
+                <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addSkinModal">
+                    <i class="fa-solid fa-plus me-1"></i>Add skin
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (Model.Skins.Any())
+    {
+        string profitClass = Model.TotalProfitLoss > 0 ? "text-success" : Model.TotalProfitLoss < 0 ? "text-danger" : "text-warning";
+
+        <div class="row g-3 g-lg-4 section-spacing">
+            <div class="col-12 col-md-4">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body p-3">
+                        <p class="small-muted mb-1">Total Purchase</p>
+                        <p class="h5 mb-0 fw-semibold">
+                            £@Model.TotalPurchaseValue.ToString("0.00")
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body p-3">
+                        <p class="small-muted mb-1">Total Current</p>
+                        <p class="h5 mb-0 fw-semibold">
+                            £@Model.TotalCurrentValue.ToString("0.00")
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body p-3">
+                        <p class="small-muted mb-1">Profit / Loss</p>
+                        <p class="h5 mb-0 fw-semibold @profitClass">
+                            £@Model.TotalProfitLoss.ToString("0.00")
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="alert alert-success shadow-sm border-0 section-spacing">
+            @successMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger shadow-sm border-0 section-spacing">
+            @errorMessage
+        </div>
+    }
+
+    @if (Model.Skins.Any())
+    {
+        <div class="card shadow-sm border-0 section-spacing">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                    <div>
+                        <h2 class="h5 fw-semibold mb-1">Portfolio analytics</h2>
+                        <p class="small-muted mb-0">Purchase value vs current value by skin.</p>
+                    </div>
+                </div>
+
+                <div class="chart-wrap">
+                    <canvas id="skinValueChart"></canvas>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.Skins.Any())
+    {
+        <div class="row g-3 g-lg-4">
+            @foreach (var skin in Model.Skins)
+            {
+                decimal? profit = skin.CurrentPrice.HasValue ? skin.CurrentPrice.Value - skin.PurchasePrice : null;
+
+                <div class="col-12 col-md-6 col-xl-4">
+                    <div class="card tool-card h-100 shadow-sm">
+                        <div class="card-body p-4 d-flex flex-column">
+
+                            @{
+                                string displayImage = !string.IsNullOrWhiteSpace(skin.ImagePath) ? skin.ImagePath : skin.ExternalImageUrl;
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(displayImage))
+                            {
+                                <div class="skin-image-wrap mb-3">
+                                    <img src="@displayImage"
+                                         alt="@skin.Name"
+                                         class="skin-card-image" />
+
+                                    @if (!string.IsNullOrWhiteSpace(skin.ImagePath))
+                                    {
+                                        <button class="btn btn-sm btn-danger skin-image-delete-btn js-delete-skin-image"
+                                                type="button"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#deleteSkinImageModal"
+                                                data-skin-id="@skin.SkinId"
+                                                data-name="@skin.Name">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="skin-card-image skin-card-image-placeholder mb-3">
+                                    <i class="fa-solid fa-image"></i>
+                                </div>
+                            }
+
+                            <form method="post"
+      asp-page-handler="UploadImage"
+      enctype="multipart/form-data"
+      class="mb-3">
+    <input type="hidden" name="skinId" value="@skin.SkinId" />
+
+    <div class="input-group input-group-sm">
+        <input name="image"
+               class="form-control"
+               type="file"
+               accept=".jpg,.jpeg,.png,.webp" />
+
+        <button class="btn btn-outline-primary" type="submit">
+            Upload
+        </button>
+    </div>
+</form>
+
+                            <div class="d-flex justify-content-between gap-3 align-items-start mb-2">
+                                <div>
+                                    <h2 class="h5 fw-semibold mb-1">@skin.Name</h2>
+                                    <p class="small-muted mb-0">@skin.Weapon - @skin.Exterior</p>
+                                </div>
+
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-outline-primary js-edit-skin"
+                                            type="button"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editSkinModal"
+                                            data-skin-id="@skin.SkinId"
+                                            data-name="@skin.Name"
+                                            data-weapon="@skin.Weapon"
+                                            data-exterior="@skin.Exterior"
+                                            data-market-hash-name="@skin.MarketHashName"
+                                            data-external-image-url="@skin.ExternalImageUrl"
+                                            data-purchase-price="@skin.PurchasePrice"
+                                            data-current-price="@skin.CurrentPrice"
+                                            data-purchase-date="@(skin.PurchaseDate?.ToString("yyyy-MM-dd") ?? string.Empty)"
+                                            data-notes="@skin.Notes"
+                                            data-image-path="@skin.ImagePath">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+
+                                    <button class="btn btn-sm btn-outline-danger js-delete-skin"
+                                            type="button"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#deleteSkinModal"
+                                            data-skin-id="@skin.SkinId"
+                                            data-name="@skin.Name">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <dl class="row small mb-3">
+                                <dt class="col-6">Purchase</dt>
+                                <dd class="col-6 text-end">£@skin.PurchasePrice.ToString("0.00")</dd>
+
+                                <dt class="col-6">Current</dt>
+                                <dd class="col-6 text-end">
+                                    @(skin.CurrentPrice.HasValue ? $"£{skin.CurrentPrice.Value:0.00}" : "-")
+                                </dd>
+
+                                <dt class="col-6">Profit/Loss</dt>
+                                @{
+                                    string profitClass = profit.HasValue ? profit.Value > 0 ? "text-success" : profit.Value < 0 ? "text-danger" : "text-warning" : "";
+                                }
+
+                                <dd class="col-6 text-end fw-semibold @profitClass">
+                                    @(profit.HasValue ? $"£{profit.Value:0.00}" : "-")
+                                </dd>
+
+                                <dt class="col-6">Bought</dt>
+                                <dd class="col-6 text-end">
+                                    @(skin.PurchaseDate.HasValue? skin.PurchaseDate.Value.ToString("dd MMM yyyy") : "-")
+                                </dd>
+                            </dl>
+
+                            @if (!string.IsNullOrWhiteSpace(skin.Notes))
+                            {
+                                <p class="small-muted mb-0 note-body">@skin.Notes</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <p class="mb-0 small-muted">
+                    No skins added yet. Click <strong>Add skin</strong> to create your first tracker entry.
+                </p>
+            </div>
+        </div>
+    }
+</div>
+
+@* Add Modal *@
+<div class="modal fade" id="addSkinModal" tabindex="-1" aria-labelledby="addSkinModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" asp-page-handler="Create" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h2 class="modal-title h5" id="addSkinModalLabel">Add skin</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="addSkinSelect" class="form-label">Skin</label>
+                            <select id="addSkinSelect" class="form-select js-skin-select"></select>
+
+                            <input type="hidden" asp-for="Skin.Name" id="addSkinName" />
+                            <input type="hidden" asp-for="Skin.Weapon" id="addSkinWeapon" />
+                            <input type="hidden" asp-for="Skin.Exterior" id="addSkinExterior" />
+                            <input type="hidden" asp-for="Skin.MarketHashName" id="addMarketHashName" />
+                            <input type="hidden" asp-for="Skin.ExternalImageUrl" id="addExternalImageUrl" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label asp-for="Skin.PurchasePrice" class="form-label">Purchase price</label>
+                            <input asp-for="Skin.PurchasePrice" class="form-control" type="number" step="0.01" min="0" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label asp-for="Skin.CurrentPrice" class="form-label">Current price</label>
+                            <input asp-for="Skin.CurrentPrice" class="form-control" type="number" step="0.01" min="0" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label asp-for="Skin.PurchaseDate" class="form-label">Purchase date</label>
+                            <input asp-for="Skin.PurchaseDate" class="form-control" type="date" />
+                        </div>
+
+
+                        <div class="col-12">
+                            <label asp-for="Skin.Notes" class="form-label">Notes</label>
+                            <textarea asp-for="Skin.Notes" class="form-control" rows="4"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-primary" type="submit">Save skin</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@* Edit Modal *@
+<div class="modal fade" id="editSkinModal" tabindex="-1" aria-labelledby="editSkinModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" asp-page-handler="Edit" enctype="multipart/form-data">
+                <input type="hidden" asp-for="Skin.SkinId" id="editSkinId" />
+                <input type="hidden" asp-for="ExistingImagePath" id="editExistingImagePath" />
+
+                <div class="modal-header">
+                    <h2 class="modal-title h5" id="editSkinModalLabel">Edit skin</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="editSkinSelect" class="form-label">Skin</label>
+                            <select id="editSkinSelect" class="form-select js-skin-select"></select>
+
+                            <input type="hidden" asp-for="Skin.Name" id="editSkinName" />
+                            <input type="hidden" asp-for="Skin.Weapon" id="editSkinWeapon" />
+                            <input type="hidden" asp-for="Skin.Exterior" id="editSkinExterior" />
+                            <input type="hidden" asp-for="Skin.MarketHashName" id="editMarketHashName" />
+                            <input type="hidden" asp-for="Skin.ExternalImageUrl" id="editExternalImageUrl" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label for="editSkinPurchasePrice" class="form-label">Purchase price</label>
+                            <input asp-for="Skin.PurchasePrice" id="editSkinPurchasePrice" class="form-control" type="number" step="0.01" min="0" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label for="editSkinCurrentPrice" class="form-label">Current price</label>
+                            <input asp-for="Skin.CurrentPrice" id="editSkinCurrentPrice" class="form-control" type="number" step="0.01" min="0" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label for="editSkinPurchaseDate" class="form-label">Purchase date</label>
+                            <input asp-for="Skin.PurchaseDate" id="editSkinPurchaseDate" class="form-control" type="date" />
+                        </div
+
+                        <div class="col-12">
+                            <label for="editSkinNotes" class="form-label">Notes</label>
+                            <textarea asp-for="Skin.Notes" id="editSkinNotes" class="form-control" rows="4"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-primary" type="submit">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteSkinModal" tabindex="-1" aria-labelledby="deleteSkinModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" asp-page-handler="Delete">
+                <input type="hidden" name="skinId" id="deleteSkinId" />
+
+                <div class="modal-header">
+                    <h2 class="modal-title h5" id="deleteSkinModalLabel">Delete skin</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <p class="mb-1">Are you sure you want to delete this skin?</p>
+                    <p class="fw-semibold mb-0" id="deleteSkinName"></p>
+                    <p class="small-muted mt-3 mb-0">This action cannot be undone.</p>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-danger" type="submit">Delete skin</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteSkinImageModal" tabindex="-1" aria-labelledby="deleteSkinImageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" asp-page-handler="DeleteImage">
+                <input type="hidden" asp-for="DeleteImageSkinId" id="deleteImageSkinId" />
+
+                <div class="modal-header">
+                    <h2 class="modal-title h5" id="deleteSkinImageModalLabel">Delete image</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <p class="mb-1">Are you sure you want to delete this image?</p>
+                    <p class="fw-semibold mb-0" id="deleteImageSkinName"></p>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-danger" type="submit">Delete image</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            let cs2Skins = [];
+            let skinValueChart = null;
+
+            function loadCs2Skins(callback) {
+                if (cs2Skins.length > 0) {
+                    callback();
+                    return;
+                }
+
+                $.getJSON('/data/cs2-skins.json')
+                    .done(function (skins) {
+                        cs2Skins = skins || [];
+                        callback();
+                    })
+                    .fail(function () {
+                        console.error('Could not load CS2 skin data.');
+                        callback();
+                    });
+            }
+
+            function buildSelectData() {
+                return $.map(cs2Skins, function (skin) {
+                    return {
+                        id: skin.marketHashName,
+                        text: skin.marketHashName,
+                        skin: skin
+                    };
+                });
+            }
+
+            function initSkinSelect($select, $modal, placeholder) {
+                loadCs2Skins(function () {
+                    if ($select.hasClass('select2-hidden-accessible')) {
+                        return;
+                    }
+
+                    $select.select2({
+                        width: '100%',
+                        dropdownParent: $modal,
+                        placeholder: placeholder,
+                        allowClear: true,
+                        data: buildSelectData()
+                    });
+                });
+            }
+
+            function setAddSkinFields(skin) {
+                $('#addSkinName').val(skin ? skin.name : '');
+                $('#addSkinWeapon').val(skin ? skin.weapon : '');
+                $('#addSkinExterior').val(skin ? skin.exterior : '');
+                $('#addMarketHashName').val(skin ? skin.marketHashName : '');
+                $('#addExternalImageUrl').val(skin ? skin.image : '');
+            }
+
+            function setEditSkinFields(skin) {
+                $('#editSkinName').val(skin ? skin.name : '');
+                $('#editSkinWeapon').val(skin ? skin.weapon : '');
+                $('#editSkinExterior').val(skin ? skin.exterior : '');
+                $('#editMarketHashName').val(skin ? skin.marketHashName : '');
+                $('#editExternalImageUrl').val(skin ? skin.image : '');
+            }
+
+            $('#addSkinModal').on('shown.bs.modal', function () {
+                initSkinSelect($('#addSkinSelect'), $('#addSkinModal'), 'Search for a CS2 skin...');
+            });
+
+            $('#editSkinModal').on('shown.bs.modal', function () {
+                initSkinSelect($('#editSkinSelect'), $('#editSkinModal'), 'Search for a CS2 skin...');
+            });
+
+            $('#addSkinSelect').on('select2:select', function (e) {
+                setAddSkinFields(e.params.data.skin);
+            });
+
+            $('#addSkinSelect').on('select2:clear', function () {
+                setAddSkinFields(null);
+            });
+
+            $('#editSkinSelect').on('select2:select', function (e) {
+                setEditSkinFields(e.params.data.skin);
+            });
+
+            $('#editSkinSelect').on('select2:clear', function () {
+                setEditSkinFields(null);
+            });
+
+            $(document).on('click', '.js-edit-skin', function () {
+                const marketHashName = $(this).data('market-hash-name');
+
+                $('#editSkinId').val($(this).data('skin-id'));
+                $('#editSkinName').val($(this).data('name'));
+                $('#editSkinWeapon').val($(this).data('weapon'));
+                $('#editSkinExterior').val($(this).data('exterior'));
+                $('#editMarketHashName').val(marketHashName);
+                $('#editExternalImageUrl').val($(this).data('external-image-url'));
+                $('#editSkinPurchasePrice').val($(this).data('purchase-price'));
+                $('#editSkinCurrentPrice').val($(this).data('current-price'));
+                $('#editSkinPurchaseDate').val($(this).data('purchase-date'));
+                $('#editSkinNotes').val($(this).data('notes'));
+                $('#editExistingImagePath').val($(this).data('image-path'));
+
+                loadCs2Skins(function () {
+                    initSkinSelect($('#editSkinSelect'), $('#editSkinModal'), 'Search for a CS2 skin...');
+
+                    const $editSelect = $('#editSkinSelect');
+
+                    if (marketHashName && $editSelect.find("option[value='" + marketHashName.replace(/'/g, "\\'") + "']").length === 0) {
+                        const option = new Option(marketHashName, marketHashName, true, true);
+                        $editSelect.append(option);
+                    }
+
+                    $editSelect.val(marketHashName).trigger('change');
+                });
+            });
+
+            $(document).on('click', '.js-delete-skin', function () {
+                $('#deleteSkinId').val($(this).data('skin-id'));
+                $('#deleteSkinName').text($(this).data('name'));
+            });
+
+            $(document).on('click', '.js-delete-skin-image', function () {
+                $('#deleteImageSkinId').val($(this).data('skin-id'));
+                $('#deleteImageSkinName').text($(this).data('name'));
+            });
+
+            function buildSkinChart() {
+                const chartEl = document.getElementById('skinValueChart');
+
+                if (!chartEl) {
+                    return;
+                }
+
+                const labels = [
+                    @foreach (var skin in Model.Skins)
+                    {
+                            <text>'@JavaScriptEncoder.Default.Encode(!string.IsNullOrWhiteSpace(skin.MarketHashName) ? skin.MarketHashName : skin.Name)',</text>
+                    }
+                ];
+
+                const purchaseValues = [
+                    @foreach (var skin in Model.Skins)
+                    {
+                            <text>@skin.PurchasePrice,</text>
+                    }
+                ];
+
+                const currentValues = [
+                    @foreach (var skin in Model.Skins)
+                    {
+                            <text>@(skin.CurrentPrice ?? skin.PurchasePrice),</text>
+                    }
+                ];
+
+                if (skinValueChart) {
+                    skinValueChart.destroy();
+                }
+
+                skinValueChart = new Chart(chartEl, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Purchase value',
+                                data: purchaseValues
+                            },
+                            {
+                                label: 'Current value',
+                                data: currentValues
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+
+            buildSkinChart();
+        });
+    </script>
+}

@@ -1,0 +1,225 @@
+﻿@page
+@model PersonalTools.Pages.Notes.IndexModel
+@{
+    ViewData["Title"] = "Notes";
+
+    string successMessage = TempData["SuccessMessage"]?.ToString() ?? Model.SuccessMessage;
+}
+
+<div class="container px-3 px-lg-4">
+    <div class="row align-items-start gy-3 section-spacing">
+        <div class="col-12 col-lg">
+            <h1 class="page-title">Notes</h1>
+            <p class="page-subtitle">
+                Add simple blog-style notes and store them locally in a JSON file.
+            </p>
+        </div>
+
+        <div class="col-12 col-lg-auto">
+            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addNoteModal">
+                <i class="fa-solid fa-plus me-1"></i>Add note
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="alert alert-success shadow-sm border-0 section-spacing">
+            @successMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger shadow-sm border-0 section-spacing">
+            @Model.ErrorMessage
+        </div>
+    }
+
+    @if (Model.Notes.Any())
+    {
+        <div class="row g-3 g-lg-4">
+            @foreach (var note in Model.Notes)
+            {
+                <div class="col-12 col-md-6 col-xl-4">
+                    <div class="card tool-card h-100 shadow-sm">
+                        <div class="card-body p-4 d-flex flex-column">
+                            <div class="d-flex justify-content-between gap-3 align-items-start mb-2">
+                                <h2 class="h5 fw-semibold mb-0">@note.Title</h2>
+
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-outline-primary js-edit-note"
+                                            type="button"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editNoteModal"
+                                            data-note-id="@note.NoteId"
+                                            data-note-title="@note.Title"
+                                            data-note-body="@note.Body">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+
+                                    <button class="btn btn-sm btn-outline-danger js-delete-note"
+                                            type="button"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#deleteNoteModal"
+                                            data-note-id="@note.NoteId"
+                                            data-note-title="@note.Title">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <p class="small-muted mb-3">
+                                Updated @note.Updated.ToString("dd MMM yyyy HH:mm")
+                            </p>
+
+                            <p class="mb-0 flex-grow-1 note-body">
+                                @note.Body
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <p class="mb-0 small-muted">
+                    No notes yet. Click <strong>Add note</strong> to create your first one.
+                </p>
+            </div>
+        </div>
+    }
+</div>
+
+@* Add Modal *@
+<div class="modal fade" id="addNoteModal" tabindex="-1" aria-labelledby="addNoteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" asp-page-handler="Create">
+                <div class="modal-header">
+                    <h2 class="modal-title h5" id="addNoteModalLabel">Add note</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label asp-for="Title" class="form-label">Title</label>
+                        <input asp-for="Title" class="form-control" placeholder="Example: Skin prices to check" />
+                    </div>
+
+                    <div class="mb-0">
+                        <label asp-for="Body" class="form-label">Note</label>
+                        <textarea asp-for="Body" class="form-control" rows="6" placeholder="Write your note here..."></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button class="btn btn-primary" type="submit">
+                        Save note
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+@* Edit Modal *@
+<div class="modal fade" id="editNoteModal" tabindex="-1" aria-labelledby="editNoteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" asp-page-handler="Edit">
+                <input type="hidden" asp-for="NoteId" id="editNoteId" />
+
+                <div class="modal-header">
+                    <h2 class="modal-title h5" id="editNoteModalLabel">Edit note</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="editTitle" class="form-label">Title</label>
+                        <input asp-for="Title" id="editTitle" class="form-control" />
+                    </div>
+
+                    <div class="mb-0">
+                        <label for="editBody" class="form-label">Note</label>
+                        <textarea asp-for="Body" id="editBody" class="form-control" rows="6"></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button class="btn btn-primary" type="submit">
+                        Save changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+@* Delete Modal *@
+<div class="modal fade" id="deleteNoteModal" tabindex="-1" aria-labelledby="deleteNoteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="post" asp-page-handler="Delete">
+                <input type="hidden" name="noteId" id="deleteNoteId" />
+
+                <div class="modal-header">
+                    <h2 class="modal-title h5" id="deleteNoteModalLabel">Delete note</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <p class="mb-1">Are you sure you want to delete this note?</p>
+                    <p class="fw-semibold mb-0" id="deleteNoteTitle"></p>
+                    <p class="small-muted mt-3 mb-0">
+                        This action cannot be undone.
+                    </p>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button class="btn btn-danger" type="submit">
+                        Delete note
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+@section Scripts {
+    <script>
+        $(document).on('click', '.js-edit-note', function () {
+            const noteId = $(this).data('note-id');
+            const noteTitle = $(this).data('note-title');
+            const noteBody = $(this).data('note-body');
+
+            $('#editNoteId').val(noteId);
+            $('#editTitle').val(noteTitle);
+            $('#editBody').val(noteBody);
+        });
+
+        $(document).on('click', '.js-delete-note', function () {
+            const noteId = $(this).data('note-id');
+            const noteTitle = $(this).data('note-title');
+
+            $('#deleteNoteId').val(noteId);
+            $('#deleteNoteTitle').text(noteTitle);
+        });
+    </script>
+}

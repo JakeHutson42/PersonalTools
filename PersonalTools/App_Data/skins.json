@@ -1,0 +1,32 @@
+[
+  {
+    "SkinId": "eff65911-7e47-41f4-b0b6-03841ebfe1c9",
+    "Name": "AWP | Asiimov",
+    "Weapon": "AWP",
+    "Exterior": "Field-Tested",
+    "MarketHashName": "AWP | Asiimov (Field-Tested)",
+    "ExternalImageUrl": "https://community.cloudflare.steamstatic.com/economy/image/class/730/3604680002",
+    "PurchasePrice": 0,
+    "CurrentPrice": null,
+    "PurchaseDate": null,
+    "Notes": "",
+    "ImagePath": "",
+    "Created": "2026-05-02T23:32:23.827052+01:00",
+    "Updated": "2026-05-02T23:32:23.8276316+01:00"
+  },
+  {
+    "SkinId": "0f72ba68-a26f-4983-9bcc-35ccdbde3ba0",
+    "Name": "M4A1-S | Printstream",
+    "Weapon": "M4A1-S",
+    "Exterior": "Factory New",
+    "MarketHashName": "M4A1-S | Printstream (Factory New)",
+    "ExternalImageUrl": "",
+    "PurchasePrice": 122.98,
+    "CurrentPrice": 321,
+    "PurchaseDate": "1945-11-22T00:00:00",
+    "Notes": "test note",
+    "ImagePath": "",
+    "Created": "2026-05-02T23:38:05.0822486+01:00",
+    "Updated": "2026-05-02T23:38:05.0822553+01:00"
+  }
+]

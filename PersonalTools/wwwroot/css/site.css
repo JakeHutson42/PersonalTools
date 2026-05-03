@@ -1,0 +1,134 @@
+:root {
+    --app-primary: #1f2937;
+    --app-primary-dark: #111827;
+    --app-bg: #f3f4f6;
+    --app-card-border: #e5e7eb;
+    --app-muted: #6b7280;
+}
+
+html, body {
+    min-height: 100%;
+}
+
+body {
+    background: var(--app-bg);
+    color: #111827;
+}
+
+.app-navbar {
+    background: linear-gradient(135deg, var(--app-primary), var(--app-primary-dark));
+}
+
+.app-main {
+    min-height: calc(100vh - 130px);
+    padding: 2rem 0;
+}
+
+.app-footer {
+    padding: 1rem 0;
+    color: var(--app-muted);
+    font-size: 0.9rem;
+}
+
+.page-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.page-subtitle {
+    color: var(--app-muted);
+    margin-bottom: 0;
+}
+
+.section-spacing {
+    margin-bottom: 1.5rem;
+}
+
+.tool-card {
+    border: 1px solid var(--app-card-border);
+    border-radius: 1rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+    .tool-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.08);
+    }
+
+.tool-card-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #eef2ff;
+    color: #3730a3;
+    font-size: 1.25rem;
+}
+
+.small-muted {
+    color: var(--app-muted);
+    font-size: 0.9rem;
+}
+
+.note-body {
+    white-space: pre-wrap;
+}
+
+.skin-card-image {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 0.85rem;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+}
+
+.skin-card-image-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+    font-size: 2rem;
+}
+
+.skin-image-wrap {
+    position: relative;
+}
+
+.skin-image-delete-btn {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+}
+
+.skin-image-wrap {
+    position: relative;
+}
+
+.skin-image-delete-btn {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+}
+
+.chart-wrap {
+    position: relative;
+    height: 360px;
+}
+
+.select2-container--default .select2-selection--single {
+    height: 38px;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+}
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 36px;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 36px;
+    }
