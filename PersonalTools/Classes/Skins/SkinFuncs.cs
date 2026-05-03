@@ -1,4 +1,5 @@
 ﻿using PersonalTools.Data.Local;
+using PersonalTools.Data.Skins;
 using PersonalTools.Entities.Skins;
 
 namespace PersonalTools.Classes.Skins
@@ -9,6 +10,7 @@ namespace PersonalTools.Classes.Skins
         Task CreateSkin(SkinObj skin);
         Task UpdateSkin(SkinObj skin);
         Task DeleteSkin(string skinId);
+        Task<int> RefreshCs2SkinData();
     }
 
     public class SkinFuncs : ISkinFuncs
@@ -16,10 +18,12 @@ namespace PersonalTools.Classes.Skins
         private const string FileName = "skins.json";
 
         private readonly ILocalJsonData _localJsonData;
+        private readonly ICs2SkinData _cs2SkinData;
 
-        public SkinFuncs(ILocalJsonData localJsonData)
+        public SkinFuncs(ILocalJsonData localJsonData, ICs2SkinData cs2SkinData)
         {
             _localJsonData = localJsonData;
+            _cs2SkinData = cs2SkinData;
         }
 
         public async Task<List<SkinObj>> GetSkins()
@@ -43,7 +47,6 @@ namespace PersonalTools.Classes.Skins
             skin.MarketHashName = skin.MarketHashName?.Trim() ?? string.Empty;
             skin.ExternalImageUrl = skin.ExternalImageUrl?.Trim() ?? string.Empty;
             skin.Notes = skin.Notes?.Trim() ?? string.Empty;
-            skin.ImagePath = skin.ImagePath?.Trim() ?? string.Empty;
 
             skin.Created = DateTime.Now;
             skin.Updated = DateTime.Now;
@@ -73,7 +76,6 @@ namespace PersonalTools.Classes.Skins
             existingSkin.CurrentPrice = skin.CurrentPrice;
             existingSkin.PurchaseDate = skin.PurchaseDate;
             existingSkin.Notes = skin.Notes?.Trim() ?? string.Empty;
-            existingSkin.ImagePath = skin.ImagePath?.Trim() ?? string.Empty;
             existingSkin.Updated = DateTime.Now;
 
             await _localJsonData.SaveList(FileName, skins);
@@ -93,6 +95,28 @@ namespace PersonalTools.Classes.Skins
             skins.Remove(skin);
 
             await _localJsonData.SaveList(FileName, skins);
+        }
+
+        public async Task<int> RefreshCs2SkinData()
+        {
+            List<Cs2ApiSkinObj> apiSkins = await _cs2SkinData.GetApiSkins();
+
+            List<Cs2LocalSkinObj> localSkins = apiSkins
+                .Where(x => !string.IsNullOrWhiteSpace(x.MarketHashName))
+                .Select(x => new Cs2LocalSkinObj
+                {
+                    Name = x.Name,
+                    Weapon = x.Weapon?.Name ?? string.Empty,
+                    Exterior = x.Wear?.Name ?? string.Empty,
+                    MarketHashName = x.MarketHashName,
+                    Image = x.Image
+                })
+                .OrderBy(x => x.MarketHashName)
+                .ToList();
+
+            await _cs2SkinData.SaveLocalSkins(localSkins);
+
+            return localSkins.Count;
         }
     }
 }

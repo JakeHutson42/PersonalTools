@@ -44,6 +44,12 @@
                     </button>
                 </form>
 
+                <form method="post" asp-page-handler="RefreshSkinData">
+                    <button class="btn btn-outline-secondary" type="submit">
+                        <i class="fa-solid fa-rotate me-1"></i>Refresh skin data
+                    </button>
+                </form>
+
                 <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addSkinModal">
                     <i class="fa-solid fa-plus me-1"></i>Add skin
                 </button>
@@ -134,29 +140,11 @@
                     <div class="card tool-card h-100 shadow-sm">
                         <div class="card-body p-4 d-flex flex-column">
 
-                            @{
-                                string displayImage = !string.IsNullOrWhiteSpace(skin.ImagePath) ? skin.ImagePath : skin.ExternalImageUrl;
-                            }
-
-                            @if (!string.IsNullOrWhiteSpace(displayImage))
+                            @if (!string.IsNullOrWhiteSpace(skin.ExternalImageUrl))
                             {
-                                <div class="skin-image-wrap mb-3">
-                                    <img src="@displayImage"
-                                         alt="@skin.Name"
-                                         class="skin-card-image" />
-
-                                    @if (!string.IsNullOrWhiteSpace(skin.ImagePath))
-                                    {
-                                        <button class="btn btn-sm btn-danger skin-image-delete-btn js-delete-skin-image"
-                                                type="button"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#deleteSkinImageModal"
-                                                data-skin-id="@skin.SkinId"
-                                                data-name="@skin.Name">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                    }
-                                </div>
+                                <img src="@skin.ExternalImageUrl"
+                                     alt="@skin.Name"
+                                     class="skin-card-image mb-3" />
                             }
                             else
                             {
@@ -164,25 +152,7 @@
                                     <i class="fa-solid fa-image"></i>
                                 </div>
                             }
-
-                            <form method="post"
-      asp-page-handler="UploadImage"
-      enctype="multipart/form-data"
-      class="mb-3">
-    <input type="hidden" name="skinId" value="@skin.SkinId" />
-
-    <div class="input-group input-group-sm">
-        <input name="image"
-               class="form-control"
-               type="file"
-               accept=".jpg,.jpeg,.png,.webp" />
-
-        <button class="btn btn-outline-primary" type="submit">
-            Upload
-        </button>
-    </div>
-</form>
-
+                            
                             <div class="d-flex justify-content-between gap-3 align-items-start mb-2">
                                 <div>
                                     <h2 class="h5 fw-semibold mb-1">@skin.Name</h2>
@@ -203,8 +173,7 @@
                                             data-purchase-price="@skin.PurchasePrice"
                                             data-current-price="@skin.CurrentPrice"
                                             data-purchase-date="@(skin.PurchaseDate?.ToString("yyyy-MM-dd") ?? string.Empty)"
-                                            data-notes="@skin.Notes"
-                                            data-image-path="@skin.ImagePath">
+                                            data-notes="@skin.Notes">
                                         <i class="fa-solid fa-pen"></i>
                                     </button>
 
@@ -271,7 +240,7 @@
 <div class="modal fade" id="addSkinModal" tabindex="-1" aria-labelledby="addSkinModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content border-0 shadow">
-            <form method="post" asp-page-handler="Create" enctype="multipart/form-data">
+            <form method="post" asp-page-handler="Create">
                 <div class="modal-header">
                     <h2 class="modal-title h5" id="addSkinModalLabel">Add skin</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -326,9 +295,8 @@
 <div class="modal fade" id="editSkinModal" tabindex="-1" aria-labelledby="editSkinModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content border-0 shadow">
-            <form method="post" asp-page-handler="Edit" enctype="multipart/form-data">
+            <form method="post" asp-page-handler="Edit">
                 <input type="hidden" asp-for="Skin.SkinId" id="editSkinId" />
-                <input type="hidden" asp-for="ExistingImagePath" id="editExistingImagePath" />
 
                 <div class="modal-header">
                     <h2 class="modal-title h5" id="editSkinModalLabel">Edit skin</h2>
@@ -361,7 +329,7 @@
                         <div class="col-12 col-md-4">
                             <label for="editSkinPurchaseDate" class="form-label">Purchase date</label>
                             <input asp-for="Skin.PurchaseDate" id="editSkinPurchaseDate" class="form-control" type="date" />
-                        </div
+                        </div>
 
                         <div class="col-12">
                             <label for="editSkinNotes" class="form-label">Notes</label>
@@ -405,30 +373,6 @@
     </div>
 </div>
 
-<div class="modal fade" id="deleteSkinImageModal" tabindex="-1" aria-labelledby="deleteSkinImageModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <form method="post" asp-page-handler="DeleteImage">
-                <input type="hidden" asp-for="DeleteImageSkinId" id="deleteImageSkinId" />
-
-                <div class="modal-header">
-                    <h2 class="modal-title h5" id="deleteSkinImageModalLabel">Delete image</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-
-                <div class="modal-body">
-                    <p class="mb-1">Are you sure you want to delete this image?</p>
-                    <p class="fw-semibold mb-0" id="deleteImageSkinName"></p>
-                </div>
-
-                <div class="modal-footer">
-                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
-                    <button class="btn btn-danger" type="submit">Delete image</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 
 @section Scripts {
     <script>
@@ -453,15 +397,27 @@
                     });
             }
 
-            function buildSelectData() {
-                return $.map(cs2Skins, function (skin) {
-                    return {
-                        id: skin.marketHashName,
-                        text: skin.marketHashName,
-                        skin: skin
-                    };
-                });
-            }
+                    function buildSelectData() {
+            return $.map(cs2Skins, function (skin) {
+                const marketHashName = skin.MarketHashName || skin.marketHashName || '';
+
+                if (!marketHashName) {
+                    return null;
+                }
+
+                return {
+                    id: marketHashName,
+                    text: marketHashName,
+                    skin: {
+                        Name: skin.Name || skin.name || '',
+                        Weapon: skin.Weapon || skin.weapon || '',
+                        Exterior: skin.Exterior || skin.exterior || '',
+                        MarketHashName: marketHashName,
+                        Image: skin.Image || skin.image || ''
+                    }
+                };
+            });
+        }
 
             function initSkinSelect($select, $modal, placeholder) {
                 loadCs2Skins(function () {
@@ -479,21 +435,21 @@
                 });
             }
 
-            function setAddSkinFields(skin) {
-                $('#addSkinName').val(skin ? skin.name : '');
-                $('#addSkinWeapon').val(skin ? skin.weapon : '');
-                $('#addSkinExterior').val(skin ? skin.exterior : '');
-                $('#addMarketHashName').val(skin ? skin.marketHashName : '');
-                $('#addExternalImageUrl').val(skin ? skin.image : '');
-            }
+                    function setAddSkinFields(skin) {
+            $('#addSkinName').val(skin ? skin.Name || '' : '');
+            $('#addSkinWeapon').val(skin ? skin.Weapon || '' : '');
+            $('#addSkinExterior').val(skin ? skin.Exterior || '' : '');
+            $('#addMarketHashName').val(skin ? skin.MarketHashName || '' : '');
+            $('#addExternalImageUrl').val(skin ? skin.Image || '' : '');
+        }
 
-            function setEditSkinFields(skin) {
-                $('#editSkinName').val(skin ? skin.name : '');
-                $('#editSkinWeapon').val(skin ? skin.weapon : '');
-                $('#editSkinExterior').val(skin ? skin.exterior : '');
-                $('#editMarketHashName').val(skin ? skin.marketHashName : '');
-                $('#editExternalImageUrl').val(skin ? skin.image : '');
-            }
+        function setEditSkinFields(skin) {
+            $('#editSkinName').val(skin ? skin.Name || '' : '');
+            $('#editSkinWeapon').val(skin ? skin.Weapon || '' : '');
+            $('#editSkinExterior').val(skin ? skin.Exterior || '' : '');
+            $('#editMarketHashName').val(skin ? skin.MarketHashName || '' : '');
+            $('#editExternalImageUrl').val(skin ? skin.Image || '' : '');
+        }
 
             $('#addSkinModal').on('shown.bs.modal', function () {
                 initSkinSelect($('#addSkinSelect'), $('#addSkinModal'), 'Search for a CS2 skin...');
@@ -532,7 +488,6 @@
                 $('#editSkinCurrentPrice').val($(this).data('current-price'));
                 $('#editSkinPurchaseDate').val($(this).data('purchase-date'));
                 $('#editSkinNotes').val($(this).data('notes'));
-                $('#editExistingImagePath').val($(this).data('image-path'));
 
                 loadCs2Skins(function () {
                     initSkinSelect($('#editSkinSelect'), $('#editSkinModal'), 'Search for a CS2 skin...');
@@ -551,11 +506,6 @@
             $(document).on('click', '.js-delete-skin', function () {
                 $('#deleteSkinId').val($(this).data('skin-id'));
                 $('#deleteSkinName').text($(this).data('name'));
-            });
-
-            $(document).on('click', '.js-delete-skin-image', function () {
-                $('#deleteImageSkinId').val($(this).data('skin-id'));
-                $('#deleteImageSkinName').text($(this).data('name'));
             });
 
             function buildSkinChart() {

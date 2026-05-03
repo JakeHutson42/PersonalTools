@@ -16,7 +16,6 @@
         public DateTime? PurchaseDate { get; set; }
 
         public string Notes { get; set; } = string.Empty;
-        public string ImagePath { get; set; } = string.Empty;
 
         public DateTime Created { get; set; }
         public DateTime Updated { get; set; }
