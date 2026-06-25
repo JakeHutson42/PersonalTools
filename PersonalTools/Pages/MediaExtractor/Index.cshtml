@@ -1,0 +1,477 @@
+﻿@page
+@model PersonalTools.Pages.MediaExtractor.IndexModel
+
+@{
+    ViewData["Title"] = "Media Extractor";
+}
+
+<div class="container px-3 px-lg-4">
+
+    <div class="row align-items-start gy-3 section-spacing">
+        <div class="col-12 col-lg">
+            <h1 class="page-title">Media Extractor</h1>
+
+            <p class="page-subtitle">
+                Paste page source and extract images and videos.
+            </p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 section-spacing">
+        <div class="card-body p-4">
+
+            <form method="post" asp-page-handler="Parse">
+
+                <div class="mb-3">
+
+                    <label class="form-label">Page Source</label>
+
+                    <textarea asp-for="SourceCode"
+                              id="sourceCodeBox"
+                              class="form-control"
+                              rows="12"
+                              placeholder="Paste page source here..."></textarea>
+
+                    <div class="mt-2">
+                    </div>
+
+                </div>
+                <div class="justify-content-between">
+
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            id="btnClearSource">
+                        Clear
+                    </button>
+
+                    <button class="btn btn-primary">
+                        <i class="fa-solid fa-magnifying-glass me-1"></i>
+                        Parse Media
+                    </button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+    @if (Model.MediaItems?.Any() == true)
+    {
+        <div class="d-flex align-items-center justify-content-between mb-3">
+
+            <div class="d-flex align-items-center">
+                <h2 class="h5 mb-0">Results</h2>
+
+                <span class="badge bg-primary ms-2">
+                    @Model.MediaItems.Count
+                </span>
+            </div>
+
+            <div class="d-flex gap-2">
+
+                <button type="button" class="btn btn-outline-primary btnSelectAll">
+                    Select All
+                </button>
+
+                <button type="button" class="btn btn-outline-secondary btnSelectNone">
+                    Clear
+                </button>
+
+                <button type="button" class="btn btn-success btnDownloadZip">
+                    Download ZIP
+                </button>
+
+                <select class="form-select w-auto filterType">
+                    <option value="all">All</option>
+                    <option value="Image">Images</option>
+                    <option value="Video">Videos</option>
+                </select>
+
+            </div>
+
+        </div>
+
+        @foreach (var item in Model.MediaItems)
+        {
+            <div class="card tool-card shadow-sm mb-3 media-card position-relative">
+
+                <div class="card-body p-4">
+
+                    <div class="form-check position-absolute" style="top:10px;right:10px;">
+                        <input class="form-check-input media-check"
+                               type="checkbox"
+                               data-id="@item.Id"
+                               data-url="@item.Url"
+                               data-type="@item.Type" />
+                    </div>
+
+                    <div class="row align-items-center">
+
+                        <div class="col-auto">
+
+                            @if (item.Type == "Image")
+                            {
+                                <img src="@item.Url"
+                                     loading="lazy"
+                                     class="rounded border media-thumb"
+                                     style="width:150px;height:100px;object-fit:cover;">
+                            }
+                            else
+                            {
+                                <div class="video-thumb-wrapper border rounded d-flex align-items-center justify-content-center"
+                                     data-url="@item.Url"
+                                     style="width:150px;height:100px">
+
+                                    <i class="fa-solid fa-film fa-3x text-secondary"></i>
+
+                                </div>
+                            }
+
+                        </div>
+
+                        <div class="col">
+
+                            <h5 class="mb-2">@item.Name</h5>
+
+                            <div class="small-muted">
+                                <div class="mb-1">
+                                    Type <span class="badge bg-primary">@item.Type</span>
+                                </div>
+                                <div>Size: @item.SizeFormatted</div>
+
+                                @if (item.Type == "Image" && item.Width > 0)
+                                {
+                                    <div>Dimensions: @item.Width x @item.Height</div>
+                                }
+
+                                @if (item.Type == "Video" && item.DurationSeconds > 0)
+                                {
+                                    <div>Duration: @item.DurationFormatted</div>
+                                }
+                            </div>
+
+                            <div class="mt-3 d-flex gap-2">
+
+
+                                <!-- direct download button -->
+                                <a href="?handler=DownloadFile&url=@Uri.EscapeDataString(item.Url)"
+                                   class="btn btn-success">
+                                    Download
+                                </a>
+
+                                <!-- preview -->
+                                <button type="button"
+                                        class="btn btn-outline-secondary btnView"
+                                        data-url="@item.Url"
+                                        data-type="@item.Type">
+                                    Preview
+                                </button>
+
+                                <!-- open original -->
+                                <a href="@item.Url"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="btn btn-outline-secondary">
+                                    <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>
+                                    Open Original
+                                </a>
+
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="media-viewer mt-4" style="display:none"></div>
+
+                </div>
+
+            </div>
+        }
+    }
+    else
+    {
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <p class="mb-0 small-muted">No media found yet.</p>
+            </div>
+        </div>
+    }
+
+</div>
+
+@section Scripts {
+
+    <script>
+        $(function () {
+            let activeViewer = null;
+
+            function closeAllViewers() {
+                $(".media-viewer").slideUp().html("");
+
+                if (activeViewer && typeof activeViewer.destroy === "function")
+                    activeViewer.destroy();
+
+                activeViewer = null;
+            }
+
+            function handleImageLoad(img, viewer) {
+
+                let card = viewer.closest(".media-card");
+
+                card.find(".small-muted").append(
+                    `<div>Dimensions: ${img.naturalWidth} x ${img.naturalHeight}</div>`
+                );
+            }
+
+            $(document).on("click", ".btnDownloadServer", function () {
+
+                let url = $(this).data("url");
+
+                window.location.href = `?handler=DownloadFile&url=${encodeURIComponent(url)}`;
+            });
+
+            $(document).on("click", "#btnClearSource", function () {
+
+                if (!$("#sourceCodeBox").val().trim()) return;
+
+                $("#sourceCodeBox").val("");
+
+            });
+
+            $(document).on("click", ".btnView", function () {
+
+                let card = $(this).closest(".media-card");
+                let viewer = card.find(".media-viewer");
+
+                let url = $(this).data("url");
+                let type = $(this).data("type");
+
+                closeAllViewers();
+
+                if (viewer.is(":visible")) {
+                    viewer.slideUp().html("");
+                    return;
+                }
+
+                if (type === "Image") {
+
+                    viewer.html(`
+                        <div class="text-center">
+                            <img src="${url}"
+                                 class="img-fluid rounded viewer-image"
+                                 style="max-height:700px;">
+                        </div>
+                    `);
+
+                    viewer.slideDown(() => {
+
+                        let image = viewer.find("img")[0];
+
+                        activeViewer = new Viewer(image, {
+                            navbar: false,
+                            toolbar: true,
+                            title: false
+                        });
+
+                        image.onload = function () {
+                            handleImageLoad(this, viewer);
+                        };
+
+                        if (image.complete)
+                            handleImageLoad(image, viewer);
+
+                    });
+                }
+
+                else if (type === "Video") {
+
+                    let videoId = "vid_" + Date.now();
+
+                    viewer.html(`
+                        <video id="${videoId}"
+                               class="video-js vjs-big-play-centered w-100"
+                               controls
+                               preload="auto">
+
+                            <source src="${url}" type="video/mp4">
+                        </video>
+                    `);
+
+                    viewer.slideDown(() => {
+
+                        let video = document.getElementById(videoId);
+
+                        videojs(videoId, {
+                            controls: true,
+                            autoplay: false,
+                            preload: "auto"
+                        });
+
+                        video.addEventListener("loadedmetadata", function () {
+
+                            let mins = Math.floor(video.duration / 60);
+                            let secs = Math.floor(video.duration % 60);
+
+                            let formatted = `${mins}:${secs.toString().padStart(2, "0")}`;
+
+                            let card = viewer.closest(".media-card");
+
+                            card.find(".small-muted").append(
+                                `<div>Duration: ${formatted}</div>`
+                            );
+                        });
+                    });
+                }
+
+            });
+
+            function getSelectedItems() {
+
+                let items = [];
+
+                $(".media-check:checked").each(function () {
+
+                    items.push({
+                        id: $(this).data("id"),
+                        url: $(this).data("url"),
+                        type: $(this).data("type")
+                    });
+
+                });
+
+                return items;
+            }
+
+            $(document).on("click", ".btnSelectAll", () => $(".media-check").prop("checked", true));
+            $(document).on("click", ".btnSelectNone", () => $(".media-check").prop("checked", false));
+
+            $(document).on("change", ".filterType", function () {
+
+                let val = $(this).val();
+
+                $(".media-card").each(function () {
+
+                    let type = $(this).find(".media-check").data("type");
+
+                    $(this).toggle(val === "all" || val === type);
+                });
+            });
+
+            $(document).on("click", ".btnDownloadZip", function () {
+
+                let urls = getSelectedItems().map(x => x.url);
+
+                if (!urls.length) {
+                    alert("No items selected");
+                    return;
+                }
+
+                fetch("?handler=DownloadZip", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(urls)
+                })
+                .then(r => r.blob())
+                .then(blob => {
+
+                    let link = document.createElement("a");
+                    link.href = URL.createObjectURL(blob);
+                    link.download = "media.zip";
+                    link.click();
+
+                });
+
+            });
+
+            function generateVideoThumbnail(videoUrl, callback) {
+
+                const video = document.createElement("video");
+
+                video.crossOrigin = "anonymous";
+                video.muted = true;
+                video.playsInline = true;
+
+                video.src = videoUrl;
+
+                video.addEventListener("loadeddata", function () {
+
+                    try {
+                        video.currentTime = 0.2;
+                    } catch (e) {
+                        callback(null);
+                    }
+                });
+
+                video.addEventListener("seeked", function () {
+
+                    try {
+                        const canvas = document.createElement("canvas");
+                        canvas.width = 150;
+                        canvas.height = 100;
+
+                        const ctx = canvas.getContext("2d");
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                        canvas.toBlob(function (blob) {
+
+                            if (!blob) {
+                                callback(null);
+                                return;
+                            }
+
+                            const url = URL.createObjectURL(blob);
+                            callback(url);
+
+                        }, "image/jpeg", 0.75);
+
+                    } catch (e) {
+                        callback(null);
+                    }
+
+                });
+
+                video.addEventListener("error", function () {
+                    callback(null);
+                });
+
+                video.load();
+            }
+
+            function initVideoThumbnails() {
+
+                $(".video-thumb-wrapper").each(function () {
+
+                    const wrapper = $(this);
+                    const url = wrapper.data("url");
+
+                    if (wrapper.data("thumb-generated")) return;
+
+                    wrapper.data("thumb-generated", true);
+
+                    generateVideoThumbnail(url, function (thumbUrl) {
+
+                    if (!thumbUrl) {
+                        wrapper.html(`
+                            <div class="d-flex align-items-center justify-content-center h-100">
+                                <i class="fa-solid fa-film fa-2x text-secondary"></i>
+                            </div>
+                        `);
+                        return;
+                    }
+
+                    wrapper.html(`
+                        <img src="${thumbUrl}"
+                             style="width:100%;height:100%;object-fit:cover;border-radius:4px;">
+                    `);
+                });
+                });
+            }
+
+            // run on load
+            initVideoThumbnails();
+
+        });
+    </script>
+
+}
