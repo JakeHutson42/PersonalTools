@@ -36,7 +36,15 @@ namespace PersonalTools.Classes.Dashboard
                     IconClass = "fa-solid fa-note-sticky",
                     PageUrl = "/Notes",
                     ButtonText = "Open notes"
-                }
+                },
+                new DashboardToolObj
+                {
+                    Title = "Media Extractor",
+                    Description = "Parse page source and extract images and videos.",
+                    IconClass = "fa-solid fa-photo-film",
+                    PageUrl = "/MediaExtractor",
+                    ButtonText = "Open"
+                },
             };
         }
     }
