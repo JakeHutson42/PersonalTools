@@ -3,9 +3,12 @@
 CREATE DATABASE IF NOT EXISTS PersonalTools CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE PersonalTools;
 SET FOREIGN_KEY_CHECKS=0;
+DROP TABLE IF EXISTS CaseOpeningTradeUpRecipeHoldings;
+DROP TABLE IF EXISTS CaseOpeningTradeUpRecipes;
 DROP TABLE IF EXISTS CaseOpeningTradeUpInputs;
 DROP TABLE IF EXISTS CaseOpeningTradeUps;
 DROP TABLE IF EXISTS CaseOpeningHistory;
+DROP TABLE IF EXISTS CaseOpeningAutoBuyRules;
 DROP TABLE IF EXISTS CaseOpeningBots;
 DROP TABLE IF EXISTS CaseOpeningBotServers;
 DROP TABLE IF EXISTS CaseOpeningUserInventoryUpgrades;

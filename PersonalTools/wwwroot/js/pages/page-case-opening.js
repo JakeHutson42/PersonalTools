@@ -67,6 +67,7 @@
     let tradeUpRecipeSummary = null;
     let tradeUpRecipesLoaded = false;
     let tradeUpRecipePollTimer = null;
+    let tradeUpRecipeEvaluationRequest = null;
     let tradeUpRecipeModalMode = 'create';
     let tradeUpRecipeModalRecipeId = null;
     const tradeUpCaseItemsCache = new Map();
@@ -2795,7 +2796,6 @@
             .attr('title', held > 0 ? 'Collect held skins before deleting this recipe.' : '');
         $('#caseTradeUpRecipeModalSubmit').addClass('d-none');
         $('#caseTradeUpRecipeModalCost').text('');
-        renderTradeUpModalHoldingCapacity();
         bootstrap.Modal.getOrCreateInstance(document.getElementById('caseTradeUpRecipeModal')).show();
     }
 
@@ -2985,8 +2985,11 @@
     // Also called opportunistically right after any case open (player or bot) - the event that
     // can bring a recipe's inputs up to ten.
     function evaluateTradeUpRecipes() {
-        if (!(tradeUpRecipeSummary?.recipes || []).length) return;
-        request('/api/case-opening/trade-up-recipes/evaluate', 'POST', { showLoader: false })
+        if (!(tradeUpRecipeSummary?.recipes || []).length || tradeUpRecipeEvaluationRequest) return;
+
+        // Evaluation can take longer than one polling interval when several recipes fire. Keep a
+        // single request in flight so a slow response never causes duplicate work from this tab.
+        tradeUpRecipeEvaluationRequest = request('/api/case-opening/trade-up-recipes/evaluate', 'POST', { showLoader: false })
             .done(function (results) {
                 if (!Array.isArray(results) || results.length === 0) return;
 
@@ -2998,6 +3001,9 @@
                     const label = result.isMatch ? 'matched - ready to collect' : 'did not match - waiting to be collected';
                     window.personalToolsToast?.info(`Auto trade-up fired for ${result.output.name}: ${label}.`);
                 });
+            })
+            .always(function () {
+                tradeUpRecipeEvaluationRequest = null;
             });
         // A quiet poll failure just tries again next tick - no .fail handler, no error surfaced.
     }
