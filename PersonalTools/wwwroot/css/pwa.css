@@ -1,0 +1,220 @@
+.pwa-prompt {
+    position: fixed;
+    left: max(1rem, env(safe-area-inset-left));
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    z-index: 1060;
+    display: grid;
+    grid-template-columns: auto minmax(12rem, 1fr) auto;
+    align-items: center;
+    gap: .75rem;
+    width: min(39rem, calc(100vw - 2rem));
+    padding: .75rem;
+    color: var(--pt-ink);
+    border: 1px solid color-mix(in srgb, var(--pt-mint) 42%, var(--pt-line));
+    border-radius: var(--pt-card-radius);
+    background: color-mix(in srgb, var(--pt-surface) 93%, transparent);
+    box-shadow: 0 1rem 2.8rem rgba(8, 13, 25, .3), inset 0 1px 0 rgba(255, 255, 255, .08);
+    backdrop-filter: blur(18px) saturate(1.2);
+    opacity: 0;
+    transform: translateY(.75rem);
+    transition: opacity .22s ease, transform .22s ease;
+}
+
+.pwa-prompt[hidden] {
+    display: none;
+}
+
+.pwa-prompt.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+body:has(.modal.show) .pwa-prompt,
+body:has(.offcanvas.show) .pwa-prompt {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.pwa-prompt-icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: .8rem;
+    box-shadow: 0 .35rem .8rem rgba(8, 13, 25, .22);
+}
+
+.pwa-prompt-copy {
+    display: grid;
+    min-width: 0;
+    gap: .12rem;
+}
+
+.pwa-prompt-copy strong {
+    color: var(--pt-ink);
+    font-size: .84rem;
+}
+
+.pwa-prompt-copy > span {
+    color: var(--pt-ink-soft);
+    font-size: .72rem;
+    line-height: 1.35;
+}
+
+.pwa-prompt-actions {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+}
+
+body:has(.case-opening-page) .pwa-prompt {
+    bottom: calc(5.4rem + env(safe-area-inset-bottom));
+}
+
+:root[data-app-theme="matrix"] .pwa-prompt {
+    border-color: rgba(71, 255, 141, .44);
+    background: color-mix(in srgb, #020806 92%, transparent);
+    box-shadow: 0 1rem 2.8rem rgba(0, 0, 0, .48), 0 0 1.2rem rgba(71, 255, 141, .1);
+}
+
+:root[data-app-theme="tactical"] .pwa-prompt,
+:root[data-app-theme="tactical"] .pwa-prompt-icon {
+    border-radius: 0;
+}
+
+.pwa-offline-page {
+    display: grid;
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin: 0;
+    padding: 1.25rem;
+    place-items: center;
+    color: #f3f5fb;
+    background: radial-gradient(circle at 20% 20%, #273254, transparent 42%), #0d1220;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.pwa-offline-panel {
+    display: grid;
+    justify-items: center;
+    width: min(31rem, 100%);
+    padding: clamp(1.5rem, 5vw, 3rem);
+    border: 1px solid #38435f;
+    border-radius: 1.2rem;
+    background: rgba(21, 28, 49, .92);
+    box-shadow: 0 1.4rem 4rem rgba(0, 0, 0, .38);
+    text-align: center;
+}
+
+.pwa-offline-panel img {
+    width: 5rem;
+    height: 5rem;
+    margin-bottom: 1.15rem;
+    border-radius: 1.25rem;
+}
+
+.pwa-offline-panel p {
+    margin: 0 0 .35rem;
+    color: #8fd0c2;
+    font-size: .72rem;
+    font-weight: 750;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+.pwa-offline-panel h1 {
+    margin: 0;
+    font-size: clamp(1.55rem, 6vw, 2.35rem);
+    letter-spacing: -.035em;
+}
+
+.pwa-offline-panel span {
+    max-width: 24rem;
+    margin-top: .75rem;
+    color: #aeb7cc;
+    font-size: .9rem;
+    line-height: 1.5;
+}
+
+.pwa-offline-panel a {
+    margin-top: 1.35rem;
+    padding: .65rem 1.05rem;
+    color: #101624;
+    border-radius: .55rem;
+    background: #8fd0c2;
+    font-size: .85rem;
+    font-weight: 750;
+    text-decoration: none;
+}
+
+@media (max-width: 767.98px) {
+    .pwa-prompt {
+        right: max(.65rem, env(safe-area-inset-right));
+        bottom: max(.65rem, env(safe-area-inset-bottom));
+        left: max(.65rem, env(safe-area-inset-left));
+        grid-template-columns: auto minmax(0, 1fr);
+        width: auto;
+    }
+
+    .pwa-prompt-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+    }
+
+    body:has(.case-opening-page) .pwa-prompt {
+        bottom: calc(5.25rem + env(safe-area-inset-bottom));
+    }
+}
+
+@media (min-width: 992px) {
+    .has-app-sidebar .pwa-prompt {
+        left: calc(var(--pt-sidebar-width) + 1rem);
+        transition: left .24s ease, opacity .22s ease, transform .22s ease;
+    }
+
+    .has-app-sidebar.app-sidebar-collapsed .pwa-prompt {
+        left: calc(var(--pt-sidebar-compact-width) + 1rem);
+    }
+}
+
+/* The installed mobile app is an immersive Case Simulator shell. Browser navigation retains the
+   normal Personal Tools header, while standalone mode relies on the simulator's own HUD and dock. */
+@media (display-mode: standalone) and (max-width: 991.98px) {
+    body:has(.case-opening-page) .app-mobile-header,
+    body:has(.case-opening-page) .app-sidebar,
+    body:has(.case-opening-page) .app-footer {
+        display: none !important;
+    }
+
+    body:has(.case-opening-page) .app-main {
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding-top: max(.5rem, env(safe-area-inset-top));
+    }
+
+    body:has(.case-opening-page) .case-game-hud {
+        top: max(.5rem, env(safe-area-inset-top));
+    }
+}
+
+@media (max-width: 991.98px) {
+    :root.is-standalone-app body:has(.case-opening-page) .app-mobile-header,
+    :root.is-standalone-app body:has(.case-opening-page) .app-sidebar,
+    :root.is-standalone-app body:has(.case-opening-page) .app-footer {
+        display: none !important;
+    }
+
+    :root.is-standalone-app body:has(.case-opening-page) .app-main {
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding-top: max(.5rem, env(safe-area-inset-top));
+    }
+
+    :root.is-standalone-app body:has(.case-opening-page) .case-game-hud {
+        top: max(.5rem, env(safe-area-inset-top));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pwa-prompt {
+        transition: none;
+    }
+}

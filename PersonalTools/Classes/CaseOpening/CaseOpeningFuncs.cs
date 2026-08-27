@@ -12,6 +12,7 @@ public interface ICaseOpeningFuncs
     Task<CaseOpeningCaseObj> GetCaseOpeningCase(Guid userId, string caseKey, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningHistoryObj>> GetCaseOpeningHistory(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningCollectionObj> GetCaseOpeningCollection(Guid userId, string caseKey, CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningCollectionSummaryObj>> GetCaseOpeningCollections(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningBotProgressObj> GetCaseOpeningBotProgress(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningBotProgressObj> PurchaseCaseOpeningBotServer(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningBotProgressObj> PurchaseCaseOpeningBot(Guid userId, CancellationToken cancellationToken = default);
@@ -178,6 +179,53 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             userId,
             caseKey,
             cancellationToken);
+        return BuildCaseOpeningCollection(caseData, collectedItems);
+    }
+
+    public async Task<List<CaseOpeningCollectionSummaryObj>> GetCaseOpeningCollections(Guid userId, CancellationToken cancellationToken = default)
+    {
+        List<CaseOpeningCollectionDbModel> collectedItems = await _data.GetCaseOpeningCollections(userId, cancellationToken);
+        if (collectedItems.Count == 0)
+        {
+            return [];
+        }
+
+        Dictionary<string, List<CaseOpeningCollectionDbModel>> collectedByCase = collectedItems
+            .GroupBy(item => item.CaseKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+        List<CaseOpeningCaseObj> cases = await _referenceData.GetCuratedCases(cancellationToken);
+        List<CaseOpeningCollectionSummaryObj> summaries = [];
+
+        foreach (CaseOpeningCaseObj caseData in cases.Where(item => collectedByCase.ContainsKey(item.CaseKey)))
+        {
+            List<CaseOpeningCollectionDbModel> caseCollectedItems = collectedByCase[caseData.CaseKey];
+            CaseOpeningCollectionObj collection = BuildCaseOpeningCollection(caseData, caseCollectedItems);
+            CaseOpeningCollectionSummaryObj summary = collection.Adapt<CaseOpeningCollectionSummaryObj>();
+            summary.ImageUrl = caseData.ImageUrl;
+            summary.FirstObtainedUtc = caseCollectedItems.Min(item => item.FirstObtainedUtc);
+            summary.Rarities = collection.Items
+                .GroupBy(item => new { item.RarityKey, item.RarityName, item.RarityColor })
+                .OrderBy(group => GetCollectionRarityOrder(group.Key.RarityKey))
+                .Select(group => new CaseOpeningCollectionRaritySummaryObj
+                {
+                    RarityKey = group.Key.RarityKey,
+                    RarityName = group.Key.RarityName,
+                    RarityColor = group.Key.RarityColor,
+                    TotalItemCount = group.Count(),
+                    CollectedItemCount = group.Count(item => item.IsCollected)
+                })
+                .ToList();
+            summaries.Add(summary);
+        }
+
+        return summaries
+            .OrderByDescending(summary => summary.FirstObtainedUtc)
+            .ThenBy(summary => summary.CaseName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static CaseOpeningCollectionObj BuildCaseOpeningCollection(CaseOpeningCaseObj caseData, List<CaseOpeningCollectionDbModel> collectedItems)
+    {
         Dictionary<string, DateTime> firstObtainedBySourceId = collectedItems.ToDictionary(
             item => item.SourceItemId,
             item => item.FirstObtainedUtc,

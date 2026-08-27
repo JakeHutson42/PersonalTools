@@ -154,6 +154,26 @@ public sealed class CaseOpeningCollectionObj
     public List<CaseOpeningCollectionItemObj> Items { get; set; } = [];
 }
 
+public sealed class CaseOpeningCollectionRaritySummaryObj
+{
+    public string RarityKey { get; set; } = string.Empty;
+    public string RarityName { get; set; } = string.Empty;
+    public string RarityColor { get; set; } = string.Empty;
+    public int TotalItemCount { get; set; }
+    public int CollectedItemCount { get; set; }
+}
+
+public sealed class CaseOpeningCollectionSummaryObj
+{
+    public string CaseKey { get; set; } = string.Empty;
+    public string CaseName { get; set; } = string.Empty;
+    public string ImageUrl { get; set; } = string.Empty;
+    public int TotalItemCount { get; set; }
+    public int CollectedItemCount { get; set; }
+    public DateTime FirstObtainedUtc { get; set; }
+    public List<CaseOpeningCollectionRaritySummaryObj> Rarities { get; set; } = [];
+}
+
 public class CaseOpeningProgressDbModel
 {
     public Guid UserId { get; set; }

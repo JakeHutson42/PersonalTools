@@ -59,6 +59,12 @@ public sealed class CaseOpeningController : ControllerBase
             caseKey);
     }
 
+    [HttpGet("collections")]
+    public Task<ActionResult<List<CaseOpeningCollectionSummaryObj>>> GetCollections(CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.GetCaseOpeningCollections(UserId, cancellationToken), "load collections", "all");
+    }
+
     [HttpGet("progress")]
     public Task<ActionResult<CaseOpeningProgressObj>> GetProgress(CancellationToken cancellationToken)
     {

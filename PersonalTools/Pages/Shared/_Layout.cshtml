@@ -30,8 +30,14 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="@(appearanceMode == "dark" ? "#151c31" : "#f6f7fb")" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Personal Tools" />
     <title>@ViewData["Title"] | Personal Tools</title>
     <link rel="icon" type="image/svg+xml" href="~/favicon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="~/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="~/manifest.webmanifest" />
     <script src="~/js/appearance-storage.js" asp-append-version="true"></script>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" />
@@ -40,6 +46,7 @@
     <link rel="stylesheet" href="~/lib/viewerjs/viewer.min.css" />
     <link rel="stylesheet" href="~/lib/video.js/video-js.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/pwa.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/sortable.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/mediaextractor.css" />
     @await RenderSectionAsync("Head", required: false)
@@ -52,6 +59,18 @@
     }
     <div id="appToastMessages" data-success-message="@successToastMessage" data-error-message="@errorToastMessage" hidden></div>
     <div class="toast-container position-fixed bottom-0 end-0 p-3 app-toast-container" id="appToastContainer" aria-label="Notifications"></div>
+
+    <aside class="pwa-prompt" id="pwaPrompt" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <img class="pwa-prompt-icon" src="~/icons/pwa-icon-192.png" alt="" />
+        <span class="pwa-prompt-copy">
+            <strong id="pwaPromptTitle">Install Personal Tools</strong>
+            <span id="pwaPromptMessage">Open Personal Tools from your Home Screen without the browser controls.</span>
+        </span>
+        <span class="pwa-prompt-actions">
+            <button class="btn btn-sm btn-primary" id="pwaPromptAction" type="button">Install</button>
+            <button class="btn btn-sm btn-outline-secondary" id="pwaPromptDismiss" type="button">Not now</button>
+        </span>
+    </aside>
 
     <canvas class="app-matrix-rain-canvas"
             id="appMatrixRainCanvas"
@@ -235,6 +254,7 @@
     <script src="~/js/motion.js" asp-append-version="true"></script>
     <script src="~/js/matrix-rain.js" asp-append-version="true"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/pwa.js" asp-append-version="true"></script>
     <script src="~/lib/viewerjs/viewer.min.js"></script>
     <script src="~/lib/video.js/video.min.js"></script>
     @await RenderSectionAsync("Scripts", required: false)

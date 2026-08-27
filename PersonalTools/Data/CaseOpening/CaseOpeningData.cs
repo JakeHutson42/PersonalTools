@@ -8,6 +8,7 @@ public interface ICaseOpeningData
 {
     Task<List<CaseOpeningHistoryDbModel>> GetCaseOpeningHistory(Guid userId, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningCollectionDbModel>> GetCaseOpeningCollection(Guid userId, string caseKey, CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningCollectionDbModel>> GetCaseOpeningCollections(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressDbModel> GetCaseOpeningProgress(Guid userId, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningOwnedCaseDbModel>> GetCaseOpeningOwnedCases(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryCapacityDbModel> GetCaseOpeningInventoryCapacity(Guid userId, CancellationToken cancellationToken = default);
@@ -100,6 +101,15 @@ public sealed class CaseOpeningData : ICaseOpeningData
             "sp_case_opening_collection_get",
             ReadCollection,
             Parameters(("p_user_id", userId), ("p_case_key", caseKey)),
+            cancellationToken);
+    }
+
+    public Task<List<CaseOpeningCollectionDbModel>> GetCaseOpeningCollections(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return _database.GetBulkDataSP(
+            "sp_case_opening_collections_get",
+            ReadCollection,
+            Parameters(("p_user_id", userId)),
             cancellationToken);
     }
 

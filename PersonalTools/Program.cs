@@ -280,7 +280,27 @@ if (!app.Environment.IsDevelopment())
 
 app.UseForwardedHeaders();
 app.UseHttpsRedirection();
-app.UseStaticFiles();
+var staticContentTypes = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+staticContentTypes.Mappings[".webmanifest"] = "application/manifest+json";
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = staticContentTypes,
+    OnPrepareResponse = context =>
+    {
+        string path = context.Context.Request.Path.Value ?? string.Empty;
+        if (path.Equals("/service-worker.js", StringComparison.OrdinalIgnoreCase))
+        {
+            // Browsers must revalidate the worker itself so a cached script can never strand
+            // clients on an old application shell. The worker only caches versioned static assets.
+            context.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+            context.Context.Response.Headers["Service-Worker-Allowed"] = "/";
+        }
+        else if (path.Equals("/manifest.webmanifest", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Context.Response.Headers.CacheControl = "no-cache";
+        }
+    }
+});
 app.UseMiddleware<ContentSecurityPolicyMiddleware>();
 
 app.UseRouting();

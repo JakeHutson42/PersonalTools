@@ -15,6 +15,9 @@
     let catalogue = [];
     let collectionData = null;
     let collectionFilter = 'all';
+    let profileCollections = [];
+    let profileCollectionsLoaded = false;
+    let profileCollectionsLoading = false;
     const collectionItems = new Map();
     const botCaseStorageKey = 'personalTools.caseOpeningBotCase';
     const botOpenInFlight = new Set();
@@ -58,6 +61,7 @@
     let achievementSummary = null;
     let achievementKeysLoaded = false;
     let unlockedAchievementKeys = new Set();
+    let currentStatistics = null;
     let inventoryCapacity = null;
     let inventoryUpgrades = null;
     let inventoryUpgradesLoaded = false;
@@ -93,6 +97,7 @@
     const shopGroupByLevelStorageKey = 'personalTools.caseOpeningShopGroupByLevel';
     let shopGroupByLevel = loadShopGroupByLevel();
     let ownedCaseCounterFrame = null;
+    let stockStateTimer = null;
     const tradeUpSelectionIds = new Set();
     const destinationStorageKey = 'personalTools.caseOpeningDestination';
     const validDestinations = ['upgrades', 'shop', 'open', 'inventory', 'tradeups'];
@@ -206,12 +211,9 @@
 
     function renderAchievements(summary) {
         achievementSummary = summary || null;
-        const stats = achievementSummary?.stats || {};
         const achievements = Array.isArray(achievementSummary?.achievements)
             ? achievementSummary.achievements
             : [];
-        const unlocked = Number(achievementSummary?.unlockedCount || 0);
-        const total = Number(achievementSummary?.totalCount || achievements.length);
         const nextUnlockedKeys = new Set(achievements
             .filter(achievement => achievement.isUnlocked)
             .map(achievement => String(achievement.achievementKey || '')));
@@ -220,14 +222,8 @@
                 && !unlockedAchievementKeys.has(String(achievement.achievementKey || '')))
             : [];
 
-        $('#caseAchievementCount').text(`${unlocked} / ${total}`);
-        $('#caseAchievementCases').text(Number(stats.totalCasesOpened || 0).toLocaleString());
-        $('#caseAchievementTradeUps').text(Number(stats.totalTradeUpsCompleted || 0).toLocaleString());
-        const loginStreak = Number(stats.currentLoginStreak || 0);
-        $('#caseAchievementStreak').text(`${loginStreak} ${loginStreak === 1 ? 'day' : 'days'}`);
-        $('#caseAchievementStars').text(Number(achievementSummary?.earnedStars || 0).toLocaleString());
-        $('#caseAchievementCollections').text(
-            `${Number(stats.completedCollections || 0)} collections · ${Number(stats.completedRaritySets || 0)} rarity sets`);
+        const stats = achievementSummary?.stats || {};
+        $('#caseAchievementCollections').text(`${Number(stats.completedCollections || 0)} collections · ${Number(stats.completedRaritySets || 0)} rarity sets`);
 
         const $grid = $('#caseAchievementGrid').empty();
         achievements.forEach(function (achievement) {
@@ -266,6 +262,7 @@
         });
         unlockedAchievementKeys = nextUnlockedKeys;
         achievementKeysLoaded = true;
+        renderPlayerProfile();
     }
 
     function initialiseCollapsibleSections() {
@@ -634,6 +631,47 @@
         $('#caseXpText').text(`${xpIntoLevel} / ${xpForNextLevel} XP`);
         $('#caseXpFill').css('width', `${percentage}%`);
         $('#caseXpTrack').attr('aria-valuenow', String(percentage));
+        renderPlayerProfile();
+    }
+
+    function renderPlayerProfile() {
+        const xp = Number(caseProgress?.xp || 0);
+        const level = xpLevelForTotal(xp);
+        const xpIntoLevel = xp - xpCumulativeForLevel(level);
+        const xpForNextLevel = Math.max(1, xpCumulativeForLevel(level + 1) - xpCumulativeForLevel(level));
+        const xpPercentage = Math.max(0, Math.min(100, Math.round((xpIntoLevel / xpForNextLevel) * 100)));
+        const achievementStats = achievementSummary?.stats || {};
+        const achievementsUnlocked = Number(achievementSummary?.unlockedCount || 0);
+        const achievementsTotal = Number(achievementSummary?.totalCount || 0);
+        const achievementCompletion = achievementsTotal > 0 ? Math.round((achievementsUnlocked / achievementsTotal) * 100) : 0;
+        const inventoryUsed = Number(inventoryCapacity?.usedSlots || 0);
+        const inventoryTotal = Number(inventoryCapacity?.totalCapacity || 1000);
+        const botCount = (botProgress?.servers || []).reduce((count, server) => count + (server.bots || []).length, 0);
+        const unlockedCases = new Set((caseProgress?.unlockedCaseKeys || []).map(key => String(key).toLowerCase()));
+        catalogue.filter(isCaseUnlocked).forEach(item => unlockedCases.add(String(item.caseKey || '').toLowerCase()));
+
+        $('#caseProfileLevel').text(`Lv ${level}`);
+        $('#caseProfileXp').text(`${xpIntoLevel.toLocaleString()} / ${xpForNextLevel.toLocaleString()} XP`);
+        $('#caseProfileXpFill').css('width', `${xpPercentage}%`);
+        $('#caseProfileXpTrack').attr('aria-valuenow', String(xpPercentage));
+        $('#caseProfileStars').text(Number(caseProgress?.stars || 0).toLocaleString());
+        $('#caseProfileCapacity').text(`${inventoryUsed.toLocaleString()} / ${inventoryTotal.toLocaleString()} inventory slots`);
+        $('#caseProfileCasesOpened').text(Number(achievementStats.totalCasesOpened || 0).toLocaleString());
+        $('#caseProfileTradeUps').text(Number(achievementStats.totalTradeUpsCompleted || 0).toLocaleString());
+        const loginStreak = Number(achievementStats.currentLoginStreak || 0);
+        $('#caseProfileLoginStreak').text(`${loginStreak} ${loginStreak === 1 ? 'day' : 'days'}`);
+        $('#caseProfileSessionStatTrak').text(sessionOpenings.filter(item => item.isStatTrak).length.toLocaleString());
+        $('#caseProfileAchievementStars').text(Number(achievementSummary?.earnedStars || 0).toLocaleString());
+        $('#caseProfileAchievementCompletion').text(`${achievementCompletion}%`);
+        $('#caseProfileCasesUnlocked').text(unlockedCases.size.toLocaleString());
+        $('#caseProfileMultiOpen').text((1 + Number(caseProgress?.multiOpenLevel || 0)).toLocaleString());
+        $('#caseProfileBots').text(botCount.toLocaleString());
+
+        if (currentStatistics) {
+            $('#caseProfileStatisticsCase').text(`Statistics for ${currentStatistics.caseName}.`);
+            $('#caseProfileRarePulls').text(Number(currentStatistics.targetPulls || 0).toLocaleString());
+            $('#caseProfileDryStreak').text(Number(currentStatistics.currentDryStreak || 0).toLocaleString());
+        }
     }
 
     function playLevelUpAnimation(level) {
@@ -764,6 +802,7 @@
         $counter.removeClass('is-decrementing is-incrementing');
         if (!shouldAnimate) {
             $value.text(quantity.toLocaleString());
+            renderCaseStockState();
             return;
         }
 
@@ -784,9 +823,21 @@
 
             $value.text(quantity.toLocaleString());
             window.setTimeout(() => $counter.removeClass('is-decrementing is-incrementing'), 260);
+            renderCaseStockState();
         }
 
         ownedCaseCounterFrame = window.requestAnimationFrame(tick);
+    }
+
+    function renderCaseStockState() {
+        const outOfStock = Number(caseData?.ownedQuantity || 0) < 1;
+        // Keep the last result visible after the final owned case is opened. The empty-stock hero
+        // takes over on initial load, case selection, or as soon as stock is replenished.
+        const resultVisible = !$result.hasClass('d-none');
+        const showEmptyState = outOfStock && !opening && !resultVisible;
+        $('.case-machine').toggleClass('d-none', showEmptyState);
+        $('#caseNoStock').toggleClass('d-none', !showEmptyState);
+        if (caseData?.imageUrl) $('#caseNoStockImage').attr('src', caseData.imageUrl);
     }
 
     function renderInventoryCapacity(capacity) {
@@ -800,6 +851,12 @@
         $('#caseInventoryCapacity').text(
             `${used.toLocaleString()} / ${total.toLocaleString()} slots used · ${skins.toLocaleString()} skins · ${cases.toLocaleString()} cases${storageNote}`
         );
+        $('#caseHudCapacity')
+            .toggleClass('is-active', used >= total * .9)
+            .attr('title', `${used.toLocaleString()} of ${total.toLocaleString()} inventory slots used`)
+            .find('span')
+            .text(`${used.toLocaleString()} / ${total.toLocaleString()}`);
+        renderPlayerProfile();
         if ($('#caseShopCaseGrid').children().length) renderShop(catalogue);
     }
 
@@ -1007,6 +1064,18 @@
         }), document.createTextNode(botsRunning
             ? `${bots.length} bot${bots.length === 1 ? '' : 's'} active`
             : bots.length === 0 ? 'No bots installed' : 'Ready'));
+
+        $('#caseHudBotStatus')
+            .toggleClass('is-active', botsRunning)
+            .attr('title', botsRunning
+                ? `${bots.length} opening bot${bots.length === 1 ? '' : 's'} active`
+                : bots.length === 0 ? 'No opening bots installed' : `${bots.length} opening bot${bots.length === 1 ? '' : 's'} ready`)
+            .find('i')
+            .attr('class', botsRunning ? 'fa-solid fa-satellite-dish' : 'fa-solid fa-robot')
+            .end()
+            .find('span')
+            .text(botsRunning ? `${bots.length} active` : bots.length === 0 ? 'No bots' : `${bots.length} ready`);
+        renderPlayerProfile();
 
         const $servers = $('#caseBotServers').empty();
         servers.forEach((server, index) => {
@@ -1305,6 +1374,41 @@
             $('.case-session-stat, #caseSessionBest').get(),
             { fromY: 5, delay: 30, duration: 230 }
         );
+        renderRecentDrops();
+        renderPlayerProfile();
+    }
+
+    function renderRecentDrops() {
+        const recentItems = sessionOpenings.slice(-50).reverse();
+        const $rail = $('#caseRecentDropsRail').empty();
+        $('#caseRecentDropsCount').text(recentItems.length === 0
+            ? 'This session'
+            : `${sessionOpenings.length.toLocaleString()} this session`);
+
+        if (recentItems.length === 0) {
+            $rail.append($('<div>', { class: 'case-recent-drops-empty', id: 'caseRecentDropsEmpty' }).append(
+                $('<i>', { class: 'fa-solid fa-box-open', 'aria-hidden': 'true' }),
+                $('<span>', { text: 'Your latest pulls will appear here.' })
+            ));
+            return;
+        }
+
+        recentItems.forEach(function (item) {
+            $rail.append($('<article>', {
+                class: `case-recent-drop ${rarityClass(item)}`,
+                title: `${item.name} · ${item.rarityName || 'Item'}`
+            }).append(
+                $('<img>', { src: item.imageUrl, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }),
+                $('<div>', { class: 'case-recent-drop-copy' }).append(
+                    $('<small>', { text: item.rarityName || 'Item' }),
+                    $('<strong>', { text: item.name }),
+                    $('<span>', { text: [item.wear, caseNameFor(item.caseKey)].filter(Boolean).join(' · ') })
+                ),
+                statTrakBadge(item)
+            ));
+        });
+
+        window.personalToolsMotion?.reveal($rail.children().get(), { fromX: 8, delay: 24, duration: 220 });
     }
 
     function showError(response, fallback) {
@@ -1398,6 +1502,8 @@
     }
 
     function configureCase(data) {
+        window.clearTimeout(stockStateTimer);
+        stockStateTimer = null;
         caseData = data;
         $('.case-machine').removeClass('is-multi-results');
         $('#caseReelWindow').removeClass('has-multi-results');
@@ -1420,9 +1526,9 @@
         $('#caseSelectorGrid input').prop('checked', false)
             .filter(`[value="${caseKey}"]`).prop('checked', true);
         renderCaseSelector();
-        renderRareItems(data);
         $open.prop('disabled', Number(data.ownedQuantity || 0) < 1);
         renderOpenQuantity();
+        renderCaseStockState();
     }
 
     function collectionCard(item) {
@@ -1476,12 +1582,13 @@
         const $summary = $('#caseCollectionRaritySummary').empty();
         [...raritySummary.entries()]
             .sort(([leftKey], [rightKey]) => rarityDisplayOrder(leftKey) - rarityDisplayOrder(rightKey))
-            .forEach(([, entry]) => $summary.append(
-            $('<span>', { class: `case-collection-rarity-chip ${rarityClass(entry.item)}` }).append(
-                $('<i>', { 'aria-hidden': 'true' }),
-                document.createTextNode(`${entry.item.rarityName}: ${entry.collected}/${entry.total}`)
-            )
-        ));
+            .forEach(([, entry]) => {
+                const $chip = $('<span>', { class: `case-collection-rarity-chip ${rarityClass(entry.item)}` }).append(
+                    $('<i>', { 'aria-hidden': 'true' }),
+                    document.createTextNode(`${entry.item.rarityName}: ${entry.collected}/${entry.total}`)
+                );
+                $summary.append($chip);
+            });
         $('[data-collection-filter]').each(function () {
             $(this).toggleClass('active', String($(this).data('collection-filter')) === collectionFilter);
         });
@@ -1507,6 +1614,7 @@
         const requestedCaseKey = selectedCaseKey || caseKey;
         return request(`/api/case-opening/cases/${encodeURIComponent(requestedCaseKey)}/collection`, 'GET', { showLoader: false })
             .done(function (data) {
+                profileCollectionsLoaded = false;
                 if (data.caseKey !== caseKey) return;
                 collectionData = data;
                 renderCollection();
@@ -1514,47 +1622,99 @@
             .fail(response => showError(response, 'This case collection could not be loaded.'));
     }
 
-    function rarePreviewItems(data) {
-        if (data.type === 'Sticker Capsule') {
-            return data.items.filter(item => item.rarityKey === 'remarkable' || item.rarityKey === 'exotic');
-        }
+    function profileCollectionCard(collection) {
+        const total = Number(collection.totalItemCount || 0);
+        const collected = Number(collection.collectedItemCount || 0);
+        const percentage = total > 0 ? Math.round((collected / total) * 100) : 0;
+        const completed = total > 0 && collected >= total;
+        const firstObtained = collection.firstObtainedUtc
+            ? new Date(collection.firstObtainedUtc).toLocaleDateString()
+            : 'Unknown';
+        const $rarities = $('<div>', { class: 'case-profile-collection-rarities' });
 
-        return data.items.filter(item => item.isRareSpecial);
-    }
+        (collection.rarities || []).forEach(function (rarity) {
+            $rarities.append($('<span>', { class: `case-collection-rarity-chip ${rarityClass(rarity)}` }).append(
+                $('<i>', { 'aria-hidden': 'true' }),
+                document.createTextNode(`${rarity.rarityName}: ${Number(rarity.collectedItemCount || 0)}/${Number(rarity.totalItemCount || 0)}`)
+            ));
+        });
 
-    function rareItemCard(item) {
-        return $('<div>', { class: 'col-12 col-sm-6 col-lg-4 col-xl-3' }).append(
-            $('<article>', { class: `card case-rare-item-card ${rarityClass(item)}` }).append(
-                $('<img>', {
-                    class: 'case-rare-item-image',
-                    src: item.imageUrl,
-                    alt: '',
-                    loading: 'lazy',
-                    referrerpolicy: 'no-referrer'
-                }),
-                $('<div>', { class: 'card-body pt-0' }).append(
-                    $('<p>', { class: 'small fw-semibold case-rare-label mb-1', text: item.rarityName }),
-                    $('<h3>', { class: 'h6 fw-semibold mb-0', text: item.name }),
-                    item.phase ? $('<span>', { class: 'badge text-bg-dark mt-2', text: item.phase }) : null
-                )
+        return $('<article>', { class: `case-profile-collection-card${completed ? ' is-complete' : ''}` }).append(
+            $('<div>', { class: 'case-profile-collection-art' }).append(
+                $('<img>', { src: collection.imageUrl, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }),
+                completed ? $('<span>', { class: 'case-profile-collection-complete', text: 'Complete' }) : null
+            ),
+            $('<div>', { class: 'case-profile-collection-body' }).append(
+                $('<div>', { class: 'case-profile-collection-heading' }).append(
+                    $('<div>').append(
+                        $('<small>', { text: `Started ${firstObtained}` }),
+                        $('<strong>', { text: collection.caseName })
+                    ),
+                    $('<span>', { text: `${collected} / ${total}` })
+                ),
+                $('<div>', {
+                    class: 'case-profile-collection-progress',
+                    role: 'progressbar',
+                    'aria-label': `${collection.caseName} collection progress`,
+                    'aria-valuemin': '0',
+                    'aria-valuemax': '100',
+                    'aria-valuenow': String(percentage)
+                }).append($('<span>').css('width', `${percentage}%`)),
+                $('<div>', { class: 'case-profile-collection-meta' }).append(
+                    $('<span>', { text: `${percentage}% complete` }),
+                    $('<span>', { text: `${Math.max(0, total - collected)} remaining` })
+                ),
+                $rarities
             )
         );
     }
 
-    function renderRareItems(data) {
-        const items = rarePreviewItems(data);
-        const stickerCapsule = data.type === 'Sticker Capsule';
-        $('#caseRareItemsTitle').text(data.name);
-        $('#caseRareItemsType').text(stickerCapsule ? 'Holo and foil highlights' : 'Possible special items');
-        $('#caseRareItemsDescription').text(stickerCapsule
-            ? 'These are the Holo and Foil stickers available from this capsule. Normal High Grade stickers remain visible in the reel.'
-            : 'These knives or gloves form the rare special-item pool for this case. Every displayed finish is part of the simulated opening pool.');
+    function renderProfileCollections() {
+        const $grid = $('#caseProfileCollectionsGrid').empty();
+        const completed = profileCollections.filter(collection => Number(collection.totalItemCount || 0) > 0
+            && Number(collection.collectedItemCount || 0) >= Number(collection.totalItemCount || 0)).length;
+        $('#caseProfileCollectionSummary').text(`${profileCollections.length.toLocaleString()} started · ${completed.toLocaleString()} completed`);
 
-        const $grid = $('#caseRareItemsGrid').empty();
-        items.forEach(item => $grid.append(rareItemCard(item)));
-        $grid.toggleClass('d-none', items.length === 0);
-        $('#caseRareItemsEmpty').toggleClass('d-none', items.length > 0);
-        $('#caseRareItemsButton').prop('disabled', items.length === 0);
+        if (profileCollections.length === 0) {
+            $grid.append($('<div>', { class: 'case-profile-collections-empty' }).append(
+                $('<i>', { class: 'fa-solid fa-layer-group', 'aria-hidden': 'true' }),
+                $('<span>', { text: 'Open a case to begin its permanent collection.' })
+            ));
+            return;
+        }
+
+        profileCollections.forEach(collection => $grid.append(profileCollectionCard(collection)));
+        window.personalToolsMotion?.reveal($grid.children().get(), { fromY: 7, delay: 28, duration: 260 });
+    }
+
+    function loadProfileCollections(options) {
+        const settings = options || {};
+        if (profileCollectionsLoading) return $.Deferred().resolve().promise();
+        if (profileCollectionsLoaded && settings.force !== true) {
+            renderProfileCollections();
+            return $.Deferred().resolve(profileCollections).promise();
+        }
+
+        profileCollectionsLoading = true;
+        $('#caseProfileCollectionsGrid').empty().append(
+            $('<div>', { class: 'case-profile-collections-loading', role: 'status', 'aria-label': 'Loading collections' })
+                .append($('<span>'), $('<span>'), $('<span>')));
+        return request('/api/case-opening/collections', 'GET', { showLoader: false })
+            .done(function (collections) {
+                profileCollections = Array.isArray(collections) ? collections : [];
+                profileCollectionsLoaded = true;
+                renderProfileCollections();
+            })
+            .fail(function (response) {
+                const message = response.responseJSON?.message || 'Your collection record could not be loaded.';
+                $('#caseProfileCollectionsGrid').html('').append($('<div>', { class: 'case-profile-collections-empty is-error' }).append(
+                    $('<i>', { class: 'fa-solid fa-triangle-exclamation', 'aria-hidden': 'true' }),
+                    $('<span>', { text: message })
+                ));
+            })
+            .always(function () {
+                profileCollectionsLoading = false;
+            });
     }
 
     function loadCase(selectedKey, options) {
@@ -1601,6 +1761,7 @@
     }
 
     function renderStatistics(statistics) {
+        currentStatistics = statistics;
         $('#caseLuckSubtitle').text(`Statistics for ${statistics.caseName}.`);
         $('#caseLuckTotalLabel').text(statistics.caseName);
         $('#caseLuckTargetLabel').text(`${statistics.targetRarityName} pulls`);
@@ -1610,6 +1771,7 @@
         animateNumber($('#caseLuckTargets'), statistics.targetPulls);
         animateNumber($('#caseLuckDryStreak'), statistics.currentDryStreak);
         $('#caseLuckProbability').text(`${Number(statistics.noTargetStreakProbability).toFixed(2)}%`);
+        renderPlayerProfile();
         window.personalToolsMotion?.reveal($('.case-luck-card').get(), { fromY: 7, delay: 35, duration: 280 });
 
         // Only an opening can trigger the joke. Loading or switching cases must never replay it.
@@ -3133,6 +3295,7 @@
             allHistoryItems.unshift(historyItem);
         });
         historyDirty = true;
+        renderRecentDrops();
         if (refreshDisplay !== false) {
             renderSessionSummary();
             if (activeDestination === 'inventory') renderHistory(allHistoryItems);
@@ -3169,6 +3332,19 @@
         $('#chooseCaseButton, #caseSelectorGrid input').prop('disabled', false);
         evaluateAutoBuy();
         evaluateTradeUpRecipes();
+
+        window.clearTimeout(stockStateTimer);
+        const completedCaseKey = caseKey;
+        if (Number(caseData?.ownedQuantity || 0) < 1) {
+            // The final pull remains visible long enough to register, then the Shop call-to-action
+            // takes over the arena. The recent-drop rail keeps that result available afterwards.
+            stockStateTimer = window.setTimeout(function () {
+                stockStateTimer = null;
+                if (caseKey !== completedCaseKey || Number(caseData?.ownedQuantity || 0) > 0) return;
+                $result.addClass('d-none');
+                renderCaseStockState();
+            }, 1800);
+        }
     }
 
     function renderFinishedOpening(result) {
@@ -3553,10 +3729,78 @@
         buttons[nextIndex].click();
     });
 
+    $('[data-case-profile-tab]').on('click', function () {
+        const target = String($(this).data('case-profile-tab') || '');
+        const tabButton = document.querySelector(`#caseProfileTabs [data-bs-target="${target}"]`);
+        if (tabButton) bootstrap.Tab.getOrCreateInstance(tabButton).show();
+    });
+
+    $('#casePlayerProfile')
+        .on('show.bs.offcanvas', function () {
+            renderPlayerProfile();
+            if ($('#caseProfileCollectionsPane').hasClass('active')) loadProfileCollections();
+            $('#caseBottomNav').addClass('is-obscured');
+        })
+        .on('hidden.bs.offcanvas', function () {
+            if (!$('.modal.show').length) $('#caseBottomNav').removeClass('is-obscured');
+        });
+
+    const profileScrollBody = document.querySelector('#casePlayerProfile .offcanvas-body');
+    let profileTouchY = null;
+    profileScrollBody?.addEventListener('touchstart', function (event) {
+        profileTouchY = event.touches[0]?.clientY ?? null;
+    }, { passive: true });
+    profileScrollBody?.addEventListener('touchmove', function (event) {
+        const currentY = event.touches[0]?.clientY;
+        if (profileTouchY === null || currentY === undefined) return;
+
+        const movingDown = currentY > profileTouchY;
+        const maximumScroll = Math.max(0, profileScrollBody.scrollHeight - profileScrollBody.clientHeight);
+        const atTop = profileScrollBody.scrollTop <= 0;
+        const atBottom = profileScrollBody.scrollTop >= maximumScroll - 1;
+        if (maximumScroll === 0 || (movingDown && atTop) || (!movingDown && atBottom)) {
+            event.preventDefault();
+        }
+        profileTouchY = currentY;
+    }, { passive: false });
+    profileScrollBody?.addEventListener('touchend', function () {
+        profileTouchY = null;
+    }, { passive: true });
+    profileScrollBody?.addEventListener('touchcancel', function () {
+        profileTouchY = null;
+    }, { passive: true });
+
+    $('#caseProfileTabs [data-bs-toggle="pill"]').on('shown.bs.tab', function () {
+        document.querySelector('#casePlayerProfile .offcanvas-body')?.scrollTo({ top: 0, behavior: 'auto' });
+        if (this.id === 'caseProfileCollectionsTab') loadProfileCollections();
+    });
+
+    $('#visitCaseShopButton').on('click', function () {
+        const selectedCase = catalogue.find(item => item.caseKey === caseKey);
+        shopSearch = selectedCase?.name || caseData?.name || '';
+        shopTier = '';
+        shopPage = 1;
+        $('#caseShopSearch').val(shopSearch);
+        $('#caseShopTier').val('');
+        switchDestination('shop');
+        renderShop(catalogue);
+
+        window.requestAnimationFrame(function () {
+            const card = document.querySelector(`.case-shop-case[data-case-key="${CSS.escape(caseKey)}"]`);
+            card?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+            card?.querySelector('.js-shop-buy-case')?.focus({ preventScroll: true });
+        });
+    });
+
     $(document).on('show.bs.modal', '.modal', function () {
         $('#caseBottomNav').addClass('is-obscured');
     }).on('hidden.bs.modal', '.modal', function () {
         if (!$('.modal.show').length) $('#caseBottomNav').removeClass('is-obscured');
+    });
+    $(document).on('click.caseOddsPopover', function (event) {
+        const oddsButton = document.getElementById('caseOddsButton');
+        if (!oddsButton || oddsButton.contains(event.target) || event.target.closest('.popover')) return;
+        bootstrap.Popover.getInstance(oddsButton)?.hide();
     });
     $(window).on('resize.caseBottomNav', () => positionDestinationIndicator(false));
 

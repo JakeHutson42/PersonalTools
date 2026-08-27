@@ -84,6 +84,14 @@ html, body {
     min-height: 100%
 }
 
+html {
+    scrollbar-gutter: stable;
+}
+
+html:has(.case-opening-page) {
+    overflow-y: scroll;
+}
+
 body {
     transition: background-color .2s ease,color .2s ease
 }

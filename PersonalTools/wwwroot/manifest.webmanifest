@@ -1,0 +1,59 @@
+{
+  "id": "/",
+  "name": "Personal Tools",
+  "short_name": "Tools",
+  "description": "A private collection of personal productivity, media and gaming tools.",
+  "start_url": "/CaseOpening",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#151c31",
+  "theme_color": "#151c31",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/pwa-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/pwa-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/",
+      "icons": [{ "src": "/icons/pwa-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Case Simulator",
+      "short_name": "Cases",
+      "url": "/CaseOpening",
+      "icons": [{ "src": "/icons/pwa-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Notes",
+      "short_name": "Notes",
+      "url": "/Notes",
+      "icons": [{ "src": "/icons/pwa-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}
