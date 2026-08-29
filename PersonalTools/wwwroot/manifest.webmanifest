@@ -5,6 +5,9 @@
   "description": "A private collection of personal productivity, media and gaming tools.",
   "start_url": "/CaseOpening",
   "scope": "/",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
   "display": "standalone",
   "orientation": "any",
   "background_color": "#151c31",

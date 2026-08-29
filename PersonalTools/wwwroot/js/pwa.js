@@ -5,7 +5,15 @@
         return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
     }
 
+    function isIosDevice() {
+        // iPadOS identifies itself as macOS, so account for touch-enabled Macs too.
+        return /iphone|ipad|ipod/i.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+
     function isMobileInstallSurface() {
+        if (isIosDevice()) return true;
+
         if (typeof navigator.userAgentData?.mobile === 'boolean') {
             return navigator.userAgentData.mobile;
         }
@@ -14,11 +22,6 @@
     }
 
     document.documentElement.classList.toggle('is-standalone-app', isStandalone());
-    if (isStandalone() && window.location.pathname === '/' && document.body?.dataset.userId) {
-        window.location.replace('/CaseOpening');
-        return;
-    }
-    if (!('serviceWorker' in navigator)) return;
 
     const prompt = document.getElementById('pwaPrompt');
     const title = document.getElementById('pwaPromptTitle');
@@ -30,7 +33,7 @@
     let installEvent = null;
     let waitingWorker = null;
     let promptMode = 'install';
-    let reloadingForUpdate = false;
+    let reloadAfterWorkerUpdate = false;
     let hideTimer = null;
 
     function installPromptDismissed() {
@@ -84,13 +87,13 @@
     }
 
     function showIosInstructions() {
-        const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
-        if (!isIos || isStandalone() || installPromptDismissed() || !document.body.dataset.userId) return;
+        if (!isIosDevice() || isStandalone() || installPromptDismissed() || !document.body.dataset.userId) return;
         showPrompt({
             mode: 'ios',
             title: 'Add Personal Tools to Home Screen',
-            message: 'Open the browser Share menu, choose Add to Home Screen, then enable Open as Web App.',
-            action: 'Got it'
+            message: 'Safari requires you to confirm this yourself. Open the Share Sheet, choose Add to Home Screen, then tap Add.',
+            action: 'Open Share Sheet',
+            dismiss: 'Not now'
         });
     }
 
@@ -119,13 +122,26 @@
 
     action?.addEventListener('click', async () => {
         if (promptMode === 'update' && waitingWorker) {
+            reloadAfterWorkerUpdate = true;
             waitingWorker.postMessage({ type: 'SKIP_WAITING' });
             return;
         }
 
         if (promptMode === 'ios') {
-            rememberInstallDismissal();
-            hidePrompt();
+            if (typeof navigator.share === 'function') {
+                try {
+                    await navigator.share({
+                        title: document.title,
+                        text: 'Add Personal Tools to your Home Screen.',
+                        url: window.location.href
+                    });
+                } catch (error) {
+                    // Cancelling the Share Sheet is expected, so leave the instructions visible.
+                    if (error?.name !== 'AbortError') console.warn('Personal Tools Share Sheet could not be opened.', error);
+                }
+            } else {
+                window.personalToolsToast?.info('Use Safari’s Share button, then choose Add to Home Screen.');
+            }
             return;
         }
 
@@ -143,9 +159,16 @@
         hidePrompt();
     });
 
+    if (!('serviceWorker' in navigator)) {
+        window.setTimeout(showIosInstructions, 2200);
+        return;
+    }
+
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (reloadingForUpdate) return;
-        reloadingForUpdate = true;
+        // A controller change also happens when the app is first installed. Only reload after
+        // the player explicitly accepted an update, never while they are opening cases.
+        if (!reloadAfterWorkerUpdate) return;
+        reloadAfterWorkerUpdate = false;
         window.location.reload();
     });
 

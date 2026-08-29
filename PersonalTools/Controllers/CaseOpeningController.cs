@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PersonalTools.Classes;
 using PersonalTools.Classes.CaseOpening;
 using PersonalTools.Entities;
 using PersonalTools.Entities.CaseOpening;
@@ -14,11 +15,13 @@ namespace PersonalTools.Controllers;
 public sealed class CaseOpeningController : ControllerBase
 {
     private readonly ICaseOpeningFuncs _caseOpening;
+    private readonly IAuthFuncs _auth;
     private readonly ILogger<CaseOpeningController> _logger;
 
-    public CaseOpeningController(ICaseOpeningFuncs caseOpening, ILogger<CaseOpeningController> logger)
+    public CaseOpeningController(ICaseOpeningFuncs caseOpening, IAuthFuncs auth, ILogger<CaseOpeningController> logger)
     {
         _caseOpening = caseOpening;
+        _auth = auth;
         _logger = logger;
     }
 
@@ -110,6 +113,18 @@ public sealed class CaseOpeningController : ControllerBase
             () => _caseOpening.SellCaseOpeningInventory(UserId, request?.OpeningIds ?? [], cancellationToken),
             "sell inventory",
             "selected");
+    }
+
+    [HttpPut("inventory/{openingId:guid}/lock")]
+    public Task<ActionResult<CaseOpeningInventoryLockObj>> SetInventoryLock(
+        Guid openingId,
+        [FromBody] CaseOpeningInventoryLockRequestObj request,
+        CancellationToken cancellationToken)
+    {
+        return Execute(
+            () => _caseOpening.SetCaseOpeningInventoryLock(UserId, openingId, request?.IsLocked ?? false, cancellationToken),
+            "update inventory lock",
+            openingId.ToString());
     }
 
     [HttpGet("inventory/upgrades")]
@@ -315,6 +330,99 @@ public sealed class CaseOpeningController : ControllerBase
         return Execute(() => _caseOpening.GetCaseSettings(cancellationToken), "load case settings", "all");
     }
 
+    [HttpPost("bots/{botId:guid}/speed")]
+    public Task<ActionResult<CaseOpeningBotProgressObj>> UpgradeBotSpeed(Guid botId, CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.UpgradeCaseOpeningBot(UserId, botId, cancellationToken), "upgrade bot speed", botId.ToString());
+    }
+
+    [HttpPut("bots/servers/{serverId:guid}/enabled")]
+    public Task<ActionResult<CaseOpeningBotProgressObj>> SetBotServerEnabled(
+        Guid serverId,
+        [FromBody] CaseOpeningBotServerStateRequestObj request,
+        CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.SetCaseOpeningBotServerEnabled(UserId, serverId, request?.IsEnabled ?? false, cancellationToken), "update bot server", serverId.ToString());
+    }
+
+    [HttpPost("bots/cycle")]
+    public Task<ActionResult<CaseOpeningBotCycleResultObj>> RunBotCycle(
+        [FromBody] CaseOpeningBotOpenRequestObj request,
+        CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.RunCaseOpeningBotCycle(UserId, request?.CaseKey ?? string.Empty, cancellationToken), "run bot cycle", request?.CaseKey ?? string.Empty);
+    }
+
+    [HttpGet("settings/price-snapshots")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningPriceSnapshotSummaryObj>> GetPriceSnapshots(CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.GetPriceSnapshots(cancellationToken), "load price snapshots", "Skinport");
+    }
+
+    [HttpPost("settings/price-snapshots")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningPriceSnapshotSummaryObj>> CreatePriceSnapshot(CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.CreatePriceSnapshot(cancellationToken), "create price snapshot", "Skinport");
+    }
+
+    [HttpPost("settings/price-snapshots/{snapshotId:guid}/activate")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningPriceSnapshotSummaryObj>> ActivatePriceSnapshot(Guid snapshotId, CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.ActivatePriceSnapshot(snapshotId, cancellationToken), "activate price snapshot", snapshotId.ToString());
+    }
+
+    [HttpDelete("settings/price-snapshots/{snapshotId:guid}")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningPriceSnapshotSummaryObj>> DeletePriceSnapshot(Guid snapshotId, CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.DeletePriceSnapshot(snapshotId, cancellationToken), "delete price snapshot", snapshotId.ToString());
+    }
+
+    [HttpPost("settings/price-snapshots/publish-balance")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningPriceSnapshotSummaryObj>> PublishPriceSnapshotBalance(CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.PublishPriceSnapshotBalance(cancellationToken), "publish price balance", "Skinport");
+    }
+
+    [HttpGet("settings/special-variants")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningSpecialVariantAdminSummaryObj>> GetSpecialVariants(CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.GetSpecialVariantSettings(cancellationToken), "load special variants", "catalogue");
+
+    [HttpPost("settings/special-variants")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningSpecialVariantAdminSummaryObj>> CreateSpecialVariant([FromBody] CaseOpeningSpecialVariantRuleRequestObj request, CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.SaveSpecialVariantRule(null, request, cancellationToken), "create special variant", request?.Name ?? string.Empty);
+
+    [HttpPut("settings/special-variants/{ruleId:guid}")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningSpecialVariantAdminSummaryObj>> UpdateSpecialVariant(Guid ruleId, [FromBody] CaseOpeningSpecialVariantRuleRequestObj request, CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.SaveSpecialVariantRule(ruleId, request, cancellationToken), "save special variant", ruleId.ToString());
+
+    [HttpPost("settings/special-variant-price-snapshots")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningSpecialVariantAdminSummaryObj>> CreateSpecialVariantPriceSnapshot([FromBody] CaseOpeningSpecialVariantPriceSnapshotRequestObj request, CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.CreateSpecialVariantPriceSnapshot(request, cancellationToken), "create special-variant price snapshot", request?.Name ?? string.Empty);
+
+    [HttpPost("settings/special-variant-price-snapshots/{snapshotId:guid}/activate")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningSpecialVariantAdminSummaryObj>> ActivateSpecialVariantPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.ActivateSpecialVariantPriceSnapshot(snapshotId, cancellationToken), "activate special-variant price snapshot", snapshotId.ToString());
+
+    [HttpDelete("settings/special-variant-price-snapshots/{snapshotId:guid}")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningSpecialVariantAdminSummaryObj>> DeleteSpecialVariantPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.DeleteSpecialVariantPriceSnapshot(snapshotId, cancellationToken), "delete special-variant price snapshot", snapshotId.ToString());
+
+    [HttpPost("settings/special-variants/csfloat-import")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<List<CaseOpeningSpecialVariantListingEvidenceObj>>> ImportSpecialVariantListings(CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.ImportSpecialVariantListings(UserId, cancellationToken), "import CSFloat listing evidence", "special variants");
+
     [HttpPut("settings/cases/{caseKey}")]
     [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
     public async Task<ActionResult<ApiResponse>> UpdateCaseSettings(
@@ -324,7 +432,7 @@ public sealed class CaseOpeningController : ControllerBase
     {
         try
         {
-            await _caseOpening.SetCaseSettings(caseKey, request.UnlockCostStars, request.PurchaseCostStars, request.XpRequirement, cancellationToken);
+            await _caseOpening.SetCaseSettings(caseKey, request.Tier, request.UnlockCostStars, request.UnlockCostGbpPence, request.PurchaseCostStars, request.PurchaseCostGbpPence, request.XpRequirement, cancellationToken);
             return Ok(new ApiResponse(true, "Case settings saved."));
         }
         catch (InvalidOperationException exception)
@@ -361,7 +469,7 @@ public sealed class CaseOpeningController : ControllerBase
     {
         try
         {
-            await _caseOpening.SetInventoryUpgradeSettings(upgradeKey, request.CostStars, request.RequiredLevel, cancellationToken);
+            await _caseOpening.SetInventoryUpgradeSettings(upgradeKey, request.CostStars, request.CostGbpPence, request.RequiredLevel, cancellationToken);
             return Ok(new ApiResponse(true, "Inventory upgrade settings saved."));
         }
         catch (InvalidOperationException exception)
@@ -398,25 +506,42 @@ public sealed class CaseOpeningController : ControllerBase
         }
     }
 
-    // ---------- Testing overrides for your own account (the variable-tweak modal's "Your progress" tab) ----------
+    // ---------- Testing overrides for an administrator-selected account (the control centre's "Your progress" tab) ----------
+
+    [HttpGet("dev/profile")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningDevProfileObj>> GetDevProfile([FromQuery] Guid? targetUserId, CancellationToken cancellationToken)
+    {
+        return ExecuteForDevTarget(
+            targetUserId,
+            async userId => new CaseOpeningDevProfileObj(
+                await _caseOpening.GetCaseOpeningProgress(userId, cancellationToken),
+                await _caseOpening.GetCaseOpeningCases(userId, cancellationToken),
+                await _caseOpening.GetDevDropSettings(userId, cancellationToken)),
+            "load dev profile",
+            "all");
+    }
 
     [HttpPut("dev/progress")]
     [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
     public Task<ActionResult<CaseOpeningProgressObj>> SetDevProgress(
         [FromBody] CaseOpeningDevProgressRequest request,
+        [FromQuery] Guid? targetUserId,
         CancellationToken cancellationToken)
     {
-        return Execute(() => _caseOpening.SetDevProgress(UserId, request.Stars, request.Xp, cancellationToken), "set dev progress", "all");
+        return ExecuteForDevTarget(targetUserId, userId => _caseOpening.SetDevProgress(userId, request.Stars, request.GbpPence, request.Xp, cancellationToken), "set dev progress", "all");
     }
 
     [HttpPut("dev/upgrades")]
     [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
     public Task<ActionResult<CaseOpeningProgressObj>> SetDevUpgrades(
         [FromBody] CaseOpeningDevUpgradesRequest request,
+        [FromQuery] Guid? targetUserId,
         CancellationToken cancellationToken)
     {
-        return Execute(
-            () => _caseOpening.SetDevUpgrades(UserId, request.SkipAnimationUnlocked, request.MultiOpenLevel, request.OpenSpeedLevel, cancellationToken),
+        return ExecuteForDevTarget(
+            targetUserId,
+            userId => _caseOpening.SetDevUpgrades(userId, request.SkipAnimationUnlocked, request.MultiOpenLevel, request.OpenSpeedLevel, cancellationToken),
             "set dev upgrades",
             "all");
     }
@@ -426,9 +551,20 @@ public sealed class CaseOpeningController : ControllerBase
     public Task<ActionResult<CaseOpeningProgressObj>> SetDevCaseUnlock(
         string caseKey,
         [FromBody] CaseOpeningDevCaseUnlockRequest request,
+        [FromQuery] Guid? targetUserId,
         CancellationToken cancellationToken)
     {
-        return Execute(() => _caseOpening.SetDevCaseUnlock(UserId, caseKey, request.Unlock, cancellationToken), "set dev case unlock", caseKey);
+        return ExecuteForDevTarget(targetUserId, userId => _caseOpening.SetDevCaseUnlock(userId, caseKey, request.Unlock, cancellationToken), "set dev case unlock", caseKey);
+    }
+
+    [HttpPut("dev/drop-rarities")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningDevDropSettingsObj>> SetDevDropRarities(
+        [FromBody] CaseOpeningDevDropSettingsRequest request,
+        [FromQuery] Guid? targetUserId,
+        CancellationToken cancellationToken)
+    {
+        return ExecuteForDevTarget(targetUserId, userId => _caseOpening.SetDevDropSettings(userId, request.RarityGroups, cancellationToken), "set dev drop rarities", "all");
     }
 
     [HttpPost("dev/reset")]
@@ -436,6 +572,28 @@ public sealed class CaseOpeningController : ControllerBase
     public Task<ActionResult<CaseOpeningProgressObj>> ResetDevProgress(CancellationToken cancellationToken)
     {
         return Execute(() => _caseOpening.ResetDevProgress(UserId, cancellationToken), "reset dev progress", "all");
+    }
+
+    private async Task<ActionResult<T>> ExecuteForDevTarget<T>(Guid? targetUserId, Func<Guid, Task<T>> action, string operation, string caseKey)
+    {
+        try
+        {
+            Guid resolvedUserId = targetUserId ?? UserId;
+            AppUser? targetUser = await _auth.GetUser(resolvedUserId);
+            if (targetUser is null || !targetUser.IsActive)
+                throw new InvalidOperationException("Choose an active user account.");
+
+            return Ok(await action(resolvedUserId));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new ApiResponse(false, exception.Message));
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Case-opening {Operation} failed for administrator {UserId}, target user {TargetUserId}, and case {CaseKey}.", operation, UserId, targetUserId ?? UserId, caseKey);
+            return StatusCode(502, new ApiResponse(false, "The case service could not be reached. Please try again shortly."));
+        }
     }
 
     private async Task<ActionResult<T>> Execute<T>(Func<Task<T>> action, string operation, string caseKey)
@@ -461,9 +619,11 @@ public sealed class CaseOpeningController : ControllerBase
     }
 }
 
-public sealed record CaseOpeningCaseSettingsRequest(int UnlockCostStars, int PurchaseCostStars, int XpRequirement);
-public sealed record CaseOpeningInventoryUpgradeSettingsRequest(int CostStars, int RequiredLevel);
+public sealed record CaseOpeningCaseSettingsRequest(int Tier, int UnlockCostStars, long UnlockCostGbpPence, int PurchaseCostStars, long PurchaseCostGbpPence, int XpRequirement);
+public sealed record CaseOpeningInventoryUpgradeSettingsRequest(int CostStars, long CostGbpPence, int RequiredLevel);
 public sealed record CaseOpeningXpByRarityRequest(int XpAwarded);
-public sealed record CaseOpeningDevProgressRequest(int Stars, int Xp);
+public sealed record CaseOpeningDevProgressRequest(int Stars, long GbpPence, int Xp);
+public sealed record CaseOpeningDevProfileObj(CaseOpeningProgressObj Progress, List<CaseOpeningCaseSummaryObj> Cases, CaseOpeningDevDropSettingsObj DropSettings);
 public sealed record CaseOpeningDevUpgradesRequest(bool SkipAnimationUnlocked, int MultiOpenLevel, int OpenSpeedLevel);
 public sealed record CaseOpeningDevCaseUnlockRequest(bool Unlock);
+public sealed record CaseOpeningDevDropSettingsRequest(List<string>? RarityGroups);

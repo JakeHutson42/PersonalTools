@@ -90,6 +90,20 @@
 
     @if (showNavigation)
     {
+        <aside class="live-winners-dock" id="liveWinnersDock" data-is-admin="@canManageSettings.ToString().ToLowerInvariant()" aria-label="Live Case Simulator winners">
+            <button class="live-winners-trigger" id="liveWinnersTrigger" type="button" aria-expanded="false" aria-controls="liveWinnersPanel">
+                <span class="live-winners-live-dot" aria-hidden="true"></span><span class="live-winners-count" id="liveWinnersCount">—</span><span class="live-winners-label">live</span>
+                <i class="fa-solid fa-trophy" aria-hidden="true"></i>
+            </button>
+            <section class="live-winners-panel" id="liveWinnersPanel" hidden>
+                <div class="live-winners-header"><div><p>24-hour hall of fame</p><h2>Recent winners</h2></div><span><i class="fa-solid fa-sparkles" aria-hidden="true"></i> Live</span></div>
+                <ol class="live-winners-list" id="liveWinnersList"><li class="live-winners-empty">Loading the latest wins…</li></ol>
+                @if (canManageSettings)
+                {
+                    <label class="live-winners-visibility">Visibility <select id="liveWinnersVisibility" aria-label="Winners dock visibility"><option value="users">All users</option><option value="admins">Administrators only</option></select></label>
+                }
+            </section>
+        </aside>
         <button class="matrix-ambient-toggle"
                 id="matrixAmbientToggle"
                 type="button"

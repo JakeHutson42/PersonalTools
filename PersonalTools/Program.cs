@@ -103,6 +103,8 @@ builder.Services.AddHttpClient<ISteamOpenIdData, SteamOpenIdData>(client =>
 builder.Services.AddScoped<ISteamOpenIdFuncs, SteamOpenIdFuncs>();
 builder.Services.AddScoped<IAppSettingsData, AppSettingsData>();
 builder.Services.AddScoped<IAppSettingsFuncs, AppSettingsFuncs>();
+builder.Services.AddScoped<ILiveWinnersData, LiveWinnersData>();
+builder.Services.AddScoped<ILiveWinnersFuncs, LiveWinnersFuncs>();
 builder.Services.AddScoped<IQuickLinksData, QuickLinksData>();
 builder.Services.AddScoped<IQuickLinksFuncs, QuickLinksFuncs>();
 builder.Services.AddScoped<IDashboardWidgetOrderData, DashboardWidgetOrderData>();
@@ -262,7 +264,19 @@ builder.Services.AddHostedService<PasteBinCleanupService>();
 
 // CS2 Case Simulator
 builder.Services.AddScoped<ICaseOpeningData, CaseOpeningData>();
-builder.Services.AddScoped<ICS2ItemPriceData, NullCS2ItemPriceData>();
+builder.Services.AddHttpClient<ICS2ItemPriceData, SkinportCS2ItemPriceData>(client =>
+{
+    client.BaseAddress = new Uri("https://api.skinport.com/");
+    client.Timeout = TimeSpan.FromSeconds(45);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("PersonalTools/1.0 (+https://jakehutson.me)");
+    client.DefaultRequestHeaders.AcceptEncoding.ParseAdd("br");
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AutomaticDecompression = System.Net.DecompressionMethods.Brotli
+        | System.Net.DecompressionMethods.GZip
+        | System.Net.DecompressionMethods.Deflate
+});
+builder.Services.AddHttpClient<ICSFloatMarketData, CSFloatMarketData>(client => { client.BaseAddress = new Uri("https://csfloat.com/"); client.Timeout = TimeSpan.FromSeconds(30); client.DefaultRequestHeaders.UserAgent.ParseAdd("PersonalTools/1.0 (+https://jakehutson.me)"); });
 builder.Services.AddHttpClient<ICaseOpeningReferenceData, CaseOpeningReferenceData>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(20);

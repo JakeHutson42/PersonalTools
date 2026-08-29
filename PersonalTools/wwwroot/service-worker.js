@@ -1,6 +1,9 @@
 'use strict';
 
-const staticCacheName = 'personal-tools-static-v2';
+const staticCacheName = 'personal-tools-static-v3';
+const caseImageCacheName = 'personal-tools-case-images-v1';
+const maximumCaseImages = 250;
+let caseImageWritesSinceTrim = 0;
 const offlineFallbackUrl = '/offline.html';
 const precacheUrls = [
     offlineFallbackUrl,
@@ -26,6 +29,19 @@ function isSafeStaticRequest(request, url) {
         && staticPathPrefixes.some(prefix => url.pathname.startsWith(prefix));
 }
 
+function isCaseImageRequest(request, url) {
+    return request.destination === 'image'
+        && request.method === 'GET'
+        && url.hostname === 'community.akamai.steamstatic.com'
+        && url.pathname.startsWith('/economy/image/');
+}
+
+async function trimCache(cache, maximumEntries) {
+    const keys = await cache.keys();
+    const overflow = keys.length - maximumEntries;
+    if (overflow > 0) await Promise.all(keys.slice(0, overflow).map(key => cache.delete(key)));
+}
+
 self.addEventListener('install', event => {
     event.waitUntil(caches.open(staticCacheName).then(cache => cache.addAll(precacheUrls)));
 });
@@ -34,7 +50,8 @@ self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys()
             .then(keys => Promise.all(keys
-                .filter(key => key.startsWith('personal-tools-static-') && key !== staticCacheName)
+                .filter(key => (key.startsWith('personal-tools-static-') && key !== staticCacheName)
+                    || (key.startsWith('personal-tools-case-images-') && key !== caseImageCacheName))
                 .map(key => caches.delete(key))))
             .then(() => self.clients.claim())
     );
@@ -52,6 +69,31 @@ self.addEventListener('fetch', event => {
     if (request.mode === 'navigate') {
         // Authenticated HTML always comes from the network. Only the generic offline page is cached.
         event.respondWith(fetch(request).catch(() => caches.match(offlineFallbackUrl)));
+        return;
+    }
+
+    if (isCaseImageRequest(request, url)) {
+        event.respondWith((async () => {
+            const cache = await caches.open(caseImageCacheName);
+            const cached = await cache.match(request, { ignoreVary: true });
+            if (cached) return cached;
+            try {
+                const response = await fetch(request);
+                if (response.ok || response.type === 'opaque') {
+                    event.waitUntil((async () => {
+                        await cache.put(request, response.clone());
+                        caseImageWritesSinceTrim += 1;
+                        if (caseImageWritesSinceTrim >= 20) {
+                            caseImageWritesSinceTrim = 0;
+                            await trimCache(cache, maximumCaseImages);
+                        }
+                    })());
+                }
+                return response;
+            } catch {
+                return Response.error();
+            }
+        })());
         return;
     }
 

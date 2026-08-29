@@ -49,7 +49,7 @@
                     else if (setting.Definition.InputType == AppSettingInputType.Switch)
                     { <div class="form-check form-switch"><input class="form-check-input pt-switch" type="checkbox" role="switch" checked="@(setting.Value == "true")" aria-label="@setting.Definition.Name" /></div> }
                     else
-                    { <div class="input-group"><input class="form-control" type="password" autocomplete="new-password" placeholder="@(setting.IsConfigured ? "Key saved — enter a new one to replace it" : "Paste Steam Web API key")" /><button class="btn btn-outline-primary" type="button">Save key</button></div><small class="text-success-emphasis @(setting.IsConfigured ? "" : "d-none")"><i class="fa-solid fa-lock me-1"></i>Protected key saved</small> }
+                    { <div class="input-group"><input class="form-control" type="password" autocomplete="new-password" placeholder="@(setting.IsConfigured ? "Key saved — enter a new one to replace it" : $"Paste {setting.Definition.Name}")" /><button class="btn btn-outline-primary" type="button">Save key</button></div><small class="text-success-emphasis @(setting.IsConfigured ? "" : "d-none")"><i class="fa-solid fa-lock me-1"></i>Protected key saved</small> }
                 </div></article>
                 }
             </div></div></section></div>

@@ -1,5 +1,11 @@
 namespace PersonalTools.Entities.CaseOpening;
 
+public static class CaseOpeningEconomyModes
+{
+    public const string Stars = "stars";
+    public const string Gbp = "gbp";
+}
+
 public class CaseOpeningItemObj
 {
     public string SourceItemId { get; set; } = string.Empty;
@@ -22,6 +28,12 @@ public class CaseOpeningItemObj
     public decimal? MaxFloat { get; set; }
     public decimal? FloatValue { get; set; }
     public int? PatternSeed { get; set; }
+    public Guid? SpecialVariantRuleId { get; set; }
+    public string SpecialVariantName { get; set; } = string.Empty;
+    public string SpecialVariantTier { get; set; } = string.Empty;
+    public string SpecialVariantDescription { get; set; } = string.Empty;
+    public Guid? SpecialVariantPriceSnapshotId { get; set; }
+    public decimal? SpecialVariantPrice { get; set; }
 
     // Kept nullable until a shared market-price provider is configured. The API contract
     // can gain prices later without changing the case result or history shapes.
@@ -36,6 +48,11 @@ public sealed class CaseOpeningCaseObj
     public string ImageUrl { get; set; } = string.Empty;
     public int UnlockCostStars { get; set; }
     public int PurchaseCostStars { get; set; }
+    public long UnlockCostGbpPence { get; set; }
+    public long PurchaseCostGbpPence { get; set; }
+    public int Tier { get; set; } = 1;
+    public long UnlockCost { get; set; }
+    public long PurchaseCost { get; set; }
     public int XpRequirement { get; set; }
     public int SaleMultiplier { get; set; } = 1;
     public bool IsUnlocked { get; set; }
@@ -52,6 +69,11 @@ public sealed class CaseOpeningCaseSummaryObj
     public string ImageUrl { get; set; } = string.Empty;
     public int UnlockCostStars { get; set; }
     public int PurchaseCostStars { get; set; }
+    public long UnlockCostGbpPence { get; set; }
+    public long PurchaseCostGbpPence { get; set; }
+    public int Tier { get; set; } = 1;
+    public long UnlockCost { get; set; }
+    public long PurchaseCost { get; set; }
     public int XpRequirement { get; set; }
     public int SaleMultiplier { get; set; } = 1;
     public bool IsUnlocked { get; set; }
@@ -79,9 +101,73 @@ public sealed class CaseOpeningResultObj
     public int Level { get; set; }
     public bool LeveledUp { get; set; }
     public int LevelRewardStars { get; set; }
+    public long LevelRewardAmountMinor { get; set; }
     public bool IsAutoSold { get; set; }
     public int AutoSoldStars { get; set; }
+    public long AutoSoldAmountMinor { get; set; }
     public bool IsNewCollectionItem { get; set; }
+    public decimal? MarketOpeningCost { get; set; }
+    public decimal? MarketProfit { get; set; }
+}
+
+public sealed class CaseOpeningPriceSnapshotDbModel
+{
+    public Guid PriceSnapshotId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public string Currency { get; set; } = "GBP";
+    public string PriceBasis { get; set; } = "median";
+    public int SourceItemCount { get; set; }
+    public int MatchedItemCount { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime ImportedUtc { get; set; }
+}
+
+public sealed class CaseOpeningSnapshotPriceDbModel
+{
+    public Guid PriceSnapshotId { get; set; }
+    public string MarketHashName { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public decimal? MinimumPrice { get; set; }
+    public decimal? MeanPrice { get; set; }
+    public decimal? MedianPrice { get; set; }
+    public decimal? SuggestedPrice { get; set; }
+    public int Quantity { get; set; }
+    public DateTime? SourceUpdatedUtc { get; set; }
+    public bool IsFallback { get; set; }
+}
+
+public sealed class CaseOpeningCaseMarketValueObj
+{
+    public string CaseKey { get; set; } = string.Empty;
+    public string CaseName { get; set; } = string.Empty;
+    public decimal? OpeningCost { get; set; }
+    public decimal? ExpectedValue { get; set; }
+    public decimal? ExpectedProfit { get; set; }
+    public decimal? ReturnPercentage { get; set; }
+    public decimal? ExpectedSaleValuePence { get; set; }
+    public decimal? TargetReturnPercentage { get; set; }
+    public int PricedVariants { get; set; }
+    public int TotalVariants { get; set; }
+    public int Tier { get; set; }
+    public long RecommendedPurchaseGbpPence { get; set; }
+    public long RecommendedUnlockGbpPence { get; set; }
+    public int RecommendedPurchaseStars { get; set; }
+    public int RecommendedUnlockStars { get; set; }
+    public long PublishedPurchaseGbpPence { get; set; }
+    public bool HasCompletePricing { get; set; }
+}
+
+public sealed class CaseOpeningPriceSnapshotSummaryObj
+{
+    public List<CaseOpeningPriceSnapshotDbModel> Snapshots { get; set; } = [];
+    public Guid? ActiveSnapshotId { get; set; }
+    public string Currency { get; set; } = "GBP";
+    public List<CaseOpeningCaseMarketValueObj> Cases { get; set; } = [];
+    public bool CanPublish { get; set; }
+    public int FallbackPriceCount { get; set; }
+    public int MissingPriceCount { get; set; }
+    public List<string> TierWarnings { get; set; } = [];
 }
 
 public sealed class CaseOpeningOpenRequestObj
@@ -93,6 +179,11 @@ public sealed class CaseOpeningOpenBatchResultObj
 {
     public List<CaseOpeningResultObj> Results { get; set; } = [];
     public int RemainingCaseQuantity { get; set; }
+}
+
+public sealed class CaseOpeningDevDropSettingsObj
+{
+    public List<string> RarityGroups { get; set; } = [];
 }
 
 public sealed class CaseOpeningOwnedCaseDbModel
@@ -122,6 +213,7 @@ public class CaseOpeningHistoryObj : CaseOpeningItemObj
 {
     public Guid OpeningId { get; set; }
     public string CaseKey { get; set; } = string.Empty;
+    public bool IsLocked { get; set; }
     public DateTime OpenedUtc { get; set; }
 }
 
@@ -154,6 +246,74 @@ public sealed class CaseOpeningCollectionObj
     public List<CaseOpeningCollectionItemObj> Items { get; set; } = [];
 }
 
+public sealed class CaseOpeningSpecialVariantRuleDbModel
+{
+    public Guid RuleId { get; set; }
+    public string SourceItemId { get; set; } = string.Empty;
+    public string MarketHashName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Tier { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string PaintIndex { get; set; } = string.Empty;
+    public string Phase { get; set; } = string.Empty;
+    public int? PatternSeed { get; set; }
+    public decimal? MinimumFloat { get; set; }
+    public decimal? MaximumFloat { get; set; }
+    public bool? RequiresStatTrak { get; set; }
+    public Guid? PriceSnapshotId { get; set; }
+    public decimal? Price { get; set; }
+}
+
+public sealed class CaseOpeningSpecialVariantRuleRequestObj
+{
+    public string SourceItemId { get; set; } = string.Empty;
+    public string MarketHashName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Tier { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string? PaintIndex { get; set; }
+    public string? Phase { get; set; }
+    public int? PatternSeed { get; set; }
+    public decimal? MinimumFloat { get; set; }
+    public decimal? MaximumFloat { get; set; }
+    public bool? RequiresStatTrak { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class CaseOpeningSpecialVariantListingEvidenceObj
+{
+    public Guid RuleId { get; set; }
+    public string RuleName { get; set; } = string.Empty;
+    public string ListingId { get; set; } = string.Empty;
+    public decimal PriceMinor { get; set; }
+    public decimal FloatValue { get; set; }
+    public int PatternSeed { get; set; }
+    public DateTime CreatedUtc { get; set; }
+}
+
+public sealed class CaseOpeningSpecialVariantPriceSnapshotObj
+{
+    public Guid PriceSnapshotId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+    public DateTime ImportedUtc { get; set; }
+}
+
+public sealed class CaseOpeningSpecialVariantPriceSnapshotRequestObj
+{
+    public string Name { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public Dictionary<Guid, decimal> Prices { get; set; } = [];
+}
+
+public sealed class CaseOpeningSpecialVariantAdminSummaryObj
+{
+    public List<CaseOpeningSpecialVariantRuleDbModel> Rules { get; set; } = [];
+    public List<CaseOpeningSpecialVariantPriceSnapshotObj> Snapshots { get; set; } = [];
+    public Guid? ActiveSnapshotId { get; set; }
+}
+
 public sealed class CaseOpeningCollectionRaritySummaryObj
 {
     public string RarityKey { get; set; } = string.Empty;
@@ -178,6 +338,7 @@ public class CaseOpeningProgressDbModel
 {
     public Guid UserId { get; set; }
     public int Stars { get; set; }
+    public long GbpPence { get; set; }
     public int Xp { get; set; }
     public bool SkipAnimationUnlocked { get; set; }
     public int MultiOpenLevel { get; set; }
@@ -186,21 +347,31 @@ public class CaseOpeningProgressDbModel
 
 public sealed class CaseOpeningProgressObj : CaseOpeningProgressDbModel
 {
+    public string EconomyMode { get; set; } = CaseOpeningEconomyModes.Stars;
+    public string CurrencyCode { get; set; } = "STAR";
+    public long ActiveBalanceMinor { get; set; }
+    public int SkinSaleRateBasisPoints { get; set; } = 9250;
+    public bool FreeCaseAllowanceEnabled { get; set; }
+    public int FreeCaseAllowanceRemaining { get; set; }
+    public int FreeCaseAllowanceQuantity { get; set; }
+    public DateTime? FreeCaseAllowanceRefreshUtc { get; set; }
     public int Level { get; set; }
     public int XpIntoLevel { get; set; }
     public int XpForNextLevel { get; set; }
-    public int SkipAnimationCost { get; set; }
+    public long SkipAnimationCost { get; set; }
     public int SkipAnimationXpRequirement { get; set; }
-    public int MultiOpenCost { get; set; }
+    public long MultiOpenCost { get; set; }
     public int MultiOpenXpRequirement { get; set; }
     public int MaximumMultiOpenLevel { get; set; }
     public decimal OpenSpeedMultiplier { get; set; }
-    public int OpenSpeedUpgradeCost { get; set; }
+    public long OpenSpeedUpgradeCost { get; set; }
     public int OpenSpeedUpgradeXpRequirement { get; set; }
     public int MaximumOpenSpeedLevel { get; set; }
     public int MaximumOpenQuantity { get; set; }
     public int StorageContainerBaseCostStars { get; set; }
     public int StorageContainerCostIncrementStars { get; set; }
+    public long StorageContainerBaseCost { get; set; }
+    public long StorageContainerCostIncrement { get; set; }
     public int StorageContainerSlots { get; set; }
     public int MaximumStorageContainers { get; set; }
     public Dictionary<string, int> SaleValues { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -224,6 +395,32 @@ public sealed class CaseOpeningPlayerStatsDbModel
     public int CompletedRaritySets { get; set; }
     public int HighestRewardedLevel { get; set; }
     public DateOnly? LastLoginUtcDate { get; set; }
+    public long TotalMilSpecPulls { get; set; }
+    public long TotalRestrictedPulls { get; set; }
+    public long TotalClassifiedPulls { get; set; }
+    public long TotalCovertPulls { get; set; }
+    public long TotalRareSpecialPulls { get; set; }
+    public long TotalStatTrakPulls { get; set; }
+    public long TotalCasesPurchased { get; set; }
+    public long TotalCasePurchaseStarsSpent { get; set; }
+    public long TotalSaleStarsEarned { get; set; }
+    public long TotalPullValueStars { get; set; }
+    public long TotalStarsSpent { get; set; }
+    public long TotalLevelRewardStars { get; set; }
+    public long TotalUpgradesPurchased { get; set; }
+    public long TotalGbpPenceSpent { get; set; }
+    public long TotalGbpPenceEarned { get; set; }
+    public long TotalGbpCasePurchasePenceSpent { get; set; }
+    public long TotalGbpSalePenceEarned { get; set; }
+    public long TotalGbpLevelRewardPence { get; set; }
+    public long TotalGbpAchievementRewardPence { get; set; }
+}
+
+public sealed class CaseOpeningFreeCaseAllowanceObj
+{
+    public int Remaining { get; set; }
+    public int Quantity { get; set; }
+    public DateTime? RefreshUtc { get; set; }
 }
 
 public sealed class CaseOpeningPlayerStatsObj
@@ -239,6 +436,25 @@ public sealed class CaseOpeningPlayerStatsObj
     public int CompletedRaritySets { get; set; }
     public int HighestRewardedLevel { get; set; }
     public DateOnly? LastLoginUtcDate { get; set; }
+    public long TotalMilSpecPulls { get; set; }
+    public long TotalRestrictedPulls { get; set; }
+    public long TotalClassifiedPulls { get; set; }
+    public long TotalCovertPulls { get; set; }
+    public long TotalRareSpecialPulls { get; set; }
+    public long TotalStatTrakPulls { get; set; }
+    public long TotalCasesPurchased { get; set; }
+    public long TotalCasePurchaseStarsSpent { get; set; }
+    public long TotalSaleStarsEarned { get; set; }
+    public long TotalPullValueStars { get; set; }
+    public long TotalStarsSpent { get; set; }
+    public long TotalLevelRewardStars { get; set; }
+    public long TotalUpgradesPurchased { get; set; }
+    public long TotalGbpPenceSpent { get; set; }
+    public long TotalGbpPenceEarned { get; set; }
+    public long TotalGbpCasePurchasePenceSpent { get; set; }
+    public long TotalGbpSalePenceEarned { get; set; }
+    public long TotalGbpLevelRewardPence { get; set; }
+    public long TotalGbpAchievementRewardPence { get; set; }
 }
 
 public sealed class CaseOpeningAchievementDbModel
@@ -249,6 +465,7 @@ public sealed class CaseOpeningAchievementDbModel
     public string MetricKey { get; set; } = string.Empty;
     public int TargetValue { get; set; }
     public int RewardStars { get; set; }
+    public long RewardGbpPence { get; set; }
     public int SortOrder { get; set; }
     public bool IsUnlocked { get; set; }
     public DateTime? UnlockedUtc { get; set; }
@@ -262,6 +479,8 @@ public sealed class CaseOpeningAchievementObj
     public int TargetValue { get; set; }
     public int CurrentValue { get; set; }
     public int RewardStars { get; set; }
+    public long RewardGbpPence { get; set; }
+    public long RewardAmountMinor { get; set; }
     public int SortOrder { get; set; }
     public bool IsUnlocked { get; set; }
     public DateTime? UnlockedUtc { get; set; }
@@ -273,12 +492,18 @@ public sealed class CaseOpeningAchievementSummaryObj
     public int UnlockedCount { get; set; }
     public int TotalCount { get; set; }
     public int EarnedStars { get; set; }
+    public long EarnedAmountMinor { get; set; }
     public List<CaseOpeningAchievementObj> Achievements { get; set; } = [];
 }
 
 // Global, shared across every account - one singleton row (Id is always 1).
 public sealed class CaseOpeningGameSettingsObj
 {
+    public string EconomyMode { get; set; } = CaseOpeningEconomyModes.Stars;
+    public int SkinSaleRateBasisPoints { get; set; } = 9250;
+    public bool FreeCaseAllowanceEnabled { get; set; }
+    public int FreeCaseAllowanceQuantity { get; set; } = 25;
+    public int FreeCaseAllowanceHours { get; set; } = 24;
     public int XpPerCaseOpen { get; set; }
     public int SkipAnimationCostStars { get; set; }
     public int SkipAnimationXpRequirement { get; set; }
@@ -300,6 +525,26 @@ public sealed class CaseOpeningGameSettingsObj
     public int StorageContainerSlots { get; set; }
     public int MaximumStorageContainers { get; set; }
     public int TradeUpRecipeCostStars { get; set; }
+    public long SkipAnimationCostGbpPence { get; set; }
+    public long MultiOpenCostGbpPence { get; set; }
+    public long OpenSpeedUpgradeBaseCostGbpPence { get; set; }
+    public long OpenSpeedUpgradeCostIncrementGbpPence { get; set; }
+    public long BotServerBaseCostGbpPence { get; set; }
+    public long BotServerCostIncrementGbpPence { get; set; }
+    public long BotBaseCostGbpPence { get; set; }
+    public long BotSpeedUpgradeBaseCostGbpPence { get; set; } = 300;
+    public long BotSpeedUpgradeCostIncrementGbpPence { get; set; } = 100;
+    public long StorageContainerBaseCostGbpPence { get; set; }
+    public long StorageContainerCostIncrementGbpPence { get; set; }
+    public long TradeUpRecipeCostGbpPence { get; set; }
+    public int TradeUpSlotUpgradeBaseCostStars { get; set; } = 300;
+    public int TradeUpSlotUpgradeCostIncrementStars { get; set; } = 75;
+    public long TradeUpSlotUpgradeBaseCostGbpPence { get; set; } = 300;
+    public long TradeUpSlotUpgradeCostIncrementGbpPence { get; set; } = 75;
+    public int TradeUpHoldingUpgradeBaseCostStars { get; set; } = 250;
+    public int TradeUpHoldingUpgradeCostIncrementStars { get; set; } = 50;
+    public long TradeUpHoldingUpgradeBaseCostGbpPence { get; set; } = 250;
+    public long TradeUpHoldingUpgradeCostIncrementGbpPence { get; set; } = 50;
 }
 
 public sealed class CaseOpeningCaseSettingsObj
@@ -307,6 +552,9 @@ public sealed class CaseOpeningCaseSettingsObj
     public string CaseKey { get; set; } = string.Empty;
     public int UnlockCostStars { get; set; }
     public int PurchaseCostStars { get; set; }
+    public long UnlockCostGbpPence { get; set; }
+    public long PurchaseCostGbpPence { get; set; }
+    public int Tier { get; set; } = 1;
     public int XpRequirement { get; set; }
 }
 
@@ -328,6 +576,9 @@ public sealed class CaseOpeningCasePurchaseResultObj
     public int OwnedQuantity { get; set; }
     public int StarsSpent { get; set; }
     public int StarsBalance { get; set; }
+    public string EconomyMode { get; set; } = CaseOpeningEconomyModes.Stars;
+    public long AmountSpentMinor { get; set; }
+    public long BalanceMinor { get; set; }
 }
 
 public sealed class CaseOpeningStoragePurchaseResultObj
@@ -337,6 +588,9 @@ public sealed class CaseOpeningStoragePurchaseResultObj
     public int TotalCapacity { get; set; }
     public int StarsSpent { get; set; }
     public int StarsBalance { get; set; }
+    public string EconomyMode { get; set; } = CaseOpeningEconomyModes.Stars;
+    public long AmountSpentMinor { get; set; }
+    public long BalanceMinor { get; set; }
 }
 
 public sealed class CaseOpeningSellRequestObj
@@ -344,11 +598,25 @@ public sealed class CaseOpeningSellRequestObj
     public List<Guid> OpeningIds { get; set; } = [];
 }
 
+public sealed class CaseOpeningInventoryLockRequestObj
+{
+    public bool IsLocked { get; set; }
+}
+
+public sealed class CaseOpeningInventoryLockObj
+{
+    public Guid OpeningId { get; set; }
+    public bool IsLocked { get; set; }
+}
+
 public class CaseOpeningSellResultObj
 {
     public int StarsAwarded { get; set; }
     public int StarsBalance { get; set; }
     public int SoldItemCount { get; set; }
+    public string EconomyMode { get; set; } = CaseOpeningEconomyModes.Stars;
+    public long AmountAwardedMinor { get; set; }
+    public long BalanceMinor { get; set; }
 }
 
 public sealed class CaseOpeningSellResultDbModel : CaseOpeningSellResultObj
@@ -378,12 +646,16 @@ public class CaseOpeningInventoryUpgradeDbModel
 public sealed class CaseOpeningInventoryUpgradeObj : CaseOpeningInventoryUpgradeDbModel
 {
     public int Stars { get; set; }
+    public long GbpPence { get; set; }
+    public string EconomyMode { get; set; } = CaseOpeningEconomyModes.Stars;
+    public long ActiveBalanceMinor { get; set; }
     public List<CaseOpeningUpgradeDefinitionObj> AvailableUpgrades { get; set; } = [];
 
     // Recipe slots are a repeatable +1 purchase (like the bot speed upgrade) rather than a
     // discrete-tier upgrade definition, so the cost is computed here instead of living in
     // CaseOpeningUpgradeDefinitions. Zero means "not unlocked yet" or "already at maximum".
     public int TradeUpRecipeSlotUpgradeCostStars { get; set; }
+    public long TradeUpRecipeSlotUpgradeCost { get; set; }
     public int MaximumTradeUpRecipeSlots { get; set; }
 }
 
@@ -394,6 +666,8 @@ public sealed class CaseOpeningUpgradeDefinitionObj
     public string Description { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public int CostStars { get; set; }
+    public long CostGbpPence { get; set; }
+    public long Cost { get; set; }
     public int RequiredLevel { get; set; }
     public int SortOrder { get; set; }
     public bool IsUnlocked { get; set; }
@@ -508,6 +782,7 @@ public sealed class CaseOpeningTradeUpRecipeObj : CaseOpeningTradeUpRecipeDbMode
 {
     public int HeldCount { get; set; }
     public int EligibleInputCount { get; set; }
+    public long HoldingUpgradeCost { get; set; }
 }
 
 public sealed class CaseOpeningTradeUpRecipeRequestObj
@@ -543,6 +818,9 @@ public sealed class CaseOpeningTradeUpRecipeSummaryObj
     // CaseOpeningTradeUpRecipeObj.HoldingCapacity, since the pool is not shared account-wide.
     public int UsedHoldingCount { get; set; }
     public int RecipeCostStars { get; set; }
+    public long RecipeCost { get; set; }
+    public string EconomyMode { get; set; } = CaseOpeningEconomyModes.Stars;
+    public long ActiveBalanceMinor { get; set; }
     public List<CaseOpeningTradeUpRecipeObj> Recipes { get; set; } = [];
     public List<CaseOpeningTradeUpHoldingObj> Holdings { get; set; } = [];
 }
@@ -553,6 +831,7 @@ public class CaseOpeningBotServerDbModel
     public Guid UserId { get; set; }
     public DateTime CreatedUtc { get; set; }
     public int SpeedLevel { get; set; }
+    public bool IsEnabled { get; set; } = true;
 }
 
 public sealed class CaseOpeningBotDbModel
@@ -562,6 +841,12 @@ public sealed class CaseOpeningBotDbModel
     public Guid UserId { get; set; }
     public DateTime CreatedUtc { get; set; }
     public DateTime? LastOpenedUtc { get; set; }
+    public int SpeedLevel { get; set; }
+    public decimal SpeedMultiplier { get; set; }
+    public int OpeningIntervalSeconds { get; set; }
+    public int NextSpeedUpgradeCost { get; set; }
+    public long ActiveNextSpeedUpgradeCost { get; set; }
+    public bool MaximumSpeedReached { get; set; }
 }
 
 public sealed class CaseOpeningBotServerObj : CaseOpeningBotServerDbModel
@@ -570,16 +855,22 @@ public sealed class CaseOpeningBotServerObj : CaseOpeningBotServerDbModel
     public decimal SpeedMultiplier { get; set; }
     public int OpeningIntervalSeconds { get; set; }
     public int NextSpeedUpgradeCost { get; set; }
+    public long ActiveNextSpeedUpgradeCost { get; set; }
     public bool MaximumSpeedReached { get; set; }
 }
 
 public sealed class CaseOpeningBotProgressObj
 {
     public int Stars { get; set; }
+    public long GbpPence { get; set; }
+    public string EconomyMode { get; set; } = CaseOpeningEconomyModes.Stars;
+    public long ActiveBalanceMinor { get; set; }
     public int ServerCapacity { get; set; }
     public int OpeningIntervalSeconds { get; set; }
     public int NextServerCost { get; set; }
     public int NextBotCost { get; set; }
+    public long ActiveNextServerCost { get; set; }
+    public long ActiveNextBotCost { get; set; }
     public int MaximumSpeedLevel { get; set; }
     public List<CaseOpeningBotServerObj> Servers { get; set; } = [];
 }
@@ -587,6 +878,19 @@ public sealed class CaseOpeningBotProgressObj
 public sealed class CaseOpeningBotOpenRequestObj
 {
     public string CaseKey { get; set; } = string.Empty;
+}
+
+public sealed class CaseOpeningBotServerStateRequestObj
+{
+    public bool IsEnabled { get; set; }
+}
+
+public sealed class CaseOpeningBotCycleResultObj
+{
+    public List<CaseOpeningResultObj> Results { get; set; } = [];
+    public bool ShouldStop { get; set; }
+    public string StopReason { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
 }
 
 public class CaseOpeningStatisticsDbModel

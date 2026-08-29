@@ -172,13 +172,11 @@ public sealed class CaseOpeningReferenceData : ICaseOpeningReferenceData
     {
         if (stickerCapsule)
         {
-            return rarityName switch
-            {
-                "High Grade" => "high-grade",
-                "Remarkable" => "remarkable",
-                "Exotic" => "exotic",
-                _ => "high-grade"
-            };
+            // The upstream catalogue labels these as e.g. "Remarkable Sticker" and
+            // "Exotic Sticker". Match the tier token rather than requiring an exact label.
+            if (rarityName.Contains("Exotic", StringComparison.OrdinalIgnoreCase)) return "exotic";
+            if (rarityName.Contains("Remarkable", StringComparison.OrdinalIgnoreCase)) return "remarkable";
+            return "high-grade";
         }
 
         return rarityName switch

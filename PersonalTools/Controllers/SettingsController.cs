@@ -21,7 +21,7 @@ public sealed class SettingsController : ControllerBase
     {
         // Appearance and dashboard preferences remain per-user controls even though the full
         // Settings page is administrator-only. Server secrets are never user-editable.
-        if (request.Key == AppSettingKey.SteamWebApiKey && !User.IsUserAllowedHere(AppRole.Admin))
+        if ((request.Key == AppSettingKey.SteamWebApiKey || request.Key == AppSettingKey.CSFloatApiKey) && !User.IsUserAllowedHere(AppRole.Admin))
         {
             return Forbid();
         }

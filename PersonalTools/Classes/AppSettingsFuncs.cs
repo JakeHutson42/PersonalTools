@@ -55,7 +55,7 @@ public sealed class AppSettingsFuncs : IAppSettingsFuncs
                 return;
 
             if (clean.Length is < 16 or > 256) 
-                throw new InvalidOperationException("Enter a valid Steam Web API key.");
+                throw new InvalidOperationException($"Enter a valid {definition.Name}.");
 
             await _data.Set(userId, key, _protector.Protect(clean), cancellationToken);
 

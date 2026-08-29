@@ -15,18 +15,19 @@ public interface ICaseOpeningData
     Task<CaseOpeningPlayerStatsDbModel> GetCaseOpeningPlayerStats(Guid userId, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningAchievementDbModel>> GetCaseOpeningAchievements(Guid userId, CancellationToken cancellationToken = default);
     Task EvaluateCaseOpeningAchievements(Guid userId, CancellationToken cancellationToken = default);
-    Task RecordCaseOpeningPlayerActivity(Guid userId, int casesOpened, int skinsObtained, int tradeUpsCompleted, int unlocksEarned, CancellationToken cancellationToken = default);
+    Task RecordCaseOpeningPlayerActivity(Guid userId, int casesOpened, int skinsObtained, int tradeUpsCompleted, int unlocksEarned, string rarityKey, bool isStatTrak, int casesPurchased, int casePurchaseStarsSpent, int saleStarsEarned, int pullValueStars, int starsSpent, int levelRewardStars, int upgradesPurchased, CancellationToken cancellationToken = default);
     Task RecordCaseOpeningLogin(Guid userId, CancellationToken cancellationToken = default);
-    Task<bool> ClaimCaseOpeningLevelReward(Guid userId, int level, int starsAwarded, CancellationToken cancellationToken = default);
+    Task<bool> ClaimCaseOpeningLevelReward(Guid userId, int level, int starsAwarded, long gbpPenceAwarded, CancellationToken cancellationToken = default);
     Task<bool> RecordCompletedCaseOpeningCollection(Guid userId, string caseKey, CancellationToken cancellationToken = default);
     Task<bool> RecordCompletedCaseOpeningRarity(Guid userId, string caseKey, string rarityKey, CancellationToken cancellationToken = default);
     Task<List<string>> GetCaseOpeningUnlockedCases(Guid userId, CancellationToken cancellationToken = default);
-    Task<CaseOpeningProgressDbModel?> UnlockCaseOpeningCase(Guid userId, string caseKey, int cost, CancellationToken cancellationToken = default);
-    Task<CaseOpeningProgressDbModel?> UnlockCaseOpeningUpgrade(Guid userId, string upgradeKey, int cost, int maximumMultiOpenLevel, int maximumOpenSpeedLevel, CancellationToken cancellationToken = default);
-    Task<CaseOpeningSellResultDbModel?> SellCaseOpeningInventory(Guid userId, List<Guid> openingIds, int starsAwarded, CancellationToken cancellationToken = default);
+    Task<CaseOpeningProgressDbModel?> UnlockCaseOpeningCase(Guid userId, string caseKey, int costStars, long costGbpPence, CancellationToken cancellationToken = default);
+    Task<CaseOpeningProgressDbModel?> UnlockCaseOpeningUpgrade(Guid userId, string upgradeKey, int costStars, long costGbpPence, int maximumMultiOpenLevel, int maximumOpenSpeedLevel, CancellationToken cancellationToken = default);
+    Task<CaseOpeningSellResultDbModel?> SellCaseOpeningInventory(Guid userId, List<Guid> openingIds, int starsAwarded, long gbpPenceAwarded, CancellationToken cancellationToken = default);
+    Task<CaseOpeningInventoryLockObj?> SetCaseOpeningInventoryLock(Guid userId, Guid openingId, bool isLocked, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryUpgradeDbModel> GetCaseOpeningInventoryUpgrades(Guid userId, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningUpgradeDefinitionObj>> GetCaseOpeningUpgradeDefinitions(Guid userId, CancellationToken cancellationToken = default);
-    Task UnlockCaseOpeningInventoryUpgrade(Guid userId, string upgradeKey, int cost, CancellationToken cancellationToken = default);
+    Task UnlockCaseOpeningInventoryUpgrade(Guid userId, string upgradeKey, int costStars, long costGbpPence, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningAutoBuyRuleDbModel>> GetCaseOpeningAutoBuyRules(Guid userId, CancellationToken cancellationToken = default);
     Task SetCaseOpeningAutoBuyRule(Guid userId, string caseKey, int thresholdQuantity, int purchaseQuantity, bool isEnabled, int ruleSlotCap, CancellationToken cancellationToken = default);
     Task DeleteCaseOpeningAutoBuyRule(Guid userId, string caseKey, CancellationToken cancellationToken = default);
@@ -40,38 +41,56 @@ public interface ICaseOpeningData
         bool? isMatch,
         CancellationToken cancellationToken = default);
     Task<List<CaseOpeningTradeUpRecipeObj>> GetCaseOpeningTradeUpRecipes(Guid userId, CancellationToken cancellationToken = default);
-    Task CreateCaseOpeningTradeUpRecipe(Guid userId, CaseOpeningTradeUpRecipeDbModel recipe, int cost, int recipeSlotCap, CancellationToken cancellationToken = default);
+    Task CreateCaseOpeningTradeUpRecipe(Guid userId, CaseOpeningTradeUpRecipeDbModel recipe, int costStars, long costGbpPence, int recipeSlotCap, CancellationToken cancellationToken = default);
     Task SetCaseOpeningTradeUpRecipeActive(Guid userId, Guid recipeId, bool isActive, int recipeSlotCap, CancellationToken cancellationToken = default);
     Task DeleteCaseOpeningTradeUpRecipe(Guid userId, Guid recipeId, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningTradeUpHoldingObj>> GetCaseOpeningTradeUpHoldings(Guid userId, CancellationToken cancellationToken = default);
     Task CollectCaseOpeningTradeUpHolding(Guid userId, Guid holdingId, CancellationToken cancellationToken = default);
-    Task UpgradeCaseOpeningTradeUpRecipeSlots(Guid userId, int cost, int maximumSlots, CancellationToken cancellationToken = default);
-    Task UpgradeCaseOpeningTradeUpRecipeHolding(Guid userId, Guid recipeId, int cost, int maximumCapacity, CancellationToken cancellationToken = default);
+    Task UpgradeCaseOpeningTradeUpRecipeSlots(Guid userId, int costStars, long costGbpPence, int maximumSlots, CancellationToken cancellationToken = default);
+    Task UpgradeCaseOpeningTradeUpRecipeHolding(Guid userId, Guid recipeId, int costStars, long costGbpPence, int maximumCapacity, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningBotServerDbModel>> GetCaseOpeningBotServers(Guid userId, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningBotDbModel>> GetCaseOpeningBots(Guid userId, CancellationToken cancellationToken = default);
-    Task PurchaseCaseOpeningBotServer(Guid userId, Guid serverId, int cost, CancellationToken cancellationToken = default);
-    Task PurchaseCaseOpeningBot(Guid userId, Guid serverId, Guid botId, int cost, CancellationToken cancellationToken = default);
-    Task UpgradeCaseOpeningBotServer(Guid userId, Guid serverId, int cost, int maximumLevel, CancellationToken cancellationToken = default);
+    Task PurchaseCaseOpeningBotServer(Guid userId, Guid serverId, int costStars, long costGbpPence, CancellationToken cancellationToken = default);
+    Task PurchaseCaseOpeningBot(Guid userId, Guid serverId, Guid botId, int costStars, long costGbpPence, CancellationToken cancellationToken = default);
+    Task UpgradeCaseOpeningBot(Guid userId, Guid botId, int costStars, long costGbpPence, int maximumLevel, CancellationToken cancellationToken = default);
+    Task SetCaseOpeningBotServerEnabled(Guid userId, Guid serverId, bool isEnabled, CancellationToken cancellationToken = default);
     Task<bool> ClaimCaseOpeningBotCycle(Guid userId, Guid botId, CancellationToken cancellationToken = default);
     Task<bool> CaseOpeningConditionExists(Guid userId, string sourceItemId, decimal floatValue, int patternSeed, CancellationToken cancellationToken = default);
     Task<bool> CaseOpeningCollectionItemExists(Guid userId, string caseKey, string sourceItemId, CancellationToken cancellationToken = default);
     Task SaveCaseOpening(Guid userId, CaseOpeningHistoryDbModel opening, CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningSpecialVariantRuleDbModel>> GetActiveCaseOpeningSpecialVariantRules(CancellationToken cancellationToken = default);
+    Task SaveCaseOpeningSpecialVariant(Guid openingId, CaseOpeningSpecialVariantRuleDbModel variant, CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningSpecialVariantRuleDbModel>> GetCaseOpeningSpecialVariantRules(CancellationToken cancellationToken = default);
+    Task SaveCaseOpeningSpecialVariantRule(Guid ruleId, CaseOpeningSpecialVariantRuleRequestObj rule, CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningSpecialVariantPriceSnapshotObj>> GetCaseOpeningSpecialVariantPriceSnapshots(CancellationToken cancellationToken = default);
+    Task CreateCaseOpeningSpecialVariantPriceSnapshot(CaseOpeningSpecialVariantPriceSnapshotObj snapshot, Dictionary<Guid, decimal> prices, CancellationToken cancellationToken = default);
+    Task ActivateCaseOpeningSpecialVariantPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
+    Task DeleteCaseOpeningSpecialVariantPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
     Task<CaseOpeningStatisticsDbModel> GetCaseOpeningStatistics(Guid userId, string caseKey, string targetRarityKey, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressDbModel?> AddCaseOpeningXp(Guid userId, int xpDelta, CancellationToken cancellationToken = default);
     Task<CaseOpeningGameSettingsObj> GetGameSettings(CancellationToken cancellationToken = default);
     Task SetGameSettings(CaseOpeningGameSettingsObj settings, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningCaseSettingsObj>> GetCaseSettings(CancellationToken cancellationToken = default);
-    Task SetCaseSettings(string caseKey, int unlockCostStars, int purchaseCostStars, int xpRequirement, CancellationToken cancellationToken = default);
+    Task SetCaseSettings(string caseKey, int tier, int unlockCostStars, long unlockCostGbpPence, int purchaseCostStars, long purchaseCostGbpPence, int xpRequirement, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningXpByRarityObj>> GetXpByRarity(CancellationToken cancellationToken = default);
     Task SetXpByRarity(string rarityKey, int xpAwarded, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningUpgradeDefinitionObj>> GetInventoryUpgradeSettings(CancellationToken cancellationToken = default);
-    Task SetInventoryUpgradeSettings(string upgradeKey, int costStars, int requiredLevel, CancellationToken cancellationToken = default);
-    Task<CaseOpeningCasePurchaseResultObj?> PurchaseCaseOpeningCases(Guid userId, string caseKey, int quantity, int purchaseCostStars, CancellationToken cancellationToken = default);
-    Task<CaseOpeningStoragePurchaseResultObj?> PurchaseCaseOpeningStorageContainer(Guid userId, Guid storageContainerId, int cost, int slots, int maximumContainers, CancellationToken cancellationToken = default);
-    Task<CaseOpeningProgressDbModel?> SetCaseOpeningProgressDev(Guid userId, int stars, int xp, CancellationToken cancellationToken = default);
+    Task SetInventoryUpgradeSettings(string upgradeKey, int costStars, long costGbpPence, int requiredLevel, CancellationToken cancellationToken = default);
+    Task<CaseOpeningCasePurchaseResultObj?> PurchaseCaseOpeningCases(Guid userId, string caseKey, int quantity, int purchaseCostStars, long purchaseCostGbpPence, CancellationToken cancellationToken = default);
+    Task<CaseOpeningStoragePurchaseResultObj?> PurchaseCaseOpeningStorageContainer(Guid userId, Guid storageContainerId, int costStars, long costGbpPence, int slots, int maximumContainers, CancellationToken cancellationToken = default);
+    Task<CaseOpeningProgressDbModel?> SetCaseOpeningProgressDev(Guid userId, int stars, long gbpPence, int xp, CancellationToken cancellationToken = default);
+    Task<CaseOpeningFreeCaseAllowanceObj> GetCaseOpeningFreeCaseAllowance(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressDbModel?> SetCaseOpeningUpgradesDev(Guid userId, bool skipAnimationUnlocked, int multiOpenLevel, int openSpeedLevel, CancellationToken cancellationToken = default);
     Task SetCaseOpeningCaseUnlockDev(Guid userId, string caseKey, bool unlock, CancellationToken cancellationToken = default);
+    Task<List<string>> GetCaseOpeningDevDropRarityGroups(Guid userId, CancellationToken cancellationToken = default);
+    Task SetCaseOpeningDevDropRarityGroups(Guid userId, List<string> rarityGroups, CancellationToken cancellationToken = default);
     Task ResetCaseOpeningProgressDev(Guid userId, CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningPriceSnapshotDbModel>> GetCaseOpeningPriceSnapshots(CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningSnapshotPriceDbModel>> GetActiveCaseOpeningSnapshotPrices(CancellationToken cancellationToken = default);
+    Task<decimal?> GetActiveCaseOpeningSnapshotPrice(string marketHashName, CancellationToken cancellationToken = default);
+    Task CreateCaseOpeningPriceSnapshot(CaseOpeningPriceSnapshotDbModel snapshot, List<CaseOpeningSnapshotPriceDbModel> prices, CancellationToken cancellationToken = default);
+    Task ActivateCaseOpeningPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
+    Task DeleteCaseOpeningPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
 }
 
 public sealed class CaseOpeningData : ICaseOpeningData
@@ -103,6 +122,64 @@ public sealed class CaseOpeningData : ICaseOpeningData
             Parameters(("p_user_id", userId), ("p_case_key", caseKey)),
             cancellationToken);
     }
+
+    public Task<List<CaseOpeningPriceSnapshotDbModel>> GetCaseOpeningPriceSnapshots(CancellationToken cancellationToken = default)
+    {
+        return _database.GetBulkDataSP("sp_case_opening_price_snapshots_get", ReadPriceSnapshot, cancellationToken: cancellationToken);
+    }
+
+    public Task<List<CaseOpeningSnapshotPriceDbModel>> GetActiveCaseOpeningSnapshotPrices(CancellationToken cancellationToken = default)
+    {
+        return _database.GetBulkDataSP("sp_case_opening_price_snapshot_active_items_get", ReadSnapshotPrice, cancellationToken: cancellationToken);
+    }
+
+    public async Task<decimal?> GetActiveCaseOpeningSnapshotPrice(string marketHashName, CancellationToken cancellationToken = default)
+    {
+        CaseOpeningSnapshotPriceDbModel? result = await _database.GetDataSP(
+            "sp_case_opening_price_snapshot_active_price_get",
+            ReadSnapshotPrice,
+            Parameters(("p_market_hash_name", marketHashName)),
+            cancellationToken);
+        return result?.Price;
+    }
+
+    public Task CreateCaseOpeningPriceSnapshot(CaseOpeningPriceSnapshotDbModel snapshot, List<CaseOpeningSnapshotPriceDbModel> prices, CancellationToken cancellationToken = default)
+    {
+        string payload = JsonSerializer.Serialize(prices.Select(item => new
+        {
+            marketHashName = item.MarketHashName,
+            price = item.Price,
+            minimumPrice = item.MinimumPrice,
+            meanPrice = item.MeanPrice,
+            medianPrice = item.MedianPrice,
+            suggestedPrice = item.SuggestedPrice,
+            quantity = item.Quantity,
+            sourceUpdatedUtc = item.SourceUpdatedUtc?.ToString("yyyy-MM-dd HH:mm:ss.ffffff")
+        }));
+        return _database.ExecuteSP(
+            "sp_case_opening_price_snapshot_create",
+            Parameters(
+                ("p_snapshot_id", snapshot.PriceSnapshotId),
+                ("p_name", snapshot.Name),
+                ("p_source", snapshot.Source),
+                ("p_currency", snapshot.Currency),
+                ("p_price_basis", snapshot.PriceBasis),
+                ("p_source_item_count", snapshot.SourceItemCount),
+                ("p_matched_item_count", snapshot.MatchedItemCount),
+                ("p_items", payload)),
+            cancellationToken);
+    }
+
+    public Task ActivateCaseOpeningPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default)
+    {
+        return _database.ExecuteSP(
+            "sp_case_opening_price_snapshot_activate",
+            Parameters(("p_snapshot_id", snapshotId)),
+            cancellationToken);
+    }
+
+    public Task DeleteCaseOpeningPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default)
+        => _database.ExecuteSP("sp_case_opening_price_snapshot_delete", Parameters(("p_snapshot_id", snapshotId)), cancellationToken);
 
     public Task<List<CaseOpeningCollectionDbModel>> GetCaseOpeningCollections(Guid userId, CancellationToken cancellationToken = default)
     {
@@ -154,7 +231,8 @@ public sealed class CaseOpeningData : ICaseOpeningData
     public Task<CaseOpeningProgressDbModel?> UnlockCaseOpeningUpgrade(
         Guid userId,
         string upgradeKey,
-        int cost,
+        int costStars,
+        long costGbpPence,
         int maximumMultiOpenLevel,
         int maximumOpenSpeedLevel,
         CancellationToken cancellationToken = default)
@@ -165,7 +243,8 @@ public sealed class CaseOpeningData : ICaseOpeningData
             Parameters(
                 ("p_user_id", userId),
                 ("p_upgrade_key", upgradeKey),
-                ("p_cost", cost),
+                ("p_cost_stars", costStars),
+                ("p_cost_gbp_pence", costGbpPence),
                 ("p_max_multi_open_level", maximumMultiOpenLevel),
                 ("p_max_open_speed_level", maximumOpenSpeedLevel)),
             cancellationToken);
@@ -183,13 +262,14 @@ public sealed class CaseOpeningData : ICaseOpeningData
     public Task<CaseOpeningProgressDbModel?> UnlockCaseOpeningCase(
         Guid userId,
         string caseKey,
-        int cost,
+        int costStars,
+        long costGbpPence,
         CancellationToken cancellationToken = default)
     {
         return _database.GetDataSP(
             "sp_case_opening_case_unlock",
             ReadProgress,
-            Parameters(("p_user_id", userId), ("p_case_key", caseKey), ("p_cost", cost)),
+            Parameters(("p_user_id", userId), ("p_case_key", caseKey), ("p_cost_stars", costStars), ("p_cost_gbp_pence", costGbpPence)),
             cancellationToken);
     }
 
@@ -197,6 +277,7 @@ public sealed class CaseOpeningData : ICaseOpeningData
         Guid userId,
         List<Guid> openingIds,
         int starsAwarded,
+        long gbpPenceAwarded,
         CancellationToken cancellationToken = default)
     {
         return _database.GetDataSP(
@@ -206,7 +287,21 @@ public sealed class CaseOpeningData : ICaseOpeningData
                 ("p_user_id", userId),
                 ("p_opening_ids", JsonSerializer.Serialize(openingIds)),
                 ("p_item_count", openingIds.Count),
-                ("p_stars_awarded", starsAwarded)),
+                ("p_stars_awarded", starsAwarded),
+                ("p_gbp_pence_awarded", gbpPenceAwarded)),
+            cancellationToken);
+    }
+
+    public Task<CaseOpeningInventoryLockObj?> SetCaseOpeningInventoryLock(
+        Guid userId,
+        Guid openingId,
+        bool isLocked,
+        CancellationToken cancellationToken = default)
+    {
+        return _database.GetDataSP(
+            "sp_case_opening_inventory_lock_set",
+            reader => new CaseOpeningInventoryLockObj { OpeningId = openingId, IsLocked = reader.GetBoolean("IsLocked") },
+            Parameters(("p_user_id", userId), ("p_opening_id", openingId), ("p_is_locked", isLocked)),
             cancellationToken);
     }
 
@@ -244,6 +339,15 @@ public sealed class CaseOpeningData : ICaseOpeningData
         int skinsObtained,
         int tradeUpsCompleted,
         int unlocksEarned,
+        string rarityKey,
+        bool isStatTrak,
+        int casesPurchased,
+        int casePurchaseStarsSpent,
+        int saleStarsEarned,
+        int pullValueStars,
+        int starsSpent,
+        int levelRewardStars,
+        int upgradesPurchased,
         CancellationToken cancellationToken = default)
     {
         return _database.ExecuteSP(
@@ -253,7 +357,16 @@ public sealed class CaseOpeningData : ICaseOpeningData
                 ("p_cases_opened", casesOpened),
                 ("p_skins_obtained", skinsObtained),
                 ("p_trade_ups_completed", tradeUpsCompleted),
-                ("p_unlocks_earned", unlocksEarned)),
+                ("p_unlocks_earned", unlocksEarned),
+                ("p_rarity_key", rarityKey),
+                ("p_is_stat_trak", isStatTrak),
+                ("p_cases_purchased", casesPurchased),
+                ("p_case_purchase_stars_spent", casePurchaseStarsSpent),
+                ("p_sale_stars_earned", saleStarsEarned),
+                ("p_pull_value_stars", pullValueStars),
+                ("p_stars_spent", starsSpent),
+                ("p_level_reward_stars", levelRewardStars),
+                ("p_upgrades_purchased", upgradesPurchased)),
             cancellationToken);
     }
 
@@ -269,11 +382,12 @@ public sealed class CaseOpeningData : ICaseOpeningData
         Guid userId,
         int level,
         int starsAwarded,
+        long gbpPenceAwarded,
         CancellationToken cancellationToken = default)
     {
         int claimed = await _database.GetScalarSP<int>(
             "sp_case_opening_level_reward_claim",
-            Parameters(("p_user_id", userId), ("p_level", level), ("p_stars_awarded", starsAwarded)),
+            Parameters(("p_user_id", userId), ("p_level", level), ("p_stars_awarded", starsAwarded), ("p_gbp_pence_awarded", gbpPenceAwarded)),
             cancellationToken);
 
         return claimed == 1;
@@ -358,7 +472,7 @@ public sealed class CaseOpeningData : ICaseOpeningData
             Parameters(("p_user_id", userId)), cancellationToken);
     }
 
-    public Task CreateCaseOpeningTradeUpRecipe(Guid userId, CaseOpeningTradeUpRecipeDbModel recipe, int cost, int recipeSlotCap, CancellationToken cancellationToken = default)
+    public Task CreateCaseOpeningTradeUpRecipe(Guid userId, CaseOpeningTradeUpRecipeDbModel recipe, int costStars, long costGbpPence, int recipeSlotCap, CancellationToken cancellationToken = default)
     {
         return _database.ExecuteSP(
             "sp_case_opening_trade_up_recipe_create",
@@ -376,7 +490,8 @@ public sealed class CaseOpeningData : ICaseOpeningData
                 ("p_target_input_rarity_key", recipe.TargetInputRarityKey),
                 ("p_target_stat_trak", recipe.TargetStatTrak),
                 ("p_target_wears", JsonSerializer.Serialize(recipe.TargetWears)),
-                ("p_cost", cost),
+                ("p_cost_stars", costStars),
+                ("p_cost_gbp_pence", costGbpPence),
                 ("p_recipe_slot_cap", recipeSlotCap)),
             cancellationToken);
     }
@@ -411,19 +526,19 @@ public sealed class CaseOpeningData : ICaseOpeningData
             cancellationToken);
     }
 
-    public Task UpgradeCaseOpeningTradeUpRecipeSlots(Guid userId, int cost, int maximumSlots, CancellationToken cancellationToken = default)
+    public Task UpgradeCaseOpeningTradeUpRecipeSlots(Guid userId, int costStars, long costGbpPence, int maximumSlots, CancellationToken cancellationToken = default)
     {
         return _database.ExecuteSP(
             "sp_case_opening_trade_up_recipe_slot_upgrade",
-            Parameters(("p_user_id", userId), ("p_cost", cost), ("p_maximum_slots", maximumSlots)),
+            Parameters(("p_user_id", userId), ("p_cost_stars", costStars), ("p_cost_gbp_pence", costGbpPence), ("p_maximum_slots", maximumSlots)),
             cancellationToken);
     }
 
-    public Task UpgradeCaseOpeningTradeUpRecipeHolding(Guid userId, Guid recipeId, int cost, int maximumCapacity, CancellationToken cancellationToken = default)
+    public Task UpgradeCaseOpeningTradeUpRecipeHolding(Guid userId, Guid recipeId, int costStars, long costGbpPence, int maximumCapacity, CancellationToken cancellationToken = default)
     {
         return _database.ExecuteSP(
             "sp_case_opening_trade_up_recipe_holding_upgrade",
-            Parameters(("p_user_id", userId), ("p_recipe_id", recipeId), ("p_cost", cost), ("p_maximum_capacity", maximumCapacity)),
+            Parameters(("p_user_id", userId), ("p_recipe_id", recipeId), ("p_cost_stars", costStars), ("p_cost_gbp_pence", costGbpPence), ("p_maximum_capacity", maximumCapacity)),
             cancellationToken);
     }
 
@@ -445,15 +560,15 @@ public sealed class CaseOpeningData : ICaseOpeningData
             cancellationToken);
     }
 
-    public Task PurchaseCaseOpeningBotServer(Guid userId, Guid serverId, int cost, CancellationToken cancellationToken = default)
+    public Task PurchaseCaseOpeningBotServer(Guid userId, Guid serverId, int costStars, long costGbpPence, CancellationToken cancellationToken = default)
     {
         return _database.ExecuteSP(
             "sp_case_opening_bot_server_purchase",
-            Parameters(("p_user_id", userId), ("p_server_id", serverId), ("p_cost", cost)),
+            Parameters(("p_user_id", userId), ("p_server_id", serverId), ("p_cost_stars", costStars), ("p_cost_gbp_pence", costGbpPence)),
             cancellationToken);
     }
 
-    public Task PurchaseCaseOpeningBot(Guid userId, Guid serverId, Guid botId, int cost, CancellationToken cancellationToken = default)
+    public Task PurchaseCaseOpeningBot(Guid userId, Guid serverId, Guid botId, int costStars, long costGbpPence, CancellationToken cancellationToken = default)
     {
         return _database.ExecuteSP(
             "sp_case_opening_bot_purchase",
@@ -461,7 +576,8 @@ public sealed class CaseOpeningData : ICaseOpeningData
                 ("p_user_id", userId),
                 ("p_server_id", serverId),
                 ("p_bot_id", botId),
-                ("p_cost", cost)),
+                ("p_cost_stars", costStars),
+                ("p_cost_gbp_pence", costGbpPence)),
             cancellationToken);
     }
 
@@ -573,26 +689,51 @@ public sealed class CaseOpeningData : ICaseOpeningData
             "sp_case_opening_game_settings_set",
             Parameters(
                 ("p_xp_per_case_open", settings.XpPerCaseOpen),
+                ("p_economy_mode", settings.EconomyMode),
+                ("p_skin_sale_rate_basis_points", settings.SkinSaleRateBasisPoints),
+                ("p_free_case_allowance_enabled", settings.FreeCaseAllowanceEnabled),
+                ("p_free_case_allowance_quantity", settings.FreeCaseAllowanceQuantity),
+                ("p_free_case_allowance_hours", settings.FreeCaseAllowanceHours),
                 ("p_skip_animation_cost_stars", settings.SkipAnimationCostStars),
+                ("p_skip_animation_cost_gbp_pence", settings.SkipAnimationCostGbpPence),
                 ("p_skip_animation_xp_requirement", settings.SkipAnimationXpRequirement),
                 ("p_multi_open_cost_stars", settings.MultiOpenCostStars),
+                ("p_multi_open_cost_gbp_pence", settings.MultiOpenCostGbpPence),
                 ("p_multi_open_xp_requirement", settings.MultiOpenXpRequirement),
                 ("p_open_speed_upgrade_base_cost_stars", settings.OpenSpeedUpgradeBaseCostStars),
+                ("p_open_speed_upgrade_base_cost_gbp_pence", settings.OpenSpeedUpgradeBaseCostGbpPence),
                 ("p_open_speed_upgrade_cost_increment_stars", settings.OpenSpeedUpgradeCostIncrementStars),
+                ("p_open_speed_upgrade_cost_increment_gbp_pence", settings.OpenSpeedUpgradeCostIncrementGbpPence),
                 ("p_open_speed_upgrade_xp_requirement", settings.OpenSpeedUpgradeXpRequirement),
                 ("p_maximum_open_speed_level", settings.MaximumOpenSpeedLevel),
                 ("p_maximum_multi_open_level", settings.MaximumMultiOpenLevel),
                 ("p_maximum_open_quantity", settings.MaximumOpenQuantity),
                 ("p_bot_opening_interval_seconds", settings.BotOpeningIntervalSeconds),
                 ("p_bot_server_base_cost_stars", settings.BotServerBaseCostStars),
+                ("p_bot_server_base_cost_gbp_pence", settings.BotServerBaseCostGbpPence),
                 ("p_bot_server_cost_increment_stars", settings.BotServerCostIncrementStars),
+                ("p_bot_server_cost_increment_gbp_pence", settings.BotServerCostIncrementGbpPence),
                 ("p_bot_base_cost_stars", settings.BotBaseCostStars),
+                ("p_bot_base_cost_gbp_pence", settings.BotBaseCostGbpPence),
+                ("p_bot_speed_upgrade_base_cost_gbp_pence", settings.BotSpeedUpgradeBaseCostGbpPence),
+                ("p_bot_speed_upgrade_cost_increment_gbp_pence", settings.BotSpeedUpgradeCostIncrementGbpPence),
                 ("p_bot_cost_growth_rate", settings.BotCostGrowthRate),
                 ("p_storage_container_base_cost_stars", settings.StorageContainerBaseCostStars),
+                ("p_storage_container_base_cost_gbp_pence", settings.StorageContainerBaseCostGbpPence),
                 ("p_storage_container_cost_increment_stars", settings.StorageContainerCostIncrementStars),
+                ("p_storage_container_cost_increment_gbp_pence", settings.StorageContainerCostIncrementGbpPence),
                 ("p_storage_container_slots", settings.StorageContainerSlots),
                 ("p_maximum_storage_containers", settings.MaximumStorageContainers),
-                ("p_trade_up_recipe_cost_stars", settings.TradeUpRecipeCostStars)),
+                ("p_trade_up_recipe_cost_stars", settings.TradeUpRecipeCostStars),
+                ("p_trade_up_recipe_cost_gbp_pence", settings.TradeUpRecipeCostGbpPence),
+                ("p_trade_up_slot_upgrade_base_cost_stars", settings.TradeUpSlotUpgradeBaseCostStars),
+                ("p_trade_up_slot_upgrade_cost_increment_stars", settings.TradeUpSlotUpgradeCostIncrementStars),
+                ("p_trade_up_slot_upgrade_base_cost_gbp_pence", settings.TradeUpSlotUpgradeBaseCostGbpPence),
+                ("p_trade_up_slot_upgrade_cost_increment_gbp_pence", settings.TradeUpSlotUpgradeCostIncrementGbpPence),
+                ("p_trade_up_holding_upgrade_base_cost_stars", settings.TradeUpHoldingUpgradeBaseCostStars),
+                ("p_trade_up_holding_upgrade_cost_increment_stars", settings.TradeUpHoldingUpgradeCostIncrementStars),
+                ("p_trade_up_holding_upgrade_base_cost_gbp_pence", settings.TradeUpHoldingUpgradeBaseCostGbpPence),
+                ("p_trade_up_holding_upgrade_cost_increment_gbp_pence", settings.TradeUpHoldingUpgradeCostIncrementGbpPence)),
             cancellationToken);
     }
 
@@ -601,18 +742,12 @@ public sealed class CaseOpeningData : ICaseOpeningData
         return _database.GetBulkDataSP("sp_case_opening_case_settings_get_all", ReadCaseSettings, cancellationToken: cancellationToken);
     }
 
-    public Task SetCaseSettings(string caseKey, int unlockCostStars, int purchaseCostStars, int xpRequirement, CancellationToken cancellationToken = default)
+    public Task SetCaseSettings(string caseKey, int tier, int unlockCostStars, long unlockCostGbpPence, int purchaseCostStars, long purchaseCostGbpPence, int xpRequirement, CancellationToken cancellationToken = default)
     {
         return _database.ExecuteSP(
             "sp_case_opening_case_settings_set",
-            Parameters(("p_case_key", caseKey), ("p_unlock_cost_stars", unlockCostStars), ("p_purchase_cost_stars", purchaseCostStars), ("p_xp_requirement", xpRequirement)),
+            Parameters(("p_case_key", caseKey), ("p_tier", tier), ("p_unlock_cost_stars", unlockCostStars), ("p_unlock_cost_gbp_pence", unlockCostGbpPence), ("p_purchase_cost_stars", purchaseCostStars), ("p_purchase_cost_gbp_pence", purchaseCostGbpPence), ("p_xp_requirement", xpRequirement)),
             cancellationToken);
-    }
-
-    public Task UpgradeCaseOpeningBotServer(Guid userId, Guid serverId, int cost, int maximumLevel, CancellationToken cancellationToken = default)
-    {
-        return _database.ExecuteSP("sp_case_opening_bot_server_speed_upgrade",
-            Parameters(("p_user_id", userId), ("p_server_id", serverId), ("p_cost", cost), ("p_maximum_level", maximumLevel)), cancellationToken);
     }
 
     public async Task<CaseOpeningInventoryUpgradeDbModel> GetCaseOpeningInventoryUpgrades(Guid userId, CancellationToken cancellationToken = default)
@@ -626,15 +761,15 @@ public sealed class CaseOpeningData : ICaseOpeningData
         return _database.GetBulkDataSP("sp_case_opening_upgrade_definitions_get", reader => new CaseOpeningUpgradeDefinitionObj
         {
             UpgradeKey = reader.GetString("UpgradeKey"), Name = reader.GetString("Name"), Description = reader.GetString("Description"),
-            Category = reader.GetString("Category"), CostStars = reader.GetInt32("CostStars"), RequiredLevel = reader.GetInt32("RequiredLevel"),
+            Category = reader.GetString("Category"), CostStars = reader.GetInt32("CostStars"), CostGbpPence = reader.GetInt64("CostGbpPence"), RequiredLevel = reader.GetInt32("RequiredLevel"),
             SortOrder = reader.GetInt32("SortOrder"), IsUnlocked = reader.GetBoolean("IsUnlocked")
         }, Parameters(("p_user_id", userId)), cancellationToken);
     }
 
-    public Task UnlockCaseOpeningInventoryUpgrade(Guid userId, string upgradeKey, int cost, CancellationToken cancellationToken = default)
+    public Task UnlockCaseOpeningInventoryUpgrade(Guid userId, string upgradeKey, int costStars, long costGbpPence, CancellationToken cancellationToken = default)
     {
         return _database.ExecuteSP("sp_case_opening_inventory_upgrade_unlock",
-            Parameters(("p_user_id", userId), ("p_upgrade_key", upgradeKey), ("p_cost", cost)), cancellationToken);
+            Parameters(("p_user_id", userId), ("p_upgrade_key", upgradeKey), ("p_cost_stars", costStars), ("p_cost_gbp_pence", costGbpPence)), cancellationToken);
     }
 
     public Task<List<CaseOpeningAutoBuyRuleDbModel>> GetCaseOpeningAutoBuyRules(Guid userId, CancellationToken cancellationToken = default)
@@ -677,10 +812,10 @@ public sealed class CaseOpeningData : ICaseOpeningData
         return _database.GetBulkDataSP("sp_case_opening_upgrade_settings_get", ReadUpgradeDefinition, cancellationToken: cancellationToken);
     }
 
-    public Task SetInventoryUpgradeSettings(string upgradeKey, int costStars, int requiredLevel, CancellationToken cancellationToken = default)
+    public Task SetInventoryUpgradeSettings(string upgradeKey, int costStars, long costGbpPence, int requiredLevel, CancellationToken cancellationToken = default)
     {
         return _database.ExecuteSP("sp_case_opening_upgrade_settings_set",
-            Parameters(("p_upgrade_key", upgradeKey), ("p_cost_stars", costStars), ("p_required_level", requiredLevel)), cancellationToken);
+            Parameters(("p_upgrade_key", upgradeKey), ("p_cost_stars", costStars), ("p_cost_gbp_pence", costGbpPence), ("p_required_level", requiredLevel)), cancellationToken);
     }
 
     public Task SetCaseOpeningAutoSellPreference(Guid userId, string rarityKey, bool enabled, bool preserveStatTrak, CancellationToken cancellationToken = default)
@@ -702,30 +837,31 @@ public sealed class CaseOpeningData : ICaseOpeningData
             cancellationToken);
     }
 
-    public Task<CaseOpeningCasePurchaseResultObj?> PurchaseCaseOpeningCases(Guid userId, string caseKey, int quantity, int purchaseCostStars, CancellationToken cancellationToken = default)
+    public Task<CaseOpeningCasePurchaseResultObj?> PurchaseCaseOpeningCases(Guid userId, string caseKey, int quantity, int purchaseCostStars, long purchaseCostGbpPence, CancellationToken cancellationToken = default)
     {
         return _database.GetDataSP("sp_case_opening_cases_purchase", reader => new CaseOpeningCasePurchaseResultObj
         {
             CaseKey = reader.GetString("CaseKey"), PurchasedQuantity = reader.GetInt32("PurchasedQuantity"), OwnedQuantity = reader.GetInt32("OwnedQuantity"),
-            StarsSpent = reader.GetInt32("StarsSpent"), StarsBalance = reader.GetInt32("StarsBalance")
-        }, Parameters(("p_user_id", userId), ("p_case_key", caseKey), ("p_quantity", quantity), ("p_purchase_cost_stars", purchaseCostStars)), cancellationToken);
+            StarsSpent = reader.GetInt32("StarsSpent"), StarsBalance = reader.GetInt32("StarsBalance"), EconomyMode = reader.GetString("EconomyMode"),
+            AmountSpentMinor = reader.GetInt64("AmountSpentMinor"), BalanceMinor = reader.GetInt64("BalanceMinor")
+        }, Parameters(("p_user_id", userId), ("p_case_key", caseKey), ("p_quantity", quantity), ("p_purchase_cost_stars", purchaseCostStars), ("p_purchase_cost_gbp_pence", purchaseCostGbpPence)), cancellationToken);
     }
 
-    public Task<CaseOpeningStoragePurchaseResultObj?> PurchaseCaseOpeningStorageContainer(Guid userId, Guid storageContainerId, int cost, int slots, int maximumContainers, CancellationToken cancellationToken = default)
+    public Task<CaseOpeningStoragePurchaseResultObj?> PurchaseCaseOpeningStorageContainer(Guid userId, Guid storageContainerId, int costStars, long costGbpPence, int slots, int maximumContainers, CancellationToken cancellationToken = default)
     {
         return _database.GetDataSP("sp_case_opening_storage_container_purchase", reader => new CaseOpeningStoragePurchaseResultObj
         {
             StorageContainerCount = reader.GetInt32("StorageContainerCount"), AddedSlots = reader.GetInt32("AddedSlots"), TotalCapacity = reader.GetInt32("TotalCapacity"),
-            StarsSpent = reader.GetInt32("StarsSpent"), StarsBalance = reader.GetInt32("StarsBalance")
-        }, Parameters(("p_user_id", userId), ("p_storage_container_id", storageContainerId), ("p_cost", cost), ("p_slots", slots), ("p_maximum_containers", maximumContainers)), cancellationToken);
+            StarsSpent = reader.GetInt32("StarsSpent"), StarsBalance = reader.GetInt32("StarsBalance"), EconomyMode = reader.GetString("EconomyMode"), AmountSpentMinor = reader.GetInt64("AmountSpentMinor"), BalanceMinor = reader.GetInt64("BalanceMinor")
+        }, Parameters(("p_user_id", userId), ("p_storage_container_id", storageContainerId), ("p_cost_stars", costStars), ("p_cost_gbp_pence", costGbpPence), ("p_slots", slots), ("p_maximum_containers", maximumContainers)), cancellationToken);
     }
 
-    public Task<CaseOpeningProgressDbModel?> SetCaseOpeningProgressDev(Guid userId, int stars, int xp, CancellationToken cancellationToken = default)
+    public Task<CaseOpeningProgressDbModel?> SetCaseOpeningProgressDev(Guid userId, int stars, long gbpPence, int xp, CancellationToken cancellationToken = default)
     {
         return _database.GetDataSP(
             "sp_case_opening_progress_dev_set",
             ReadProgress,
-            Parameters(("p_user_id", userId), ("p_stars", stars), ("p_xp", xp)),
+            Parameters(("p_user_id", userId), ("p_stars", stars), ("p_gbp_pence", gbpPence), ("p_xp", xp)),
             cancellationToken);
     }
 
@@ -747,6 +883,23 @@ public sealed class CaseOpeningData : ICaseOpeningData
         return _database.ExecuteSP(
             "sp_case_opening_case_unlock_dev_set",
             Parameters(("p_user_id", userId), ("p_case_key", caseKey), ("p_unlock", unlock)),
+            cancellationToken);
+    }
+
+    public Task<List<string>> GetCaseOpeningDevDropRarityGroups(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return _database.GetBulkDataSP(
+            "sp_case_opening_dev_drop_rarities_get",
+            reader => reader.GetString("RarityGroup"),
+            Parameters(("p_user_id", userId)),
+            cancellationToken);
+    }
+
+    public Task SetCaseOpeningDevDropRarityGroups(Guid userId, List<string> rarityGroups, CancellationToken cancellationToken = default)
+    {
+        return _database.ExecuteSP(
+            "sp_case_opening_dev_drop_rarities_set",
+            Parameters(("p_user_id", userId), ("p_rarity_groups", JsonSerializer.Serialize(rarityGroups))),
             cancellationToken);
     }
 
@@ -791,6 +944,7 @@ public sealed class CaseOpeningData : ICaseOpeningData
             FloatValue = NullableDecimal(reader, "FloatValue"),
             PatternSeed = reader.IsDBNull(reader.GetOrdinal("PatternSeed")) ? null : reader.GetInt32("PatternSeed"),
             EstimatedPrice = reader.IsDBNull(reader.GetOrdinal("EstimatedPrice")) ? null : reader.GetDecimal("EstimatedPrice"),
+            IsLocked = reader.GetBoolean("IsLocked"),
             // MariaDB DATETIME values have no timezone marker. The column is UTC by contract, so
             // restore that information before JSON serialisation rather than letting browsers read it as local time.
             OpenedUtc = DateTime.SpecifyKind(reader.GetDateTime("OpenedUtc"), DateTimeKind.Utc)
@@ -803,6 +957,7 @@ public sealed class CaseOpeningData : ICaseOpeningData
         {
             UserId = reader.GetGuid("UserId"),
             Stars = reader.GetInt32("Stars"),
+            GbpPence = reader.GetInt64("GbpPence"),
             Xp = reader.GetInt32("Xp"),
             SkipAnimationUnlocked = reader.GetBoolean("SkipAnimationUnlocked"),
             MultiOpenLevel = reader.GetInt32("MultiOpenLevel"),
@@ -827,7 +982,26 @@ public sealed class CaseOpeningData : ICaseOpeningData
             HighestRewardedLevel = reader.GetInt32("HighestRewardedLevel"),
             LastLoginUtcDate = reader.IsDBNull(reader.GetOrdinal("LastLoginUtcDate"))
                 ? null
-                : DateOnly.FromDateTime(reader.GetDateTime("LastLoginUtcDate"))
+                : DateOnly.FromDateTime(reader.GetDateTime("LastLoginUtcDate")),
+            TotalMilSpecPulls = reader.GetInt64("TotalMilSpecPulls"),
+            TotalRestrictedPulls = reader.GetInt64("TotalRestrictedPulls"),
+            TotalClassifiedPulls = reader.GetInt64("TotalClassifiedPulls"),
+            TotalCovertPulls = reader.GetInt64("TotalCovertPulls"),
+            TotalRareSpecialPulls = reader.GetInt64("TotalRareSpecialPulls"),
+            TotalStatTrakPulls = reader.GetInt64("TotalStatTrakPulls"),
+            TotalCasesPurchased = reader.GetInt64("TotalCasesPurchased"),
+            TotalCasePurchaseStarsSpent = reader.GetInt64("TotalCasePurchaseStarsSpent"),
+            TotalSaleStarsEarned = reader.GetInt64("TotalSaleStarsEarned"),
+            TotalPullValueStars = reader.GetInt64("TotalPullValueStars"),
+            TotalStarsSpent = reader.GetInt64("TotalStarsSpent"),
+            TotalLevelRewardStars = reader.GetInt64("TotalLevelRewardStars"),
+            TotalUpgradesPurchased = reader.GetInt64("TotalUpgradesPurchased"),
+            TotalGbpPenceSpent = reader.GetInt64("TotalGbpPenceSpent"),
+            TotalGbpPenceEarned = reader.GetInt64("TotalGbpPenceEarned")
+            ,TotalGbpCasePurchasePenceSpent = reader.GetInt64("TotalGbpCasePurchasePenceSpent")
+            ,TotalGbpSalePenceEarned = reader.GetInt64("TotalGbpSalePenceEarned")
+            ,TotalGbpLevelRewardPence = reader.GetInt64("TotalGbpLevelRewardPence")
+            ,TotalGbpAchievementRewardPence = reader.GetInt64("TotalGbpAchievementRewardPence")
         };
     }
 
@@ -841,6 +1015,7 @@ public sealed class CaseOpeningData : ICaseOpeningData
             MetricKey = reader.GetString("MetricKey"),
             TargetValue = reader.GetInt32("TargetValue"),
             RewardStars = reader.GetInt32("RewardStars"),
+            RewardGbpPence = reader.GetInt64("RewardGbpPence"),
             SortOrder = reader.GetInt32("SortOrder"),
             IsUnlocked = reader.GetBoolean("IsUnlocked"),
             UnlockedUtc = reader.IsDBNull(reader.GetOrdinal("UnlockedUtc"))
@@ -869,27 +1044,52 @@ public sealed class CaseOpeningData : ICaseOpeningData
     {
         return new CaseOpeningGameSettingsObj
         {
+            EconomyMode = reader.GetString("EconomyMode"),
+            SkinSaleRateBasisPoints = reader.GetInt32("SkinSaleRateBasisPoints"),
+            FreeCaseAllowanceEnabled = reader.GetBoolean("FreeCaseAllowanceEnabled"),
+            FreeCaseAllowanceQuantity = reader.GetInt32("FreeCaseAllowanceQuantity"),
+            FreeCaseAllowanceHours = reader.GetInt32("FreeCaseAllowanceHours"),
             XpPerCaseOpen = reader.GetInt32("XpPerCaseOpen"),
             SkipAnimationCostStars = reader.GetInt32("SkipAnimationCostStars"),
+            SkipAnimationCostGbpPence = reader.GetInt64("SkipAnimationCostGbpPence"),
             SkipAnimationXpRequirement = reader.GetInt32("SkipAnimationXpRequirement"),
             MultiOpenCostStars = reader.GetInt32("MultiOpenCostStars"),
+            MultiOpenCostGbpPence = reader.GetInt64("MultiOpenCostGbpPence"),
             MultiOpenXpRequirement = reader.GetInt32("MultiOpenXpRequirement"),
             OpenSpeedUpgradeBaseCostStars = reader.GetInt32("OpenSpeedUpgradeBaseCostStars"),
+            OpenSpeedUpgradeBaseCostGbpPence = reader.GetInt64("OpenSpeedUpgradeBaseCostGbpPence"),
             OpenSpeedUpgradeCostIncrementStars = reader.GetInt32("OpenSpeedUpgradeCostIncrementStars"),
+            OpenSpeedUpgradeCostIncrementGbpPence = reader.GetInt64("OpenSpeedUpgradeCostIncrementGbpPence"),
             OpenSpeedUpgradeXpRequirement = reader.GetInt32("OpenSpeedUpgradeXpRequirement"),
             MaximumOpenSpeedLevel = reader.GetInt32("MaximumOpenSpeedLevel"),
             MaximumMultiOpenLevel = reader.GetInt32("MaximumMultiOpenLevel"),
             MaximumOpenQuantity = reader.GetInt32("MaximumOpenQuantity"),
             BotOpeningIntervalSeconds = reader.GetInt32("BotOpeningIntervalSeconds"),
             BotServerBaseCostStars = reader.GetInt32("BotServerBaseCostStars"),
+            BotServerBaseCostGbpPence = reader.GetInt64("BotServerBaseCostGbpPence"),
             BotServerCostIncrementStars = reader.GetInt32("BotServerCostIncrementStars"),
+            BotServerCostIncrementGbpPence = reader.GetInt64("BotServerCostIncrementGbpPence"),
             BotBaseCostStars = reader.GetInt32("BotBaseCostStars"),
+            BotBaseCostGbpPence = reader.GetInt64("BotBaseCostGbpPence"),
+            BotSpeedUpgradeBaseCostGbpPence = reader.GetInt64("BotSpeedUpgradeBaseCostGbpPence"),
+            BotSpeedUpgradeCostIncrementGbpPence = reader.GetInt64("BotSpeedUpgradeCostIncrementGbpPence"),
             BotCostGrowthRate = reader.GetDecimal("BotCostGrowthRate"),
             StorageContainerBaseCostStars = reader.GetInt32("StorageContainerBaseCostStars"),
+            StorageContainerBaseCostGbpPence = reader.GetInt64("StorageContainerBaseCostGbpPence"),
             StorageContainerCostIncrementStars = reader.GetInt32("StorageContainerCostIncrementStars"),
+            StorageContainerCostIncrementGbpPence = reader.GetInt64("StorageContainerCostIncrementGbpPence"),
             StorageContainerSlots = reader.GetInt32("StorageContainerSlots"),
             MaximumStorageContainers = reader.GetInt32("MaximumStorageContainers"),
-            TradeUpRecipeCostStars = reader.GetInt32("TradeUpRecipeCostStars")
+            TradeUpRecipeCostStars = reader.GetInt32("TradeUpRecipeCostStars"),
+            TradeUpRecipeCostGbpPence = reader.GetInt64("TradeUpRecipeCostGbpPence"),
+            TradeUpSlotUpgradeBaseCostStars = reader.GetInt32("TradeUpSlotUpgradeBaseCostStars"),
+            TradeUpSlotUpgradeCostIncrementStars = reader.GetInt32("TradeUpSlotUpgradeCostIncrementStars"),
+            TradeUpSlotUpgradeBaseCostGbpPence = reader.GetInt64("TradeUpSlotUpgradeBaseCostGbpPence"),
+            TradeUpSlotUpgradeCostIncrementGbpPence = reader.GetInt64("TradeUpSlotUpgradeCostIncrementGbpPence"),
+            TradeUpHoldingUpgradeBaseCostStars = reader.GetInt32("TradeUpHoldingUpgradeBaseCostStars"),
+            TradeUpHoldingUpgradeCostIncrementStars = reader.GetInt32("TradeUpHoldingUpgradeCostIncrementStars"),
+            TradeUpHoldingUpgradeBaseCostGbpPence = reader.GetInt64("TradeUpHoldingUpgradeBaseCostGbpPence"),
+            TradeUpHoldingUpgradeCostIncrementGbpPence = reader.GetInt64("TradeUpHoldingUpgradeCostIncrementGbpPence")
         };
     }
 
@@ -898,8 +1098,11 @@ public sealed class CaseOpeningData : ICaseOpeningData
         return new CaseOpeningCaseSettingsObj
         {
             CaseKey = reader.GetString("CaseKey"),
+            Tier = reader.GetInt32("Tier"),
             UnlockCostStars = reader.GetInt32("UnlockCostStars"),
+            UnlockCostGbpPence = reader.GetInt64("UnlockCostGbpPence"),
             PurchaseCostStars = reader.GetInt32("PurchaseCostStars"),
+            PurchaseCostGbpPence = reader.GetInt64("PurchaseCostGbpPence"),
             XpRequirement = reader.GetInt32("XpRequirement")
         };
     }
@@ -913,9 +1116,105 @@ public sealed class CaseOpeningData : ICaseOpeningData
             Description = reader.GetString("Description"),
             Category = reader.GetString("Category"),
             CostStars = reader.GetInt32("CostStars"),
+            CostGbpPence = reader.GetInt64("CostGbpPence"),
             RequiredLevel = reader.GetInt32("RequiredLevel"),
             SortOrder = reader.GetInt32("SortOrder"),
             IsUnlocked = reader.GetBoolean("IsUnlocked")
+        };
+    }
+
+    public Task<List<CaseOpeningSpecialVariantRuleDbModel>> GetActiveCaseOpeningSpecialVariantRules(CancellationToken cancellationToken = default)
+        => _database.GetBulkDataSP("sp_case_opening_special_variant_rules_active_get", ReadSpecialVariantRule, cancellationToken: cancellationToken);
+
+    public Task SaveCaseOpeningSpecialVariant(Guid openingId, CaseOpeningSpecialVariantRuleDbModel variant, CancellationToken cancellationToken = default)
+        => _database.ExecuteSP(
+            "sp_case_opening_opening_special_variant_save",
+            Parameters(("p_opening_id", openingId), ("p_rule_id", variant.RuleId), ("p_name", variant.Name),
+                ("p_tier", variant.Tier), ("p_description", variant.Description), ("p_price_snapshot_id", variant.PriceSnapshotId ?? (object)DBNull.Value),
+                ("p_price", variant.Price ?? (object)DBNull.Value)), cancellationToken);
+
+    public Task<List<CaseOpeningSpecialVariantRuleDbModel>> GetCaseOpeningSpecialVariantRules(CancellationToken cancellationToken = default)
+        => _database.GetBulkDataSP("sp_case_opening_special_variant_rules_get", ReadSpecialVariantRule, cancellationToken: cancellationToken);
+
+    public Task SaveCaseOpeningSpecialVariantRule(Guid ruleId, CaseOpeningSpecialVariantRuleRequestObj rule, CancellationToken cancellationToken = default)
+        => _database.ExecuteSP("sp_case_opening_special_variant_rule_save", Parameters(
+            ("p_rule_id", ruleId), ("p_source_item_id", rule.SourceItemId), ("p_market_hash_name", rule.MarketHashName), ("p_name", rule.Name), ("p_tier", rule.Tier),
+            ("p_description", rule.Description), ("p_paint_index", rule.PaintIndex ?? (object)DBNull.Value), ("p_phase", rule.Phase ?? (object)DBNull.Value),
+            ("p_pattern_seed", rule.PatternSeed ?? (object)DBNull.Value), ("p_minimum_float", rule.MinimumFloat ?? (object)DBNull.Value),
+            ("p_maximum_float", rule.MaximumFloat ?? (object)DBNull.Value), ("p_requires_stat_trak", rule.RequiresStatTrak ?? (object)DBNull.Value), ("p_is_active", rule.IsActive)), cancellationToken);
+
+    public Task<List<CaseOpeningSpecialVariantPriceSnapshotObj>> GetCaseOpeningSpecialVariantPriceSnapshots(CancellationToken cancellationToken = default)
+        => _database.GetBulkDataSP("sp_case_opening_special_variant_price_snapshots_get", ReadSpecialVariantSnapshot, cancellationToken: cancellationToken);
+
+    public Task CreateCaseOpeningSpecialVariantPriceSnapshot(CaseOpeningSpecialVariantPriceSnapshotObj snapshot, Dictionary<Guid, decimal> prices, CancellationToken cancellationToken = default)
+        => _database.ExecuteSP("sp_case_opening_special_variant_price_snapshot_create", Parameters(
+            ("p_snapshot_id", snapshot.PriceSnapshotId), ("p_name", snapshot.Name), ("p_source", snapshot.Source),
+            ("p_prices", JsonSerializer.Serialize(prices.Select(item => new { ruleId = item.Key, price = item.Value })))), cancellationToken);
+
+    public Task ActivateCaseOpeningSpecialVariantPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default)
+        => _database.ExecuteSP("sp_case_opening_special_variant_price_snapshot_activate", Parameters(("p_snapshot_id", snapshotId)), cancellationToken);
+
+    public Task DeleteCaseOpeningSpecialVariantPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default)
+        => _database.ExecuteSP("sp_case_opening_special_variant_price_snapshot_delete", Parameters(("p_snapshot_id", snapshotId)), cancellationToken);
+
+    public async Task<CaseOpeningFreeCaseAllowanceObj> GetCaseOpeningFreeCaseAllowance(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _database.GetDataSP(
+            "sp_case_opening_free_case_allowance_get",
+            reader => new CaseOpeningFreeCaseAllowanceObj
+            {
+                Remaining = reader.GetInt32("Remaining"),
+                Quantity = reader.GetInt32("Quantity"),
+                RefreshUtc = reader.IsDBNull(reader.GetOrdinal("RefreshUtc")) ? null : reader.GetDateTime("RefreshUtc")
+            },
+            Parameters(("p_user_id", userId)),
+            cancellationToken) ?? new CaseOpeningFreeCaseAllowanceObj();
+    }
+
+    public Task UpgradeCaseOpeningBot(Guid userId, Guid botId, int costStars, long costGbpPence, int maximumLevel, CancellationToken cancellationToken = default)
+    {
+        return _database.ExecuteSP("sp_case_opening_bot_speed_upgrade",
+            Parameters(("p_user_id", userId), ("p_bot_id", botId), ("p_cost_stars", costStars), ("p_cost_gbp_pence", costGbpPence), ("p_maximum_level", maximumLevel)), cancellationToken);
+    }
+
+    public Task SetCaseOpeningBotServerEnabled(Guid userId, Guid serverId, bool isEnabled, CancellationToken cancellationToken = default)
+    {
+        return _database.ExecuteSP("sp_case_opening_bot_server_enabled_set",
+            Parameters(("p_user_id", userId), ("p_server_id", serverId), ("p_is_enabled", isEnabled)), cancellationToken);
+    }
+
+    private static CaseOpeningPriceSnapshotDbModel ReadPriceSnapshot(MySqlDataReader reader)
+    {
+        return new CaseOpeningPriceSnapshotDbModel
+        {
+            PriceSnapshotId = reader.GetGuid("PriceSnapshotId"),
+            Name = reader.GetString("Name"),
+            Source = reader.GetString("Source"),
+            Currency = reader.GetString("Currency"),
+            PriceBasis = reader.GetString("PriceBasis"),
+            SourceItemCount = reader.GetInt32("SourceItemCount"),
+            MatchedItemCount = reader.GetInt32("MatchedItemCount"),
+            IsActive = reader.GetBoolean("IsActive"),
+            ImportedUtc = DateTime.SpecifyKind(reader.GetDateTime("ImportedUtc"), DateTimeKind.Utc)
+        };
+    }
+
+    private static CaseOpeningSnapshotPriceDbModel ReadSnapshotPrice(MySqlDataReader reader)
+    {
+        return new CaseOpeningSnapshotPriceDbModel
+        {
+            PriceSnapshotId = reader.GetGuid("PriceSnapshotId"),
+            MarketHashName = reader.GetString("MarketHashName"),
+            Price = reader.GetDecimal("Price"),
+            MinimumPrice = NullableDecimal(reader, "MinimumPrice"),
+            MeanPrice = NullableDecimal(reader, "MeanPrice"),
+            MedianPrice = NullableDecimal(reader, "MedianPrice"),
+            SuggestedPrice = NullableDecimal(reader, "SuggestedPrice"),
+            Quantity = reader.GetInt32("Quantity"),
+            IsFallback = reader.GetBoolean("IsFallback"),
+            SourceUpdatedUtc = reader.IsDBNull(reader.GetOrdinal("SourceUpdatedUtc"))
+                ? null
+                : DateTime.SpecifyKind(reader.GetDateTime("SourceUpdatedUtc"), DateTimeKind.Utc)
         };
     }
 
@@ -947,7 +1246,8 @@ public sealed class CaseOpeningData : ICaseOpeningData
             ServerId = reader.GetGuid("ServerId"),
             UserId = reader.GetGuid("UserId"),
             CreatedUtc = DateTime.SpecifyKind(reader.GetDateTime("CreatedUtc"), DateTimeKind.Utc),
-            SpeedLevel = reader.GetInt32("SpeedLevel")
+            SpeedLevel = reader.GetInt32("SpeedLevel"),
+            IsEnabled = reader.GetBoolean("IsEnabled")
         };
     }
 
@@ -1036,10 +1336,38 @@ public sealed class CaseOpeningData : ICaseOpeningData
             MaxFloat = NullableDecimal(reader, "MaxFloat"),
             FloatValue = NullableDecimal(reader, "FloatValue"),
             PatternSeed = reader.IsDBNull(reader.GetOrdinal("PatternSeed")) ? null : reader.GetInt32("PatternSeed"),
+            SpecialVariantRuleId = reader.IsDBNull(reader.GetOrdinal("SpecialVariantRuleId")) ? null : reader.GetGuid("SpecialVariantRuleId"),
+            SpecialVariantName = reader.IsDBNull(reader.GetOrdinal("SpecialVariantName")) ? string.Empty : reader.GetString("SpecialVariantName"),
+            SpecialVariantTier = reader.IsDBNull(reader.GetOrdinal("SpecialVariantTier")) ? string.Empty : reader.GetString("SpecialVariantTier"),
+            SpecialVariantDescription = reader.IsDBNull(reader.GetOrdinal("SpecialVariantDescription")) ? string.Empty : reader.GetString("SpecialVariantDescription"),
+            SpecialVariantPriceSnapshotId = reader.IsDBNull(reader.GetOrdinal("SpecialVariantPriceSnapshotId")) ? null : reader.GetGuid("SpecialVariantPriceSnapshotId"),
+            SpecialVariantPrice = NullableDecimal(reader, "SpecialVariantPrice"),
             EstimatedPrice = reader.IsDBNull(reader.GetOrdinal("EstimatedPrice")) ? null : reader.GetDecimal("EstimatedPrice"),
             OpenedUtc = DateTime.SpecifyKind(reader.GetDateTime("OpenedUtc"), DateTimeKind.Utc)
         };
     }
+
+    private static CaseOpeningSpecialVariantRuleDbModel ReadSpecialVariantRule(MySqlDataReader reader)
+    {
+        return new CaseOpeningSpecialVariantRuleDbModel
+        {
+            RuleId = reader.GetGuid("RuleId"), SourceItemId = reader.GetString("SourceItemId"), MarketHashName = reader.IsDBNull(reader.GetOrdinal("MarketHashName")) ? string.Empty : reader.GetString("MarketHashName"), Name = reader.GetString("Name"),
+            Tier = reader.GetString("Tier"), Description = reader.GetString("Description"),
+            PaintIndex = reader.IsDBNull(reader.GetOrdinal("PaintIndex")) ? string.Empty : reader.GetString("PaintIndex"),
+            Phase = reader.IsDBNull(reader.GetOrdinal("Phase")) ? string.Empty : reader.GetString("Phase"),
+            PatternSeed = reader.IsDBNull(reader.GetOrdinal("PatternSeed")) ? null : reader.GetInt32("PatternSeed"),
+            MinimumFloat = NullableDecimal(reader, "MinimumFloat"), MaximumFloat = NullableDecimal(reader, "MaximumFloat"),
+            RequiresStatTrak = reader.IsDBNull(reader.GetOrdinal("RequiresStatTrak")) ? null : reader.GetBoolean("RequiresStatTrak"),
+            PriceSnapshotId = reader.IsDBNull(reader.GetOrdinal("PriceSnapshotId")) ? null : reader.GetGuid("PriceSnapshotId"),
+            Price = NullableDecimal(reader, "Price")
+        };
+    }
+
+    private static CaseOpeningSpecialVariantPriceSnapshotObj ReadSpecialVariantSnapshot(MySqlDataReader reader) => new()
+    {
+        PriceSnapshotId = reader.GetGuid("PriceSnapshotId"), Name = reader.GetString("Name"), Source = reader.GetString("Source"),
+        IsActive = reader.GetBoolean("IsActive"), ImportedUtc = DateTime.SpecifyKind(reader.GetDateTime("ImportedUtc"), DateTimeKind.Utc)
+    };
 
     private static CaseOpeningBotDbModel ReadBot(MySqlDataReader reader)
     {
@@ -1051,7 +1379,8 @@ public sealed class CaseOpeningData : ICaseOpeningData
             CreatedUtc = DateTime.SpecifyKind(reader.GetDateTime("CreatedUtc"), DateTimeKind.Utc),
             LastOpenedUtc = reader.IsDBNull(reader.GetOrdinal("LastOpenedUtc"))
                 ? null
-                : DateTime.SpecifyKind(reader.GetDateTime("LastOpenedUtc"), DateTimeKind.Utc)
+                : DateTime.SpecifyKind(reader.GetDateTime("LastOpenedUtc"), DateTimeKind.Utc),
+            SpeedLevel = reader.GetInt32("SpeedLevel")
         };
     }
 
@@ -1061,7 +1390,10 @@ public sealed class CaseOpeningData : ICaseOpeningData
         {
             StarsAwarded = reader.GetInt32("StarsAwarded"),
             StarsBalance = reader.GetInt32("StarsBalance"),
-            SoldItemCount = reader.GetInt32("SoldItemCount")
+            SoldItemCount = reader.GetInt32("SoldItemCount"),
+            EconomyMode = reader.GetString("EconomyMode"),
+            AmountAwardedMinor = reader.GetInt64("AmountAwardedMinor"),
+            BalanceMinor = reader.GetInt64("BalanceMinor")
         };
     }
 

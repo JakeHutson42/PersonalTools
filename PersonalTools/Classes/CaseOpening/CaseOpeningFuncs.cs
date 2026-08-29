@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using Mapster;
 using Microsoft.Extensions.Logging;
+using PersonalTools.Classes;
+using PersonalTools.Entities;
 using PersonalTools.Data.CaseOpening;
 using PersonalTools.Entities.CaseOpening;
 
@@ -17,7 +19,10 @@ public interface ICaseOpeningFuncs
     Task<CaseOpeningBotProgressObj> PurchaseCaseOpeningBotServer(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningBotProgressObj> PurchaseCaseOpeningBot(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningBotProgressObj> UpgradeCaseOpeningBotServer(Guid userId, Guid serverId, CancellationToken cancellationToken = default);
+    Task<CaseOpeningBotProgressObj> UpgradeCaseOpeningBot(Guid userId, Guid botId, CancellationToken cancellationToken = default);
+    Task<CaseOpeningBotProgressObj> SetCaseOpeningBotServerEnabled(Guid userId, Guid serverId, bool isEnabled, CancellationToken cancellationToken = default);
     Task<CaseOpeningResultObj> OpenCaseWithBot(Guid userId, Guid botId, string caseKey, CancellationToken cancellationToken = default);
+    Task<CaseOpeningBotCycleResultObj> RunCaseOpeningBotCycle(Guid userId, string caseKey, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressObj> GetCaseOpeningProgress(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryCapacityObj> GetCaseOpeningInventoryCapacity(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningPlayerStatsObj> GetCaseOpeningPlayerStats(Guid userId, CancellationToken cancellationToken = default);
@@ -28,6 +33,7 @@ public interface ICaseOpeningFuncs
     Task<CaseOpeningStoragePurchaseResultObj> PurchaseCaseOpeningStorageContainer(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressObj> UnlockCaseOpeningUpgrade(Guid userId, string upgradeKey, CancellationToken cancellationToken = default);
     Task<CaseOpeningSellResultObj> SellCaseOpeningInventory(Guid userId, List<Guid> openingIds, CancellationToken cancellationToken = default);
+    Task<CaseOpeningInventoryLockObj> SetCaseOpeningInventoryLock(Guid userId, Guid openingId, bool isLocked, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryUpgradeObj> GetCaseOpeningInventoryUpgrades(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryUpgradeObj> UnlockCaseOpeningInventoryUpgrade(Guid userId, string upgradeKey, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryUpgradeObj> SetCaseOpeningAutoSellPreference(Guid userId, string rarityKey, bool enabled, bool? preserveStatTrak, CancellationToken cancellationToken = default);
@@ -51,32 +57,50 @@ public interface ICaseOpeningFuncs
     Task<CaseOpeningGameSettingsObj> GetGameSettings(CancellationToken cancellationToken = default);
     Task<CaseOpeningGameSettingsObj> SetGameSettings(CaseOpeningGameSettingsObj settings, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningCaseSettingsObj>> GetCaseSettings(CancellationToken cancellationToken = default);
-    Task SetCaseSettings(string caseKey, int unlockCostStars, int purchaseCostStars, int xpRequirement, CancellationToken cancellationToken = default);
+    Task SetCaseSettings(string caseKey, int tier, int unlockCostStars, long unlockCostGbpPence, int purchaseCostStars, long purchaseCostGbpPence, int xpRequirement, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningXpByRarityObj>> GetXpByRarity(CancellationToken cancellationToken = default);
     Task SetXpByRarity(string rarityKey, int xpAwarded, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningUpgradeDefinitionObj>> GetInventoryUpgradeSettings(CancellationToken cancellationToken = default);
-    Task SetInventoryUpgradeSettings(string upgradeKey, int costStars, int requiredLevel, CancellationToken cancellationToken = default);
+    Task SetInventoryUpgradeSettings(string upgradeKey, int costStars, long costGbpPence, int requiredLevel, CancellationToken cancellationToken = default);
+    Task<CaseOpeningPriceSnapshotSummaryObj> GetPriceSnapshots(CancellationToken cancellationToken = default);
+    Task<CaseOpeningPriceSnapshotSummaryObj> CreatePriceSnapshot(CancellationToken cancellationToken = default);
+    Task<CaseOpeningPriceSnapshotSummaryObj> ActivatePriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
+    Task<CaseOpeningPriceSnapshotSummaryObj> DeletePriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
+    Task<CaseOpeningPriceSnapshotSummaryObj> PublishPriceSnapshotBalance(CancellationToken cancellationToken = default);
+    Task<CaseOpeningSpecialVariantAdminSummaryObj> GetSpecialVariantSettings(CancellationToken cancellationToken = default);
+    Task<CaseOpeningSpecialVariantAdminSummaryObj> SaveSpecialVariantRule(Guid? ruleId, CaseOpeningSpecialVariantRuleRequestObj rule, CancellationToken cancellationToken = default);
+    Task<CaseOpeningSpecialVariantAdminSummaryObj> CreateSpecialVariantPriceSnapshot(CaseOpeningSpecialVariantPriceSnapshotRequestObj request, CancellationToken cancellationToken = default);
+    Task<CaseOpeningSpecialVariantAdminSummaryObj> ActivateSpecialVariantPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
+    Task<CaseOpeningSpecialVariantAdminSummaryObj> DeleteSpecialVariantPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningSpecialVariantListingEvidenceObj>> ImportSpecialVariantListings(Guid userId, CancellationToken cancellationToken = default);
 
     // Testing overrides for the caller's own account only.
-    Task<CaseOpeningProgressObj> SetDevProgress(Guid userId, int stars, int xp, CancellationToken cancellationToken = default);
+    Task<CaseOpeningProgressObj> SetDevProgress(Guid userId, int stars, long gbpPence, int xp, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressObj> SetDevUpgrades(Guid userId, bool skipAnimationUnlocked, int multiOpenLevel, int openSpeedLevel, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressObj> SetDevCaseUnlock(Guid userId, string caseKey, bool unlock, CancellationToken cancellationToken = default);
+    Task<CaseOpeningDevDropSettingsObj> GetDevDropSettings(Guid userId, CancellationToken cancellationToken = default);
+    Task<CaseOpeningDevDropSettingsObj> SetDevDropSettings(Guid userId, IEnumerable<string>? rarityGroups, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressObj> ResetDevProgress(Guid userId, CancellationToken cancellationToken = default);
 }
 
 public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 {
     private const int BotServerCapacity = 4;
-    private const int MaximumBotSpeedLevel = 20;
+    private const int MaximumIndividualBotSpeedLevel = 5;
     private const int BotSpeedUpgradeBaseCost = 300;
     private const int BotSpeedUpgradeIncrement = 100;
     private const int MaximumTradeUpRecipeSlots = 20;
-    private const int TradeUpSlotUpgradeBaseCost = 300;
-    private const int TradeUpSlotUpgradeIncrement = 75;
     private const int MaximumTradeUpRecipeHoldingCapacity = 20;
-    private const int TradeUpHoldingUpgradeBaseCost = 250;
-    private const int TradeUpHoldingUpgradeIncrement = 50;
     private const string StarterCaseKey = "kilowatt";
+
+    private static readonly IReadOnlyDictionary<string, string[]> DevDropRarityKeys = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["blue"] = ["mil-spec", "high-grade"],
+        ["purple"] = ["restricted", "remarkable"],
+        ["pink"] = ["classified", "exotic"],
+        ["red"] = ["covert"],
+        ["gold"] = ["rare-special"]
+    };
 
     // Higher unlock tiers pay more when their simulated items are sold. This does not depend on
     // rebalance-in-testing the same way Stars costs/XP requirements do, so it stays a plain const.
@@ -112,16 +136,20 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     private readonly ICaseOpeningData _data;
     private readonly ICS2ItemPriceData _prices;
     private readonly ILogger<CaseOpeningFuncs> _logger;
+    private readonly IAppSettingsFuncs _settings;
+    private readonly ICSFloatMarketData _csFloat;
 
     public CaseOpeningFuncs(
         ICaseOpeningReferenceData referenceData,
         ICaseOpeningData data,
-        ICS2ItemPriceData prices,
+        ICS2ItemPriceData prices, IAppSettingsFuncs settings, ICSFloatMarketData csFloat,
         ILogger<CaseOpeningFuncs> logger)
     {
         _referenceData = referenceData;
         _data = data;
         _prices = prices;
+        _settings = settings;
+        _csFloat = csFloat;
         _logger = logger;
     }
 
@@ -132,6 +160,17 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     {
         ValidateCaseKey(caseKey);
         CaseOpeningCaseObj caseData = await _referenceData.GetCase(caseKey, cancellationToken);
+        Dictionary<string, CaseOpeningCaseSettingsObj> settingsByKey = await GetCaseSettingsByKey(cancellationToken);
+        if (settingsByKey.TryGetValue(caseKey, out CaseOpeningCaseSettingsObj? caseSettings))
+        {
+            caseData.UnlockCostStars = caseSettings.UnlockCostStars;
+            caseData.PurchaseCostStars = caseSettings.PurchaseCostStars;
+            caseData.UnlockCostGbpPence = caseSettings.UnlockCostGbpPence;
+            caseData.PurchaseCostGbpPence = caseSettings.PurchaseCostGbpPence;
+            caseData.Tier = caseSettings.Tier;
+            caseData.XpRequirement = caseSettings.XpRequirement;
+        }
+        ApplyActiveCaseCosts(caseData, (await _data.GetGameSettings(cancellationToken)).EconomyMode);
         CaseOpeningOwnedCaseDbModel? ownedCase = (await _data.GetCaseOpeningOwnedCases(userId, cancellationToken))
             .FirstOrDefault(item => item.CaseKey.Equals(caseKey, StringComparison.OrdinalIgnoreCase));
         caseData.OwnedQuantity = ownedCase?.Quantity ?? 0;
@@ -147,14 +186,22 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         Dictionary<string, int> ownedQuantities = (await _data.GetCaseOpeningOwnedCases(userId, cancellationToken))
             .ToDictionary(item => item.CaseKey, item => item.Quantity, StringComparer.OrdinalIgnoreCase);
         Dictionary<string, CaseOpeningCaseSettingsObj> caseSettings = await GetCaseSettingsByKey(cancellationToken);
+        CaseOpeningGameSettingsObj gameSettings = await _data.GetGameSettings(cancellationToken);
         cases.ForEach(caseData =>
         {
             (int cost, int purchaseCost, int xpRequirement) = GetCaseSettings(caseSettings, caseData.CaseKey);
             caseData.UnlockCostStars = cost;
             caseData.PurchaseCostStars = purchaseCost;
+            if (caseSettings.TryGetValue(caseData.CaseKey, out CaseOpeningCaseSettingsObj? configured))
+            {
+                caseData.UnlockCostGbpPence = configured.UnlockCostGbpPence;
+                caseData.PurchaseCostGbpPence = configured.PurchaseCostGbpPence;
+                caseData.Tier = configured.Tier;
+            }
             caseData.XpRequirement = xpRequirement;
             caseData.SaleMultiplier = GetCaseSaleMultiplier(cost);
             caseData.IsUnlocked = unlockedCaseKeys.Contains(caseData.CaseKey, StringComparer.OrdinalIgnoreCase);
+            ApplyActiveCaseCosts(caseData, gameSettings.EconomyMode);
             caseData.OwnedQuantity = ownedQuantities.GetValueOrDefault(caseData.CaseKey);
         });
         return cases
@@ -165,7 +212,20 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 
     public async Task<List<CaseOpeningHistoryObj>> GetCaseOpeningHistory(Guid userId, CancellationToken cancellationToken = default)
     {
-        return (await _data.GetCaseOpeningHistory(userId, cancellationToken)).Adapt<List<CaseOpeningHistoryObj>>();
+        List<CaseOpeningHistoryDbModel> history = await _data.GetCaseOpeningHistory(userId, cancellationToken);
+        Dictionary<string, decimal> activePrices = (await _prices.GetActivePrices(cancellationToken))
+            .ToDictionary(item => item.MarketHashName, item => item.Price, StringComparer.Ordinal);
+
+        // Keep the database value as the historical pull-time estimate, but present the active
+        // snapshot in the balance lab so switching snapshots compares the entire inventory fairly.
+        foreach (CaseOpeningHistoryDbModel item in history)
+        {
+            item.EstimatedPrice = activePrices.TryGetValue(item.MarketHashName, out decimal price)
+                ? price
+                : null;
+        }
+
+        return history.Adapt<List<CaseOpeningHistoryObj>>();
     }
 
     public async Task<CaseOpeningCollectionObj> GetCaseOpeningCollection(
@@ -301,19 +361,21 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         List<CaseOpeningBotDbModel> bots = await _data.GetCaseOpeningBots(userId, cancellationToken);
         CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
 
-        return CreateBotProgress(progress.Stars, servers, bots, settings);
+        return CreateBotProgress(progress, servers, bots, settings);
     }
 
     public async Task<CaseOpeningBotProgressObj> PurchaseCaseOpeningBotServer(Guid userId, CancellationToken cancellationToken = default)
     {
         CaseOpeningBotProgressObj current = await GetCaseOpeningBotProgress(userId, cancellationToken);
-        if (current.Stars < current.NextServerCost)
+        if (current.ActiveBalanceMinor < current.ActiveNextServerCost)
         {
             throw new InvalidOperationException($"You need {current.NextServerCost} Stars to purchase the next bot server.");
         }
 
-        await _data.PurchaseCaseOpeningBotServer(userId, Guid.NewGuid(), current.NextServerCost, cancellationToken);
-        await RecordPlayerActivity(userId, unlocksEarned: 1, cancellationToken: cancellationToken);
+        CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
+        long gbpCost = settings.BotServerBaseCostGbpPence + (current.Servers.Count * settings.BotServerCostIncrementGbpPence);
+        await _data.PurchaseCaseOpeningBotServer(userId, Guid.NewGuid(), current.NextServerCost, gbpCost, cancellationToken);
+        await RecordPlayerActivity(userId, unlocksEarned: 1, starsSpent: current.NextServerCost, upgradesPurchased: 1, cancellationToken: cancellationToken);
         await EvaluateAchievements(userId, cancellationToken);
         return await GetCaseOpeningBotProgress(userId, cancellationToken);
     }
@@ -327,13 +389,16 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             throw new InvalidOperationException("Purchase a bot server before adding another bot.");
         }
 
-        if (current.Stars < current.NextBotCost)
+        if (current.ActiveBalanceMinor < current.ActiveNextBotCost)
         {
             throw new InvalidOperationException($"You need {current.NextBotCost} Stars to purchase the next bot.");
         }
 
-        await _data.PurchaseCaseOpeningBot(userId, server.ServerId, Guid.NewGuid(), current.NextBotCost, cancellationToken);
-        await RecordPlayerActivity(userId, unlocksEarned: 1, cancellationToken: cancellationToken);
+        CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
+        int ownedBots = current.Servers.Sum(item => item.Bots.Count);
+        long gbpCost = (long)Math.Ceiling((double)settings.BotBaseCostGbpPence * Math.Pow((double)settings.BotCostGrowthRate, ownedBots));
+        await _data.PurchaseCaseOpeningBot(userId, server.ServerId, Guid.NewGuid(), current.NextBotCost, gbpCost, cancellationToken);
+        await RecordPlayerActivity(userId, unlocksEarned: 1, starsSpent: current.NextBotCost, upgradesPurchased: 1, cancellationToken: cancellationToken);
         await EvaluateAchievements(userId, cancellationToken);
         return await GetCaseOpeningBotProgress(userId, cancellationToken);
     }
@@ -343,15 +408,30 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         CaseOpeningBotProgressObj current = await GetCaseOpeningBotProgress(userId, cancellationToken);
         CaseOpeningBotServerObj server = current.Servers.FirstOrDefault(item => item.ServerId == serverId)
             ?? throw new InvalidOperationException("The selected bot server could not be found.");
-        if (server.MaximumSpeedReached)
+        CaseOpeningBotDbModel bot = server.Bots.FirstOrDefault(item => !item.MaximumSpeedReached)
+            ?? throw new InvalidOperationException("Every bot in this rack is already at level 5.");
+        return await UpgradeCaseOpeningBot(userId, bot.BotId, cancellationToken);
+    }
+
+    public async Task<CaseOpeningBotProgressObj> UpgradeCaseOpeningBot(Guid userId, Guid botId, CancellationToken cancellationToken = default)
+    {
+        CaseOpeningBotProgressObj current = await GetCaseOpeningBotProgress(userId, cancellationToken);
+        CaseOpeningBotDbModel bot = current.Servers.SelectMany(item => item.Bots).FirstOrDefault(item => item.BotId == botId)
+            ?? throw new InvalidOperationException("The selected opening bot could not be found.");
+        if (bot.MaximumSpeedReached) throw new InvalidOperationException("This opening bot is already at level 5.");
+        if (current.ActiveBalanceMinor < bot.ActiveNextSpeedUpgradeCost)
         {
-            throw new InvalidOperationException("This bot server is already running at 1.0× speed.");
+            throw new InvalidOperationException($"You need {bot.NextSpeedUpgradeCost} Stars for this bot upgrade.");
         }
-        if (current.Stars < server.NextSpeedUpgradeCost)
-        {
-            throw new InvalidOperationException($"You need {server.NextSpeedUpgradeCost} Stars for the next server speed level.");
-        }
-        await _data.UpgradeCaseOpeningBotServer(userId, serverId, server.NextSpeedUpgradeCost, MaximumBotSpeedLevel, cancellationToken);
+
+        await _data.UpgradeCaseOpeningBot(userId, botId, bot.NextSpeedUpgradeCost, bot.ActiveNextSpeedUpgradeCost, MaximumIndividualBotSpeedLevel, cancellationToken);
+        await RecordPlayerActivity(userId, starsSpent: bot.NextSpeedUpgradeCost, upgradesPurchased: 1, cancellationToken: cancellationToken);
+        return await GetCaseOpeningBotProgress(userId, cancellationToken);
+    }
+
+    public async Task<CaseOpeningBotProgressObj> SetCaseOpeningBotServerEnabled(Guid userId, Guid serverId, bool isEnabled, CancellationToken cancellationToken = default)
+    {
+        await _data.SetCaseOpeningBotServerEnabled(userId, serverId, isEnabled, cancellationToken);
         return await GetCaseOpeningBotProgress(userId, cancellationToken);
     }
 
@@ -382,7 +462,64 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 
         CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
         Dictionary<string, int> xpByRarity = await GetXpByRarityByKey(cancellationToken);
-        return await OpenCase(userId, caseKey, cancellationToken, xpByRarity, settings.XpPerCaseOpen);
+        HashSet<string> forcedRarityKeys = await GetDevForcedRarityKeys(userId, cancellationToken);
+        return await OpenCase(userId, caseKey, cancellationToken, xpByRarity, settings.XpPerCaseOpen, forcedRarityKeys: forcedRarityKeys);
+    }
+
+    public async Task<CaseOpeningBotCycleResultObj> RunCaseOpeningBotCycle(Guid userId, string caseKey, CancellationToken cancellationToken = default)
+    {
+        ValidateCaseKey(caseKey);
+        CaseOpeningGameSettingsObj economySettings = await _data.GetGameSettings(cancellationToken);
+        Dictionary<string, CaseOpeningCaseSettingsObj> configuredCases = await GetCaseSettingsByKey(cancellationToken);
+        if (configuredCases.TryGetValue(caseKey, out CaseOpeningCaseSettingsObj? configuredCase)
+            && (IsGbp(economySettings) ? configuredCase.PurchaseCostGbpPence : configuredCase.PurchaseCostStars) == 0)
+        {
+            return new CaseOpeningBotCycleResultObj { ShouldStop = true, StopReason = "free-case", Message = "Bots cannot open free cases. Choose a paid case for this rack." };
+        }
+        int ownedQuantity = (await _data.GetCaseOpeningOwnedCases(userId, cancellationToken))
+            .FirstOrDefault(item => item.CaseKey.Equals(caseKey, StringComparison.OrdinalIgnoreCase))?.Quantity ?? 0;
+        if (ownedQuantity < 1)
+        {
+            return new CaseOpeningBotCycleResultObj { ShouldStop = true, StopReason = "out-of-stock", Message = "Bots paused because the assigned case is out of stock." };
+        }
+
+        List<string> unlockedCaseKeys = await _data.GetCaseOpeningUnlockedCases(userId, cancellationToken);
+        if (!unlockedCaseKeys.Contains(caseKey, StringComparer.OrdinalIgnoreCase))
+        {
+            return new CaseOpeningBotCycleResultObj { ShouldStop = true, StopReason = "case-locked", Message = "Bots paused because the assigned case is no longer unlocked." };
+        }
+
+        CaseOpeningBotProgressObj progress = await GetCaseOpeningBotProgress(userId, cancellationToken);
+        List<CaseOpeningBotDbModel> bots = progress.Servers.Where(server => server.IsEnabled)
+            .SelectMany(server => server.Bots).Take(ownedQuantity).ToList();
+        if (bots.Count == 0)
+        {
+            return new CaseOpeningBotCycleResultObj { ShouldStop = true, StopReason = "no-active-bots", Message = "No bot servers are currently online." };
+        }
+
+        CaseOpeningBotCycleResultObj cycle = new();
+        CaseOpeningGameSettingsObj settings = economySettings;
+        Dictionary<string, int> xpByRarity = await GetXpByRarityByKey(cancellationToken);
+        CaseOpeningInventoryUpgradeDbModel autoSellSettings = await _data.GetCaseOpeningInventoryUpgrades(userId, cancellationToken);
+        Dictionary<string, CaseOpeningCaseSettingsObj> caseSaleSettings = await GetCaseSettingsByKey(cancellationToken);
+        HashSet<string> forcedRarityKeys = await GetDevForcedRarityKeys(userId, cancellationToken);
+        foreach (CaseOpeningBotDbModel bot in bots)
+        {
+            try
+            {
+                if (!await _data.ClaimCaseOpeningBotCycle(userId, bot.BotId, cancellationToken)) continue;
+                cycle.Results.Add(await OpenCase(userId, caseKey, cancellationToken, xpByRarity, settings.XpPerCaseOpen, autoSellSettings, caseSaleSettings, forcedRarityKeys: forcedRarityKeys));
+            }
+            catch (InvalidOperationException exception) when (exception.Message.Contains("owned case", StringComparison.OrdinalIgnoreCase)
+                || exception.Message.Contains("do not own", StringComparison.OrdinalIgnoreCase))
+            {
+                cycle.ShouldStop = true;
+                cycle.StopReason = "out-of-stock";
+                cycle.Message = "Bots paused because the assigned case is out of stock.";
+                break;
+            }
+        }
+        return cycle;
     }
 
     public async Task<CaseOpeningProgressObj> GetCaseOpeningProgress(Guid userId, CancellationToken cancellationToken = default)
@@ -418,11 +555,13 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         await EvaluateAchievements(userId, cancellationToken);
 
         CaseOpeningPlayerStatsDbModel stats = await _data.GetCaseOpeningPlayerStats(userId, cancellationToken);
+        CaseOpeningGameSettingsObj economySettings = await _data.GetGameSettings(cancellationToken);
         List<CaseOpeningAchievementObj> achievements = (await _data.GetCaseOpeningAchievements(userId, cancellationToken))
             .Select(achievement =>
             {
                 CaseOpeningAchievementObj result = achievement.Adapt<CaseOpeningAchievementObj>();
                 result.CurrentValue = GetAchievementMetricValue(stats, achievement.MetricKey);
+                result.RewardAmountMinor = IsGbp(economySettings) ? achievement.RewardGbpPence : achievement.RewardStars;
                 return result;
             })
             .OrderBy(achievement => achievement.SortOrder)
@@ -436,6 +575,7 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             EarnedStars = achievements
                 .Where(achievement => achievement.IsUnlocked)
                 .Sum(achievement => achievement.RewardStars),
+            EarnedAmountMinor = achievements.Where(achievement => achievement.IsUnlocked).Sum(achievement => achievement.RewardAmountMinor),
             Achievements = achievements
         };
     }
@@ -475,21 +615,23 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             throw new InvalidOperationException($"Reach level {settings.XpRequirement} to unlock this case.");
         }
 
-        if (progress.Stars < settings.UnlockCostStars)
+        CaseOpeningGameSettingsObj gameSettings = await _data.GetGameSettings(cancellationToken);
+        long unlockCost = IsGbp(gameSettings) ? settings.UnlockCostGbpPence : settings.UnlockCostStars;
+        long balance = IsGbp(gameSettings) ? progress.GbpPence : progress.Stars;
+        if (balance < unlockCost)
         {
-            throw new InvalidOperationException($"You need {settings.UnlockCostStars} Stars to unlock this case.");
+            throw new InvalidOperationException("You do not have enough currency to unlock this case.");
         }
 
-        CaseOpeningProgressDbModel? updated = await _data.UnlockCaseOpeningCase(userId, caseKey, settings.UnlockCostStars, cancellationToken);
+        CaseOpeningProgressDbModel? updated = await _data.UnlockCaseOpeningCase(userId, caseKey, settings.UnlockCostStars, settings.UnlockCostGbpPence, cancellationToken);
         if (updated is null)
         {
-            throw new InvalidOperationException("The case could not be unlocked because your Stars balance changed. Please try again.");
+            throw new InvalidOperationException("The case could not be unlocked because your balance changed. Please try again.");
         }
 
         unlockedCaseKeys.Add(caseKey);
-        await RecordPlayerActivity(userId, unlocksEarned: 1, cancellationToken: cancellationToken);
+        await RecordPlayerActivity(userId, unlocksEarned: 1, starsSpent: IsGbp(gameSettings) ? 0 : settings.UnlockCostStars, cancellationToken: cancellationToken);
         await EvaluateAchievements(userId, cancellationToken);
-        CaseOpeningGameSettingsObj gameSettings = await _data.GetGameSettings(cancellationToken);
         return await BuildProgress(
             await _data.GetCaseOpeningProgress(userId, cancellationToken),
             gameSettings,
@@ -530,25 +672,30 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             throw new InvalidOperationException($"Reach level {upgrade.XpRequirement} to unlock this upgrade.");
         }
 
-        if (progress.Stars < upgrade.Cost)
+        long upgradeCostGbpPence = upgrade.Key == "multi-open"
+            ? gameSettings.MultiOpenCostGbpPence
+            : gameSettings.OpenSpeedUpgradeBaseCostGbpPence + (progress.OpenSpeedLevel * gameSettings.OpenSpeedUpgradeCostIncrementGbpPence);
+        long activeUpgradeCost = IsGbp(gameSettings) ? upgradeCostGbpPence : upgrade.Cost;
+        if ((IsGbp(gameSettings) ? progress.GbpPence : progress.Stars) < activeUpgradeCost)
         {
-            throw new InvalidOperationException($"You need {upgrade.Cost} Stars to unlock this upgrade.");
+            throw new InvalidOperationException("You do not have enough currency to unlock this upgrade.");
         }
 
         CaseOpeningProgressDbModel? updated = await _data.UnlockCaseOpeningUpgrade(
             userId,
             upgrade.Key,
             upgrade.Cost,
+            upgradeCostGbpPence,
             gameSettings.MaximumMultiOpenLevel,
             gameSettings.MaximumOpenSpeedLevel,
             cancellationToken);
 
         if (updated is null)
         {
-            throw new InvalidOperationException("The upgrade could not be unlocked because your Stars balance changed. Please try again.");
+            throw new InvalidOperationException("The upgrade could not be unlocked because your balance changed. Please try again.");
         }
 
-        await RecordPlayerActivity(userId, unlocksEarned: 1, cancellationToken: cancellationToken);
+        await RecordPlayerActivity(userId, unlocksEarned: 1, starsSpent: IsGbp(gameSettings) ? 0 : upgrade.Cost, upgradesPurchased: 1, cancellationToken: cancellationToken);
         await EvaluateAchievements(userId, cancellationToken);
         return await BuildProgress(
             await _data.GetCaseOpeningProgress(userId, cancellationToken),
@@ -584,37 +731,72 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             throw new InvalidOperationException("One or more selected inventory items could not be sold. Refresh your inventory and try again.");
         }
 
-        Dictionary<string, CaseOpeningCaseSettingsObj> caseSettings = await GetCaseSettingsByKey(cancellationToken);
-
-        // Higher unlock tiers pay more when their simulated items are sold. This is calculated
-        // here rather than trusted from the browser, so a user cannot inflate their reward.
-        int starsAwarded = selectedItems.Sum(item =>
+        if (selectedItems.Any(item => item.IsLocked))
         {
-            (int cost, _, _) = GetCaseSettings(caseSettings, item.CaseKey);
-            return GetSaleValue(item.RarityKey) * GetCaseSaleMultiplier(cost);
-        });
+            throw new InvalidOperationException("Unlock protected items before selling them.");
+        }
+
+        CaseOpeningGameSettingsObj gameSettings = await _data.GetGameSettings(cancellationToken);
+        Dictionary<string, CaseOpeningCaseSettingsObj> caseSettings = await GetCaseSettingsByKey(cancellationToken);
+        List<CaseOpeningSaleAward> awards = selectedItems.Select(item =>
+        {
+            (int unlockCost, _, _) = GetCaseSettings(caseSettings, item.CaseKey);
+            int fallbackStars = GetSaleValue(item.RarityKey) * GetCaseSaleMultiplier(unlockCost);
+            return CaseOpeningBalancePolicy.CalculateSaleAward(item.EstimatedPrice, gameSettings.SkinSaleRateBasisPoints, fallbackStars);
+        }).ToList();
+        int starsAwarded = awards.Sum(item => item.Stars);
+        long gbpPenceAwarded = awards.Sum(item => item.GbpPence);
         CaseOpeningSellResultDbModel? result = await _data.SellCaseOpeningInventory(
             userId,
             selectedIds,
             starsAwarded,
+            gbpPenceAwarded,
             cancellationToken);
         if (result is null || result.SoldItemCount != selectedIds.Count)
         {
             throw new InvalidOperationException("One or more selected inventory items could not be sold. Refresh your inventory and try again.");
         }
 
+        await RecordPlayerActivity(userId, saleStarsEarned: IsGbp(gameSettings) ? 0 : result.StarsAwarded, cancellationToken: cancellationToken);
+
         return result.Adapt<CaseOpeningSellResultObj>();
+    }
+
+    public async Task<CaseOpeningInventoryLockObj> SetCaseOpeningInventoryLock(
+        Guid userId,
+        Guid openingId,
+        bool isLocked,
+        CancellationToken cancellationToken = default)
+    {
+        CaseOpeningInventoryLockObj? savedState = await _data.SetCaseOpeningInventoryLock(userId, openingId, isLocked, cancellationToken);
+        if (savedState is null)
+        {
+            throw new InvalidOperationException("That inventory item could not be found. Refresh your inventory and try again.");
+        }
+
+        return savedState;
     }
 
     public async Task<CaseOpeningInventoryUpgradeObj> GetCaseOpeningInventoryUpgrades(Guid userId, CancellationToken cancellationToken = default)
     {
         CaseOpeningInventoryUpgradeObj result = (await _data.GetCaseOpeningInventoryUpgrades(userId, cancellationToken))
             .Adapt<CaseOpeningInventoryUpgradeObj>();
-        result.Stars = (await _data.GetCaseOpeningProgress(userId, cancellationToken)).Stars;
+        CaseOpeningProgressDbModel progress = await _data.GetCaseOpeningProgress(userId, cancellationToken);
+        CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
+        result.Stars = progress.Stars;
+        result.GbpPence = progress.GbpPence;
+        result.EconomyMode = settings.EconomyMode;
+        result.ActiveBalanceMinor = IsGbp(settings) ? progress.GbpPence : progress.Stars;
         result.AvailableUpgrades = await _data.GetCaseOpeningUpgradeDefinitions(userId, cancellationToken);
+        result.AvailableUpgrades.ForEach(item => item.Cost = IsGbp(settings) ? item.CostGbpPence : item.CostStars);
         result.MaximumTradeUpRecipeSlots = MaximumTradeUpRecipeSlots;
         result.TradeUpRecipeSlotUpgradeCostStars = result.TradeUpRecipesUnlocked && result.TradeUpRecipeSlots < MaximumTradeUpRecipeSlots
-            ? TradeUpSlotUpgradeBaseCost + (result.TradeUpRecipeSlots * TradeUpSlotUpgradeIncrement)
+            ? settings.TradeUpSlotUpgradeBaseCostStars + (result.TradeUpRecipeSlots * settings.TradeUpSlotUpgradeCostIncrementStars)
+            : 0;
+        result.TradeUpRecipeSlotUpgradeCost = result.TradeUpRecipesUnlocked && result.TradeUpRecipeSlots < MaximumTradeUpRecipeSlots
+            ? (IsGbp(settings)
+                ? settings.TradeUpSlotUpgradeBaseCostGbpPence + (result.TradeUpRecipeSlots * settings.TradeUpSlotUpgradeCostIncrementGbpPence)
+                : result.TradeUpRecipeSlotUpgradeCostStars)
             : 0;
         return result;
     }
@@ -630,13 +812,14 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         }
 
         CaseOpeningProgressDbModel progress = await _data.GetCaseOpeningProgress(userId, cancellationToken);
+        CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
         if (CaseOpeningXpLevels.GetLevel(progress.Xp) < definition.RequiredLevel)
         {
             throw new InvalidOperationException($"Reach level {definition.RequiredLevel} to unlock {definition.Name}.");
         }
-        if (progress.Stars < definition.CostStars)
+        if ((IsGbp(settings) ? progress.GbpPence : progress.Stars) < (IsGbp(settings) ? definition.CostGbpPence : definition.CostStars))
         {
-            throw new InvalidOperationException($"You need {definition.CostStars} Stars to unlock {definition.Name}.");
+            throw new InvalidOperationException($"You do not have enough currency to unlock {definition.Name}.");
         }
 
         // Capacity tiers are cumulative. Requiring the previous tier keeps the upgrade path
@@ -645,6 +828,12 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         {
             "inventory-slots-500" => "inventory-slots-250",
             "inventory-slots-1000" => "inventory-slots-500",
+            "bulk-sell-300" => "bulk-sell-200",
+            "bulk-sell-400" => "bulk-sell-300",
+            "bulk-sell-500" => "bulk-sell-400",
+            "auto-sell-classified" => "auto-sell-covert",
+            "auto-sell-restricted" => "auto-sell-classified",
+            "auto-sell-mil-spec" => "auto-sell-restricted",
             "auto-buy-slots-10" => "auto-buy-slots-5",
             "trade-up-holding-5" => "trade-up-unlock",
             "trade-up-holding-10" => "trade-up-holding-5",
@@ -659,8 +848,8 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             throw new InvalidOperationException($"Unlock {requiredUpgrade?.Name ?? "the previous capacity tier"} first.");
         }
 
-        await _data.UnlockCaseOpeningInventoryUpgrade(userId, definition.UpgradeKey, definition.CostStars, cancellationToken);
-        await RecordPlayerActivity(userId, unlocksEarned: 1, cancellationToken: cancellationToken);
+        await _data.UnlockCaseOpeningInventoryUpgrade(userId, definition.UpgradeKey, definition.CostStars, definition.CostGbpPence, cancellationToken);
+        await RecordPlayerActivity(userId, unlocksEarned: 1, starsSpent: IsGbp(settings) ? 0 : definition.CostStars, upgradesPurchased: 1, cancellationToken: cancellationToken);
         await EvaluateAchievements(userId, cancellationToken);
         return await GetCaseOpeningInventoryUpgrades(userId, cancellationToken);
     }
@@ -798,8 +987,10 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
                 : $"Only {capacity.AvailableSlots:N0} inventory slots are available. Reduce the quantity or unlock more storage.");
         }
 
-        CaseOpeningCasePurchaseResultObj? result = await _data.PurchaseCaseOpeningCases(userId, caseKey, quantity, caseSettings.PurchaseCostStars, cancellationToken);
-        return result ?? throw new InvalidOperationException("The case purchase could not be completed. Please try again.");
+        CaseOpeningCasePurchaseResultObj? result = await _data.PurchaseCaseOpeningCases(userId, caseKey, quantity, caseSettings.PurchaseCostStars, caseSettings.PurchaseCostGbpPence, cancellationToken);
+        if (result is null) throw new InvalidOperationException("The case purchase could not be completed. Please try again.");
+        await RecordPlayerActivity(userId, casesPurchased: result.PurchasedQuantity, casePurchaseStarsSpent: result.StarsSpent, starsSpent: result.StarsSpent, cancellationToken: cancellationToken);
+        return result;
     }
 
     // Polled by the client every ~20s (mirroring how bots are driven), plus opportunistically right
@@ -859,9 +1050,12 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         }
 
         int cost = settings.StorageContainerBaseCostStars + (capacity.StorageContainerCount * settings.StorageContainerCostIncrementStars);
+        long gbpCost = settings.StorageContainerBaseCostGbpPence + (capacity.StorageContainerCount * settings.StorageContainerCostIncrementGbpPence);
         CaseOpeningStoragePurchaseResultObj? result = await _data.PurchaseCaseOpeningStorageContainer(
-            userId, Guid.NewGuid(), cost, settings.StorageContainerSlots, settings.MaximumStorageContainers, cancellationToken);
-        return result ?? throw new InvalidOperationException("The storage container could not be purchased. Please try again.");
+            userId, Guid.NewGuid(), cost, gbpCost, settings.StorageContainerSlots, settings.MaximumStorageContainers, cancellationToken);
+        if (result is null) throw new InvalidOperationException("The storage container could not be purchased. Please try again.");
+        await RecordPlayerActivity(userId, starsSpent: result.StarsSpent, upgradesPurchased: 1, cancellationToken: cancellationToken);
+        return result;
     }
 
     /// <summary>
@@ -909,6 +1103,11 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         if (!TradeUpRarityLadder.TryGetValue(inputRarityKey, out string? outputRarityKey))
         {
             throw new InvalidOperationException("Only Mil-Spec, Restricted and Classified weapon skins can be used in a Trade Up Contract.");
+        }
+
+        if (inputs.Any(item => item.IsLocked))
+        {
+            throw new InvalidOperationException("Unlock protected skins before using them in a Trade Up Contract.");
         }
 
         if (inputs.Any(item => item.IsRareSpecial || item.RarityKey != inputRarityKey || item.FloatValue is null))
@@ -1089,8 +1288,8 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             TargetWears = wears
         };
 
-        await _data.CreateCaseOpeningTradeUpRecipe(userId, recipe, settings.TradeUpRecipeCostStars, upgrades.TradeUpRecipeSlots, cancellationToken);
-        await RecordPlayerActivity(userId, unlocksEarned: 1, cancellationToken: cancellationToken);
+        await _data.CreateCaseOpeningTradeUpRecipe(userId, recipe, settings.TradeUpRecipeCostStars, settings.TradeUpRecipeCostGbpPence, upgrades.TradeUpRecipeSlots, cancellationToken);
+        await RecordPlayerActivity(userId, unlocksEarned: 1, starsSpent: IsGbp(settings) ? 0 : settings.TradeUpRecipeCostStars, cancellationToken: cancellationToken);
         return await BuildTradeUpRecipeSummary(userId, cancellationToken);
     }
 
@@ -1149,6 +1348,7 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             List<CaseOpeningHistoryDbModel> matchingInputs = inventory
                 .Where(item => string.Equals(item.CaseKey, recipe.TargetCaseKey, StringComparison.OrdinalIgnoreCase)
                     && item.RarityKey == recipe.TargetInputRarityKey
+                    && !item.IsLocked
                     && !item.IsRareSpecial
                     && item.IsStatTrak == recipe.TargetStatTrak
                     && item.FloatValue is not null)
@@ -1199,8 +1399,11 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             throw new InvalidOperationException("Auto trade-up recipe slots are already at maximum.");
         }
 
-        int cost = TradeUpSlotUpgradeBaseCost + (upgrades.TradeUpRecipeSlots * TradeUpSlotUpgradeIncrement);
-        await _data.UpgradeCaseOpeningTradeUpRecipeSlots(userId, cost, MaximumTradeUpRecipeSlots, cancellationToken);
+        CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
+        int costStars = settings.TradeUpSlotUpgradeBaseCostStars + (upgrades.TradeUpRecipeSlots * settings.TradeUpSlotUpgradeCostIncrementStars);
+        long costGbpPence = settings.TradeUpSlotUpgradeBaseCostGbpPence + (upgrades.TradeUpRecipeSlots * settings.TradeUpSlotUpgradeCostIncrementGbpPence);
+        await _data.UpgradeCaseOpeningTradeUpRecipeSlots(userId, costStars, costGbpPence, MaximumTradeUpRecipeSlots, cancellationToken);
+        await RecordPlayerActivity(userId, starsSpent: IsGbp(settings) ? 0 : costStars, upgradesPurchased: 1, cancellationToken: cancellationToken);
         return await GetCaseOpeningInventoryUpgrades(userId, cancellationToken);
     }
 
@@ -1224,8 +1427,11 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             throw new InvalidOperationException("This recipe's holding capacity is already at maximum.");
         }
 
-        int cost = TradeUpHoldingUpgradeBaseCost + (recipe.HoldingCapacity * TradeUpHoldingUpgradeIncrement);
-        await _data.UpgradeCaseOpeningTradeUpRecipeHolding(userId, recipeId, cost, MaximumTradeUpRecipeHoldingCapacity, cancellationToken);
+        CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
+        int costStars = settings.TradeUpHoldingUpgradeBaseCostStars + (recipe.HoldingCapacity * settings.TradeUpHoldingUpgradeCostIncrementStars);
+        long costGbpPence = settings.TradeUpHoldingUpgradeBaseCostGbpPence + (recipe.HoldingCapacity * settings.TradeUpHoldingUpgradeCostIncrementGbpPence);
+        await _data.UpgradeCaseOpeningTradeUpRecipeHolding(userId, recipeId, costStars, costGbpPence, MaximumTradeUpRecipeHoldingCapacity, cancellationToken);
+        await RecordPlayerActivity(userId, starsSpent: IsGbp(settings) ? 0 : costStars, upgradesPurchased: 1, cancellationToken: cancellationToken);
         return await BuildTradeUpRecipeSummary(userId, cancellationToken);
     }
 
@@ -1234,11 +1440,20 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         List<CaseOpeningTradeUpRecipeObj> recipes = await _data.GetCaseOpeningTradeUpRecipes(userId, cancellationToken);
         List<CaseOpeningTradeUpHoldingObj> holdings = await _data.GetCaseOpeningTradeUpHoldings(userId, cancellationToken);
         CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
+        CaseOpeningProgressDbModel progress = await _data.GetCaseOpeningProgress(userId, cancellationToken);
+        recipes.ForEach(recipe => recipe.HoldingUpgradeCost = recipe.HoldingCapacity >= MaximumTradeUpRecipeHoldingCapacity
+            ? 0
+            : IsGbp(settings)
+                ? settings.TradeUpHoldingUpgradeBaseCostGbpPence + (recipe.HoldingCapacity * settings.TradeUpHoldingUpgradeCostIncrementGbpPence)
+                : settings.TradeUpHoldingUpgradeBaseCostStars + (recipe.HoldingCapacity * settings.TradeUpHoldingUpgradeCostIncrementStars));
         return new CaseOpeningTradeUpRecipeSummaryObj
         {
             UsedRecipeSlots = recipes.Count(recipe => recipe.IsActive),
             UsedHoldingCount = holdings.Count,
             RecipeCostStars = settings.TradeUpRecipeCostStars,
+            RecipeCost = IsGbp(settings) ? settings.TradeUpRecipeCostGbpPence : settings.TradeUpRecipeCostStars,
+            EconomyMode = settings.EconomyMode,
+            ActiveBalanceMinor = IsGbp(settings) ? progress.GbpPence : progress.Stars,
             Recipes = recipes,
             Holdings = holdings
         };
@@ -1285,11 +1500,29 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         Dictionary<string, int> xpByRarity = await GetXpByRarityByKey(cancellationToken);
         CaseOpeningInventoryUpgradeDbModel autoSellSettings = await _data.GetCaseOpeningInventoryUpgrades(userId, cancellationToken);
         Dictionary<string, CaseOpeningCaseSettingsObj> saleSettings = await GetCaseSettingsByKey(cancellationToken);
+        HashSet<string> forcedRarityKeys = await GetDevForcedRarityKeys(userId, cancellationToken);
         List<CaseOpeningResultObj> results = [];
         for (int index = 0; index < quantity; index++)
         {
-            results.Add(await OpenCase(userId, caseKey, cancellationToken, xpByRarity, settings.XpPerCaseOpen, autoSellSettings, saleSettings));
+            results.Add(await OpenCase(
+                userId,
+                caseKey,
+                cancellationToken,
+                xpByRarity,
+                settings.XpPerCaseOpen,
+                autoSellSettings,
+                saleSettings,
+                settings,
+                deferPostOpenEvaluation: true,
+                forcedRarityKeys: forcedRarityKeys));
         }
+
+        // These inspect account-wide state and were previously repeated for every result in a
+        // multi-open. Five pulls therefore performed the same collection and achievement scans
+        // five times before the browser could receive its one batch response.
+        CaseOpeningCaseObj openedCase = await _referenceData.GetCase(caseKey, cancellationToken);
+        await RecordCollectionMilestones(userId, openedCase, cancellationToken);
+        await EvaluateAchievements(userId, cancellationToken);
 
         int remainingQuantity = (await _data.GetCaseOpeningOwnedCases(userId, cancellationToken))
             .FirstOrDefault(item => item.CaseKey.Equals(caseKey, StringComparison.OrdinalIgnoreCase))?.Quantity ?? 0;
@@ -1313,11 +1546,30 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         Dictionary<string, int>? xpByRarity = null,
         int fallbackXp = 5,
         CaseOpeningInventoryUpgradeDbModel? autoSellSettings = null,
-        Dictionary<string, CaseOpeningCaseSettingsObj>? caseSaleSettings = null)
+        Dictionary<string, CaseOpeningCaseSettingsObj>? caseSaleSettings = null,
+        CaseOpeningGameSettingsObj? gameSettings = null,
+        bool deferPostOpenEvaluation = false,
+        ISet<string>? forcedRarityKeys = null)
     {
         ValidateCaseKey(caseKey);
         CaseOpeningCaseObj caseData = await _referenceData.GetCase(caseKey, cancellationToken);
-        string rarityKey = SelectRarity(caseData.Odds);
+        List<CaseOpeningOddsObj> availableOdds = caseData.Odds
+            .Where(odd => caseData.Items.Any(item => item.RarityKey == odd.RarityKey))
+            .ToList();
+        if (availableOdds.Count == 0)
+            throw new InvalidOperationException("The case contents could not be loaded. Please try again shortly.");
+
+        if (forcedRarityKeys is { Count: > 0 })
+        {
+            List<CaseOpeningOddsObj> forcedOdds = availableOdds
+                .Where(odd => forcedRarityKeys.Contains(odd.RarityKey))
+                .ToList();
+            if (forcedOdds.Count > 0) availableOdds = forcedOdds;
+        }
+
+        // If a public source changes a catalogue, only roll its still-present tiers. This avoids
+        // an intermittent failed opening and preserves the configured relative odds.
+        string rarityKey = SelectRarity(availableOdds);
         List<CaseOpeningItemObj> eligible = caseData.Items.Where(item => item.RarityKey == rarityKey).ToList();
 
         if (eligible.Count == 0)
@@ -1327,7 +1579,19 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 
         CaseOpeningItemObj winner = Clone(eligible[RandomNumberGenerator.GetInt32(eligible.Count)]);
         await ApplyUniqueCondition(userId, winner, caseData.Type, cancellationToken);
+        CaseOpeningSpecialVariantRuleDbModel? specialVariant = await ResolveSpecialVariant(winner, cancellationToken);
+        if (specialVariant is not null)
+        {
+            winner.SpecialVariantRuleId = specialVariant.RuleId;
+            winner.SpecialVariantName = specialVariant.Name;
+            winner.SpecialVariantTier = specialVariant.Tier;
+            winner.SpecialVariantDescription = specialVariant.Description;
+            winner.SpecialVariantPriceSnapshotId = specialVariant.PriceSnapshotId;
+            winner.SpecialVariantPrice = specialVariant.Price;
+        }
         winner.EstimatedPrice = await _prices.GetEstimatedPrice(winner.MarketHashName, cancellationToken);
+        if (winner.SpecialVariantPrice is not null) winner.EstimatedPrice = winner.SpecialVariantPrice;
+        decimal? marketOpeningCost = await _prices.GetEstimatedPrice(caseData.Name, cancellationToken);
 
         CaseOpeningHistoryDbModel history = winner.Adapt<CaseOpeningHistoryDbModel>();
         history.OpeningId = Guid.NewGuid();
@@ -1336,9 +1600,16 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         history.OpenedUtc = DateTime.UtcNow;
         bool isNewCollectionItem = !await _data.CaseOpeningCollectionItemExists(userId, caseKey, history.SourceItemId, cancellationToken);
         await _data.SaveCaseOpening(userId, history, cancellationToken);
-        await RecordPlayerActivity(userId, casesOpened: 1, skinsObtained: 1, cancellationToken: cancellationToken);
-        await RecordCollectionMilestones(userId, caseData, cancellationToken);
-        await EvaluateAchievements(userId, cancellationToken);
+        if (specialVariant is not null) await _data.SaveCaseOpeningSpecialVariant(history.OpeningId, specialVariant, cancellationToken);
+        Dictionary<string, CaseOpeningCaseSettingsObj> resolvedSaleSettings = caseSaleSettings ?? await GetCaseSettingsByKey(cancellationToken);
+        (int caseUnlockCost, _, _) = GetCaseSettings(resolvedSaleSettings, caseKey);
+        int pullValueStars = GetSaleValue(rarityKey) * GetCaseSaleMultiplier(caseUnlockCost);
+        await RecordPlayerActivity(userId, casesOpened: 1, skinsObtained: 1, rarityKey: rarityKey, isStatTrak: winner.IsStatTrak, pullValueStars: pullValueStars, cancellationToken: cancellationToken);
+        if (!deferPostOpenEvaluation)
+        {
+            await RecordCollectionMilestones(userId, caseData, cancellationToken);
+            await EvaluateAchievements(userId, cancellationToken);
+        }
 
         Dictionary<string, int> resolvedXpByRarity = xpByRarity ?? await GetXpByRarityByKey(cancellationToken);
         int xpAward = resolvedXpByRarity.TryGetValue(rarityKey, out int rarityXp) ? rarityXp : fallbackXp;
@@ -1352,9 +1623,10 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             // Only reward levels crossed by this opening. This avoids retroactively awarding a
             // large balance to existing accounts when the progression foundation first ships.
             int reward = CaseOpeningXpLevels.GetRewardStarsBetween(previousLevel, newLevel);
-            if (reward > 0 && await _data.ClaimCaseOpeningLevelReward(userId, newLevel, reward, cancellationToken))
+            if (reward > 0 && await _data.ClaimCaseOpeningLevelReward(userId, newLevel, reward, reward * 5L, cancellationToken))
             {
                 levelRewardStars = reward;
+                await RecordPlayerActivity(userId, levelRewardStars: reward, cancellationToken: cancellationToken);
             }
         }
 
@@ -1372,10 +1644,14 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         int autoSoldStars = 0;
         if (isAutoSold)
         {
-            Dictionary<string, CaseOpeningCaseSettingsObj> saleSettings = caseSaleSettings ?? await GetCaseSettingsByKey(cancellationToken);
-            (int unlockCost, _, _) = GetCaseSettings(saleSettings, caseKey);
-            autoSoldStars = GetSaleValue(rarityKey) * GetCaseSaleMultiplier(unlockCost);
-            await _data.SellCaseOpeningInventory(userId, [history.OpeningId], autoSoldStars, cancellationToken);
+            CaseOpeningGameSettingsObj economySettings = gameSettings ?? await _data.GetGameSettings(cancellationToken);
+            (int unlockCost, _, _) = GetCaseSettings(resolvedSaleSettings, caseKey);
+            int fallbackStars = GetSaleValue(rarityKey) * GetCaseSaleMultiplier(unlockCost);
+            CaseOpeningSaleAward autoSaleAward = CaseOpeningBalancePolicy.CalculateSaleAward(history.EstimatedPrice, economySettings.SkinSaleRateBasisPoints, fallbackStars);
+            autoSoldStars = autoSaleAward.Stars;
+            long autoSoldGbpPence = autoSaleAward.GbpPence;
+            await _data.SellCaseOpeningInventory(userId, [history.OpeningId], autoSoldStars, autoSoldGbpPence, cancellationToken);
+            await RecordPlayerActivity(userId, saleStarsEarned: autoSoldStars, cancellationToken: cancellationToken);
         }
 
         const int winnerIndex = 31;
@@ -1399,9 +1675,14 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             Level = newLevel,
             LeveledUp = newLevel > previousLevel,
             LevelRewardStars = levelRewardStars,
+            LevelRewardAmountMinor = IsGbp(gameSettings ?? await _data.GetGameSettings(cancellationToken)) ? levelRewardStars * 5L : levelRewardStars,
             IsAutoSold = isAutoSold,
             AutoSoldStars = autoSoldStars,
-            IsNewCollectionItem = isNewCollectionItem
+            IsNewCollectionItem = isNewCollectionItem,
+            MarketOpeningCost = marketOpeningCost,
+            MarketProfit = winner.EstimatedPrice is not null && marketOpeningCost is not null
+                ? decimal.Round(winner.EstimatedPrice.Value - marketOpeningCost.Value, 2)
+                : null
         };
     }
 
@@ -1465,6 +1746,15 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         int skinsObtained = 0,
         int tradeUpsCompleted = 0,
         int unlocksEarned = 0,
+        string rarityKey = "",
+        bool isStatTrak = false,
+        int casesPurchased = 0,
+        int casePurchaseStarsSpent = 0,
+        int saleStarsEarned = 0,
+        int pullValueStars = 0,
+        int starsSpent = 0,
+        int levelRewardStars = 0,
+        int upgradesPurchased = 0,
         CancellationToken cancellationToken = default)
     {
         try
@@ -1475,6 +1765,15 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
                 skinsObtained,
                 tradeUpsCompleted,
                 unlocksEarned,
+                rarityKey,
+                isStatTrak,
+                casesPurchased,
+                casePurchaseStarsSpent,
+                saleStarsEarned,
+                pullValueStars,
+                starsSpent,
+                levelRewardStars,
+                upgradesPurchased,
                 cancellationToken);
         }
         catch (Exception exception)
@@ -1528,6 +1827,7 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 
     public async Task<CaseOpeningGameSettingsObj> SetGameSettings(CaseOpeningGameSettingsObj settings, CancellationToken cancellationToken = default)
     {
+        NormalizeStarDisplaysFromGbp(settings);
         ValidateGameSettings(settings);
         await _data.SetGameSettings(settings, cancellationToken);
         return await _data.GetGameSettings(cancellationToken);
@@ -1538,15 +1838,15 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         return _data.GetCaseSettings(cancellationToken);
     }
 
-    public Task SetCaseSettings(string caseKey, int unlockCostStars, int purchaseCostStars, int xpRequirement, CancellationToken cancellationToken = default)
+    public Task SetCaseSettings(string caseKey, int tier, int unlockCostStars, long unlockCostGbpPence, int purchaseCostStars, long purchaseCostGbpPence, int xpRequirement, CancellationToken cancellationToken = default)
     {
         ValidateCaseKey(caseKey);
-        if (unlockCostStars < 0 || purchaseCostStars < 0 || xpRequirement < 0)
+        if (tier is < 1 or > 10 || unlockCostStars < 0 || unlockCostGbpPence < 0 || purchaseCostStars < 0 || purchaseCostGbpPence < 0 || xpRequirement < 0)
         {
             throw new InvalidOperationException("Costs and XP requirements cannot be negative.");
         }
 
-        return _data.SetCaseSettings(caseKey, unlockCostStars, purchaseCostStars, xpRequirement, cancellationToken);
+        return _data.SetCaseSettings(caseKey, tier, StarsFromPence(unlockCostGbpPence), unlockCostGbpPence, StarsFromPence(purchaseCostGbpPence), purchaseCostGbpPence, xpRequirement, cancellationToken);
     }
 
     public Task<List<CaseOpeningUpgradeDefinitionObj>> GetInventoryUpgradeSettings(CancellationToken cancellationToken = default)
@@ -1554,9 +1854,9 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         return _data.GetInventoryUpgradeSettings(cancellationToken);
     }
 
-    public async Task SetInventoryUpgradeSettings(string upgradeKey, int costStars, int requiredLevel, CancellationToken cancellationToken = default)
+    public async Task SetInventoryUpgradeSettings(string upgradeKey, int costStars, long costGbpPence, int requiredLevel, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(upgradeKey) || costStars < 0 || requiredLevel < 0)
+        if (string.IsNullOrWhiteSpace(upgradeKey) || costStars < 0 || costGbpPence < 0 || requiredLevel < 0)
         {
             throw new InvalidOperationException("Upgrade costs and level requirements must be valid non-negative values.");
         }
@@ -1567,7 +1867,149 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             throw new InvalidOperationException("This inventory upgrade could not be found.");
         }
 
-        await _data.SetInventoryUpgradeSettings(upgradeKey, costStars, requiredLevel, cancellationToken);
+        await _data.SetInventoryUpgradeSettings(upgradeKey, StarsFromPence(costGbpPence), costGbpPence, requiredLevel, cancellationToken);
+    }
+
+    private async Task<CaseOpeningSpecialVariantRuleDbModel?> ResolveSpecialVariant(CaseOpeningItemObj item, CancellationToken cancellationToken)
+    {
+        List<CaseOpeningSpecialVariantRuleDbModel> rules = await _data.GetActiveCaseOpeningSpecialVariantRules(cancellationToken);
+        return rules.FirstOrDefault(rule =>
+            string.Equals(rule.SourceItemId, item.SourceItemId, StringComparison.Ordinal)
+            && (string.IsNullOrEmpty(rule.PaintIndex) || string.Equals(rule.PaintIndex, item.PaintIndex, StringComparison.OrdinalIgnoreCase))
+            && (string.IsNullOrEmpty(rule.Phase) || string.Equals(rule.Phase, item.Phase, StringComparison.OrdinalIgnoreCase))
+            && (rule.PatternSeed is null || rule.PatternSeed == item.PatternSeed)
+            && (rule.MinimumFloat is null || item.FloatValue >= rule.MinimumFloat)
+            && (rule.MaximumFloat is null || item.FloatValue <= rule.MaximumFloat)
+            && (rule.RequiresStatTrak is null || rule.RequiresStatTrak == item.IsStatTrak));
+    }
+
+    public async Task<CaseOpeningPriceSnapshotSummaryObj> GetPriceSnapshots(CancellationToken cancellationToken = default)
+    {
+        List<CaseOpeningPriceSnapshotDbModel> snapshots = await _prices.GetSnapshots(cancellationToken);
+        List<CaseOpeningSnapshotPriceDbModel> prices = await _prices.GetActivePrices(cancellationToken);
+        Dictionary<string, decimal> priceByName = prices.ToDictionary(item => item.MarketHashName, item => item.Price, StringComparer.Ordinal);
+        List<CaseOpeningCaseObj> catalogue = await _referenceData.GetCuratedCases(cancellationToken);
+        Dictionary<string, CaseOpeningCaseSettingsObj> settings = await GetCaseSettingsByKey(cancellationToken);
+        CaseOpeningGameSettingsObj gameSettings = await _data.GetGameSettings(cancellationToken);
+        List<CaseOpeningCaseMarketValueObj> cases = catalogue.Select(item =>
+        {
+            CaseOpeningCaseSettingsObj configured = settings.GetValueOrDefault(item.CaseKey) ?? new CaseOpeningCaseSettingsObj { CaseKey = item.CaseKey };
+            item.Tier = configured.Tier;
+            CaseOpeningCaseMarketValueObj value = BuildCaseMarketValue(item, priceByName);
+            value.Tier = configured.Tier;
+            value.PublishedPurchaseGbpPence = configured.PurchaseCostGbpPence;
+            value.HasCompletePricing = value.ExpectedValue is not null;
+            if (value.ExpectedValue is decimal expectedValue)
+            {
+                CaseOpeningBalanceRecommendation recommendation = CaseOpeningBalancePolicy.RecommendCasePrices(expectedValue, configured.Tier, gameSettings.SkinSaleRateBasisPoints);
+                value.ExpectedSaleValuePence = recommendation.ExpectedSaleValuePence;
+                value.TargetReturnPercentage = recommendation.TargetReturnPercentage;
+                value.RecommendedPurchaseGbpPence = recommendation.RecommendedPurchaseGbpPence;
+                value.RecommendedUnlockGbpPence = recommendation.RecommendedUnlockGbpPence;
+                value.RecommendedPurchaseStars = recommendation.RecommendedPurchaseStars;
+                value.RecommendedUnlockStars = recommendation.RecommendedUnlockStars;
+            }
+            return value;
+        }).ToList();
+        List<string> tierWarnings = CaseOpeningEconomyPolicy.ValidateTierCoverage(cases.Select(item => item.Tier));
+        return new CaseOpeningPriceSnapshotSummaryObj
+        {
+            Snapshots = snapshots,
+            ActiveSnapshotId = snapshots.FirstOrDefault(item => item.IsActive)?.PriceSnapshotId,
+            Currency = snapshots.FirstOrDefault(item => item.IsActive)?.Currency ?? "GBP",
+            Cases = cases,
+            CanPublish = snapshots.Any(item => item.IsActive) && cases.All(item => item.HasCompletePricing) && prices.All(item => !item.IsFallback) && tierWarnings.Count == 0,
+            FallbackPriceCount = prices.Count(item => item.IsFallback),
+            MissingPriceCount = cases.Sum(item => Math.Max(0, item.TotalVariants - item.PricedVariants)),
+            TierWarnings = tierWarnings
+        };
+    }
+
+    public async Task<CaseOpeningSpecialVariantAdminSummaryObj> GetSpecialVariantSettings(CancellationToken cancellationToken = default)
+    {
+        List<CaseOpeningSpecialVariantRuleDbModel> rules = await _data.GetCaseOpeningSpecialVariantRules(cancellationToken);
+        List<CaseOpeningSpecialVariantPriceSnapshotObj> snapshots = await _data.GetCaseOpeningSpecialVariantPriceSnapshots(cancellationToken);
+        return new CaseOpeningSpecialVariantAdminSummaryObj { Rules = rules, Snapshots = snapshots, ActiveSnapshotId = snapshots.FirstOrDefault(item => item.IsActive)?.PriceSnapshotId };
+    }
+
+    public async Task<CaseOpeningSpecialVariantAdminSummaryObj> SaveSpecialVariantRule(Guid? ruleId, CaseOpeningSpecialVariantRuleRequestObj rule, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(rule.SourceItemId) || string.IsNullOrWhiteSpace(rule.MarketHashName) || string.IsNullOrWhiteSpace(rule.Name) || string.IsNullOrWhiteSpace(rule.Tier) || string.IsNullOrWhiteSpace(rule.Description)
+            || rule.PatternSeed is < 0 or > 1000 || rule.MinimumFloat is < 0 or > 1 || rule.MaximumFloat is < 0 or > 1
+            || rule.MinimumFloat is not null && rule.MaximumFloat is not null && rule.MinimumFloat > rule.MaximumFloat)
+            throw new InvalidOperationException("Provide an item ID, name, tier, description, and valid optional pattern/float criteria.");
+        await _data.SaveCaseOpeningSpecialVariantRule(ruleId ?? Guid.NewGuid(), rule, cancellationToken);
+        return await GetSpecialVariantSettings(cancellationToken);
+    }
+
+    public async Task<CaseOpeningSpecialVariantAdminSummaryObj> CreateSpecialVariantPriceSnapshot(CaseOpeningSpecialVariantPriceSnapshotRequestObj request, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Source) || request.Prices.Count == 0 || request.Prices.Any(item => item.Value < 0))
+            throw new InvalidOperationException("Provide a snapshot name, source, and at least one non-negative rule price.");
+        await _data.CreateCaseOpeningSpecialVariantPriceSnapshot(new CaseOpeningSpecialVariantPriceSnapshotObj { PriceSnapshotId = Guid.NewGuid(), Name = request.Name.Trim(), Source = request.Source.Trim(), ImportedUtc = DateTime.UtcNow }, request.Prices, cancellationToken);
+        return await GetSpecialVariantSettings(cancellationToken);
+    }
+
+    public async Task<CaseOpeningSpecialVariantAdminSummaryObj> ActivateSpecialVariantPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default)
+    {
+        await _data.ActivateCaseOpeningSpecialVariantPriceSnapshot(snapshotId, cancellationToken);
+        return await GetSpecialVariantSettings(cancellationToken);
+    }
+
+    public async Task<CaseOpeningSpecialVariantAdminSummaryObj> DeleteSpecialVariantPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default)
+    {
+        await _data.DeleteCaseOpeningSpecialVariantPriceSnapshot(snapshotId, cancellationToken);
+        return await GetSpecialVariantSettings(cancellationToken);
+    }
+
+    public async Task<List<CaseOpeningSpecialVariantListingEvidenceObj>> ImportSpecialVariantListings(Guid userId, CancellationToken cancellationToken = default)
+    {
+        string? key = await _settings.GetSecret(userId, AppSettingKey.CSFloatApiKey, cancellationToken);
+        if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("Save a CSFloat API key in Settings before importing listing evidence.");
+        List<CaseOpeningSpecialVariantRuleDbModel> rules = await _data.GetCaseOpeningSpecialVariantRules(cancellationToken);
+        List<CaseOpeningSpecialVariantListingEvidenceObj> result = [];
+        foreach (CaseOpeningSpecialVariantRuleDbModel rule in rules.Where(rule => !string.IsNullOrWhiteSpace(rule.MarketHashName)))
+            result.AddRange(await _csFloat.GetListings(rule, key, cancellationToken));
+        return result;
+    }
+
+    public async Task<CaseOpeningPriceSnapshotSummaryObj> CreatePriceSnapshot(CancellationToken cancellationToken = default)
+    {
+        List<CaseOpeningCaseObj> catalogue = await _referenceData.GetCuratedCases(cancellationToken);
+        HashSet<string> requiredNames = catalogue
+            .SelectMany(item => new[] { item.Name }.Concat(item.Items.SelectMany(skin => MarketVariants(skin, item.Type).Select(variant => variant.Name))))
+            .ToHashSet(StringComparer.Ordinal);
+        await _prices.CreateSkinportSnapshot(requiredNames, cancellationToken);
+        return await GetPriceSnapshots(cancellationToken);
+    }
+
+    public async Task<CaseOpeningPriceSnapshotSummaryObj> ActivatePriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default)
+    {
+        await _prices.ActivateSnapshot(snapshotId, cancellationToken);
+        return await GetPriceSnapshots(cancellationToken);
+    }
+
+    public async Task<CaseOpeningPriceSnapshotSummaryObj> DeletePriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default)
+    {
+        await _prices.DeleteSnapshot(snapshotId, cancellationToken);
+        return await GetPriceSnapshots(cancellationToken);
+    }
+
+    public async Task<CaseOpeningPriceSnapshotSummaryObj> PublishPriceSnapshotBalance(CancellationToken cancellationToken = default)
+    {
+        CaseOpeningPriceSnapshotSummaryObj draft = await GetPriceSnapshots(cancellationToken);
+        if (draft.ActiveSnapshotId is null) throw new InvalidOperationException("Create or activate a price snapshot before publishing a balance.");
+        List<CaseOpeningCaseMarketValueObj> incomplete = draft.Cases.Where(item => !item.HasCompletePricing).ToList();
+        if (incomplete.Count > 0) throw new InvalidOperationException($"Pricing is incomplete for {incomplete.Count} case{(incomplete.Count == 1 ? string.Empty : "s")}. Missing prices must be resolved before publishing.");
+        if (draft.FallbackPriceCount > 0) throw new InvalidOperationException($"Resolve {draft.FallbackPriceCount} fallback price{(draft.FallbackPriceCount == 1 ? string.Empty : "s")} before publishing. Published balancing requires current Skinport median prices.");
+        if (draft.TierWarnings.Count > 0) throw new InvalidOperationException(string.Join(" ", draft.TierWarnings));
+        Dictionary<string, CaseOpeningCaseSettingsObj> settings = await GetCaseSettingsByKey(cancellationToken);
+        foreach (CaseOpeningCaseMarketValueObj item in draft.Cases)
+        {
+            CaseOpeningCaseSettingsObj current = settings[item.CaseKey];
+            await _data.SetCaseSettings(item.CaseKey, current.Tier, item.RecommendedUnlockStars, item.RecommendedUnlockGbpPence, item.RecommendedPurchaseStars, item.RecommendedPurchaseGbpPence, current.XpRequirement, cancellationToken);
+        }
+        return await GetPriceSnapshots(cancellationToken);
     }
 
     public Task<List<CaseOpeningXpByRarityObj>> GetXpByRarity(CancellationToken cancellationToken = default)
@@ -1590,14 +2032,14 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         return _data.SetXpByRarity(rarityKey, xpAwarded, cancellationToken);
     }
 
-    public async Task<CaseOpeningProgressObj> SetDevProgress(Guid userId, int stars, int xp, CancellationToken cancellationToken = default)
+    public async Task<CaseOpeningProgressObj> SetDevProgress(Guid userId, int stars, long gbpPence, int xp, CancellationToken cancellationToken = default)
     {
-        if (stars < 0 || xp < 0)
+        if (stars < 0 || gbpPence < 0 || xp < 0)
         {
-            throw new InvalidOperationException("Stars and XP cannot be negative.");
+            throw new InvalidOperationException("Balances and XP cannot be negative.");
         }
 
-        CaseOpeningProgressDbModel? updated = await _data.SetCaseOpeningProgressDev(userId, stars, xp, cancellationToken);
+        CaseOpeningProgressDbModel? updated = await _data.SetCaseOpeningProgressDev(userId, stars, gbpPence, xp, cancellationToken);
         if (updated is null)
         {
             throw new InvalidOperationException("Your progress could not be updated. Please try again.");
@@ -1641,15 +2083,49 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             cancellationToken);
     }
 
+    public async Task<CaseOpeningDevDropSettingsObj> GetDevDropSettings(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return new CaseOpeningDevDropSettingsObj
+        {
+            RarityGroups = NormaliseDevDropRarityGroups(await _data.GetCaseOpeningDevDropRarityGroups(userId, cancellationToken))
+        };
+    }
+
+    public async Task<CaseOpeningDevDropSettingsObj> SetDevDropSettings(Guid userId, IEnumerable<string>? rarityGroups, CancellationToken cancellationToken = default)
+    {
+        List<string> groups = NormaliseDevDropRarityGroups(rarityGroups);
+        await _data.SetCaseOpeningDevDropRarityGroups(userId, groups, cancellationToken);
+        return new CaseOpeningDevDropSettingsObj { RarityGroups = groups };
+    }
+
     public async Task<CaseOpeningProgressObj> ResetDevProgress(Guid userId, CancellationToken cancellationToken = default)
     {
         await _data.ResetCaseOpeningProgressDev(userId, cancellationToken);
+        await _data.SetCaseOpeningDevDropRarityGroups(userId, [], cancellationToken);
         CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
         return await BuildProgress(
             await _data.GetCaseOpeningProgress(userId, cancellationToken),
             settings,
             await _data.GetCaseOpeningUnlockedCases(userId, cancellationToken),
             cancellationToken);
+    }
+
+    private async Task<HashSet<string>> GetDevForcedRarityKeys(Guid userId, CancellationToken cancellationToken)
+    {
+        return NormaliseDevDropRarityGroups(await _data.GetCaseOpeningDevDropRarityGroups(userId, cancellationToken))
+            .SelectMany(group => DevDropRarityKeys[group])
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static List<string> NormaliseDevDropRarityGroups(IEnumerable<string>? rarityGroups)
+    {
+        string[] order = ["blue", "purple", "pink", "red", "gold"];
+        return (rarityGroups ?? [])
+            .Select(group => group?.Trim().ToLowerInvariant() ?? string.Empty)
+            .Where(DevDropRarityKeys.ContainsKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => Array.IndexOf(order, group))
+            .ToList();
     }
 
     private async Task<Dictionary<string, CaseOpeningCaseSettingsObj>> GetCaseSettingsByKey(CancellationToken cancellationToken)
@@ -1673,6 +2149,11 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     {
         Dictionary<string, CaseOpeningCaseSettingsObj> caseSettings = await GetCaseSettingsByKey(cancellationToken);
         CaseOpeningProgressObj result = CreateProgress(progress, settings, unlockedCaseKeys);
+        CaseOpeningFreeCaseAllowanceObj allowance = await _data.GetCaseOpeningFreeCaseAllowance(progress.UserId, cancellationToken);
+        result.FreeCaseAllowanceEnabled = settings.FreeCaseAllowanceEnabled;
+        result.FreeCaseAllowanceRemaining = allowance.Remaining;
+        result.FreeCaseAllowanceQuantity = allowance.Quantity;
+        result.FreeCaseAllowanceRefreshUtc = allowance.RefreshUtc;
         result.CaseSaleMultipliers = caseSettings.Values.ToDictionary(
             item => item.CaseKey,
             item => GetCaseSaleMultiplier(item.UnlockCostStars),
@@ -1689,6 +2170,11 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         {
             UserId = progress.UserId,
             Stars = progress.Stars,
+            GbpPence = progress.GbpPence,
+            EconomyMode = settings.EconomyMode,
+            CurrencyCode = settings.EconomyMode == CaseOpeningEconomyModes.Gbp ? "GBP" : "STAR",
+            ActiveBalanceMinor = settings.EconomyMode == CaseOpeningEconomyModes.Gbp ? progress.GbpPence : progress.Stars,
+            SkinSaleRateBasisPoints = settings.SkinSaleRateBasisPoints,
             Xp = progress.Xp,
             Level = CaseOpeningXpLevels.GetLevel(progress.Xp),
             XpIntoLevel = CaseOpeningXpLevels.GetXpIntoLevel(progress.Xp),
@@ -1696,21 +2182,25 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             SkipAnimationUnlocked = progress.SkipAnimationUnlocked,
             MultiOpenLevel = progress.MultiOpenLevel,
             OpenSpeedLevel = progress.OpenSpeedLevel,
-            SkipAnimationCost = settings.SkipAnimationCostStars,
+            SkipAnimationCost = IsGbp(settings) ? settings.SkipAnimationCostGbpPence : settings.SkipAnimationCostStars,
             SkipAnimationXpRequirement = settings.SkipAnimationXpRequirement,
-            MultiOpenCost = settings.MultiOpenCostStars,
+            MultiOpenCost = IsGbp(settings) ? settings.MultiOpenCostGbpPence : settings.MultiOpenCostStars,
             MultiOpenXpRequirement = settings.MultiOpenXpRequirement,
             MaximumMultiOpenLevel = settings.MaximumMultiOpenLevel,
             // Level 0 = 1x, then +.5x per level up to 3x at level 4. Level 5 (the final tier) grants
             // Skip Animation instead of a further multiplier - the reel doesn't get faster than 3x,
             // it gets bypassed entirely.
             OpenSpeedMultiplier = 1m + (Math.Min(progress.OpenSpeedLevel, 4) * .5m),
-            OpenSpeedUpgradeCost = settings.OpenSpeedUpgradeBaseCostStars + (progress.OpenSpeedLevel * settings.OpenSpeedUpgradeCostIncrementStars),
+            OpenSpeedUpgradeCost = IsGbp(settings)
+                ? settings.OpenSpeedUpgradeBaseCostGbpPence + (progress.OpenSpeedLevel * settings.OpenSpeedUpgradeCostIncrementGbpPence)
+                : settings.OpenSpeedUpgradeBaseCostStars + (progress.OpenSpeedLevel * settings.OpenSpeedUpgradeCostIncrementStars),
             OpenSpeedUpgradeXpRequirement = settings.OpenSpeedUpgradeXpRequirement + progress.OpenSpeedLevel,
             MaximumOpenSpeedLevel = settings.MaximumOpenSpeedLevel,
             MaximumOpenQuantity = settings.MaximumOpenQuantity,
             StorageContainerBaseCostStars = settings.StorageContainerBaseCostStars,
             StorageContainerCostIncrementStars = settings.StorageContainerCostIncrementStars,
+            StorageContainerBaseCost = IsGbp(settings) ? settings.StorageContainerBaseCostGbpPence : settings.StorageContainerBaseCostStars,
+            StorageContainerCostIncrement = IsGbp(settings) ? settings.StorageContainerCostIncrementGbpPence : settings.StorageContainerCostIncrementStars,
             StorageContainerSlots = settings.StorageContainerSlots,
             MaximumStorageContainers = settings.MaximumStorageContainers,
             SaleValues = new Dictionary<string, int>(SaleValues, StringComparer.OrdinalIgnoreCase),
@@ -1749,7 +2239,7 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     }
 
     private static CaseOpeningBotProgressObj CreateBotProgress(
-        int stars,
+        CaseOpeningProgressDbModel progress,
         List<CaseOpeningBotServerDbModel> servers,
         List<CaseOpeningBotDbModel> bots,
         CaseOpeningGameSettingsObj settings)
@@ -1763,22 +2253,38 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
                     .Where(bot => bot.ServerId == server.ServerId)
                     .OrderBy(bot => bot.CreatedUtc)
                     .ToList();
-                result.SpeedMultiplier = .5m + (Math.Min(server.SpeedLevel, MaximumBotSpeedLevel) * .025m);
-                result.OpeningIntervalSeconds = Math.Max(1, (int)Math.Ceiling(settings.BotOpeningIntervalSeconds * (.5m / result.SpeedMultiplier)));
-                result.NextSpeedUpgradeCost = BotSpeedUpgradeBaseCost + (server.SpeedLevel * BotSpeedUpgradeIncrement);
-                result.MaximumSpeedReached = server.SpeedLevel >= MaximumBotSpeedLevel;
+                int serverLevel = result.Bots.Sum(bot => Math.Min(bot.SpeedLevel, MaximumIndividualBotSpeedLevel));
+                result.SpeedLevel = serverLevel;
+                foreach (CaseOpeningBotDbModel bot in result.Bots)
+                {
+                    bot.SpeedMultiplier = .5m + (Math.Min(bot.SpeedLevel, MaximumIndividualBotSpeedLevel) * .1m);
+                    bot.OpeningIntervalSeconds = Math.Max(1, (int)Math.Ceiling(settings.BotOpeningIntervalSeconds * (.5m / bot.SpeedMultiplier)));
+                    bot.NextSpeedUpgradeCost = StarsFromPence(settings.BotSpeedUpgradeBaseCostGbpPence + (serverLevel * settings.BotSpeedUpgradeCostIncrementGbpPence));
+                    bot.ActiveNextSpeedUpgradeCost = IsGbp(settings) ? settings.BotSpeedUpgradeBaseCostGbpPence + (serverLevel * settings.BotSpeedUpgradeCostIncrementGbpPence) : bot.NextSpeedUpgradeCost;
+                    bot.MaximumSpeedReached = bot.SpeedLevel >= MaximumIndividualBotSpeedLevel;
+                }
+                result.SpeedMultiplier = result.Bots.Count == 0 ? .5m : result.Bots.Average(bot => bot.SpeedMultiplier);
+                result.OpeningIntervalSeconds = result.Bots.Count == 0 ? settings.BotOpeningIntervalSeconds : result.Bots.Min(bot => bot.OpeningIntervalSeconds);
+                result.NextSpeedUpgradeCost = result.Bots.Where(bot => !bot.MaximumSpeedReached).Select(bot => bot.NextSpeedUpgradeCost).DefaultIfEmpty(0).Min();
+                result.ActiveNextSpeedUpgradeCost = result.Bots.Where(bot => !bot.MaximumSpeedReached).Select(bot => bot.ActiveNextSpeedUpgradeCost).DefaultIfEmpty(0).Min();
+                result.MaximumSpeedReached = result.Bots.Count >= BotServerCapacity && result.Bots.All(bot => bot.MaximumSpeedReached);
                 return result;
             })
             .ToList();
 
         return new CaseOpeningBotProgressObj
         {
-            Stars = stars,
+            Stars = progress.Stars,
+            GbpPence = progress.GbpPence,
+            EconomyMode = settings.EconomyMode,
+            ActiveBalanceMinor = IsGbp(settings) ? progress.GbpPence : progress.Stars,
             ServerCapacity = BotServerCapacity,
             OpeningIntervalSeconds = settings.BotOpeningIntervalSeconds,
             NextServerCost = GetNextBotServerCost(serverObjs.Count, settings),
             NextBotCost = GetNextBotCost(bots.Count, settings),
-            MaximumSpeedLevel = MaximumBotSpeedLevel,
+            ActiveNextServerCost = IsGbp(settings) ? settings.BotServerBaseCostGbpPence + (serverObjs.Count * settings.BotServerCostIncrementGbpPence) : GetNextBotServerCost(serverObjs.Count, settings),
+            ActiveNextBotCost = IsGbp(settings) ? (long)Math.Ceiling((double)settings.BotBaseCostGbpPence * Math.Pow((double)settings.BotCostGrowthRate, bots.Count)) : GetNextBotCost(bots.Count, settings),
+            MaximumSpeedLevel = MaximumIndividualBotSpeedLevel,
             Servers = serverObjs
         };
     }
@@ -1823,14 +2329,20 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 
     private static string SelectRarity(List<CaseOpeningOddsObj> odds)
     {
-        int roll = RandomNumberGenerator.GetInt32(1_000_000);
+        List<(CaseOpeningOddsObj Odd, int Weight)> weighted = odds
+            .Select(odd => (odd, Math.Max(0, (int)(odd.Percentage * 10_000m))))
+            .Where(item => item.Item2 > 0)
+            .ToList();
+        if (weighted.Count == 0) return odds[^1].RarityKey;
+
+        int roll = RandomNumberGenerator.GetInt32(weighted.Sum(item => item.Weight));
         int boundary = 0;
-        foreach (CaseOpeningOddsObj odd in odds)
+        foreach ((CaseOpeningOddsObj odd, int weight) in weighted)
         {
-            boundary += (int)(odd.Percentage * 10_000m);
+            boundary += weight;
             if (roll < boundary) return odd.RarityKey;
         }
-        return odds[^1].RarityKey;
+        return weighted[^1].Odd.RarityKey;
     }
 
     private static CaseOpeningItemObj SelectReelItem(CaseOpeningCaseObj caseData)
@@ -1900,9 +2412,13 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 
         item.Wear = WearFromFloat(item.FloatValue.Value);
         item.IsStatTrak = item.SupportsStatTrak && RandomNumberGenerator.GetInt32(100) < 10;
-        string star = item.IsRareSpecial ? "★ " : string.Empty;
-        string statTrak = item.IsStatTrak ? "StatTrak™ " : string.Empty;
-        item.MarketHashName = $"{star}{statTrak}{item.Name} ({item.Wear})";
+        bool souvenir = caseType.Equals("Souvenir Package", StringComparison.OrdinalIgnoreCase)
+            || caseType.Equals("Souvenir", StringComparison.OrdinalIgnoreCase);
+        item.IsStatTrak = !souvenir && item.IsStatTrak;
+        string prefix = souvenir
+            ? "Souvenir "
+            : $"{(item.IsRareSpecial ? "★ " : string.Empty)}{(item.IsStatTrak ? "StatTrak™ " : string.Empty)}";
+        item.MarketHashName = $"{prefix}{item.Name} ({item.Wear})";
     }
 
     /// <summary>
@@ -1967,6 +2483,117 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         return "Battle-Scarred";
     }
 
+    private static bool IsGbp(CaseOpeningGameSettingsObj settings) =>
+        string.Equals(settings.EconomyMode, CaseOpeningEconomyModes.Gbp, StringComparison.OrdinalIgnoreCase);
+
+    private static void ApplyActiveCaseCosts(CaseOpeningCaseObj item, string economyMode)
+    {
+        bool gbp = string.Equals(economyMode, CaseOpeningEconomyModes.Gbp, StringComparison.OrdinalIgnoreCase);
+        item.UnlockCost = gbp ? item.UnlockCostGbpPence : item.UnlockCostStars;
+        item.PurchaseCost = gbp ? item.PurchaseCostGbpPence : item.PurchaseCostStars;
+    }
+
+    private sealed record MarketVariant(string Name, decimal Weight);
+
+    private static List<MarketVariant> MarketVariants(CaseOpeningItemObj item, string caseType)
+    {
+        if (caseType.Equals("Sticker Capsule", StringComparison.OrdinalIgnoreCase))
+        {
+            return [new MarketVariant($"Sticker | {item.Name}", 1m)];
+        }
+
+        decimal minimum = item.MinFloat ?? 0m;
+        decimal maximum = item.MaxFloat ?? 1m;
+        if (maximum < minimum) maximum = minimum;
+        (string Wear, decimal Start, decimal End)[] bands =
+        [
+            ("Factory New", 0m, .07m),
+            ("Minimal Wear", .07m, .15m),
+            ("Field-Tested", .15m, .38m),
+            ("Well-Worn", .38m, .45m),
+            ("Battle-Scarred", .45m, 1.000001m)
+        ];
+        List<(string Wear, decimal Weight)> wears = [];
+        if (maximum == minimum)
+        {
+            wears.Add((WearFromFloat(minimum), 1m));
+        }
+        else
+        {
+            foreach ((string wear, decimal start, decimal end) in bands)
+            {
+                decimal overlap = Math.Max(0m, Math.Min(maximum, end) - Math.Max(minimum, start));
+                if (overlap > 0) wears.Add((wear, overlap / (maximum - minimum)));
+            }
+        }
+
+        bool souvenir = caseType.Equals("Souvenir Package", StringComparison.OrdinalIgnoreCase)
+            || caseType.Equals("Souvenir", StringComparison.OrdinalIgnoreCase);
+        string normalPrefix = souvenir ? "Souvenir " : item.IsRareSpecial ? "★ " : string.Empty;
+        string statTrakPrefix = item.IsRareSpecial ? "★ StatTrak™ " : "StatTrak™ ";
+        List<MarketVariant> variants = [];
+        foreach ((string wear, decimal weight) in wears)
+        {
+            variants.Add(new MarketVariant($"{normalPrefix}{item.Name} ({wear})", item.SupportsStatTrak && !souvenir ? weight * .9m : weight));
+            if (item.SupportsStatTrak && !souvenir)
+            {
+                variants.Add(new MarketVariant($"{statTrakPrefix}{item.Name} ({wear})", weight * .1m));
+            }
+        }
+        return variants;
+    }
+
+    private static CaseOpeningCaseMarketValueObj BuildCaseMarketValue(CaseOpeningCaseObj caseData, IReadOnlyDictionary<string, decimal> prices)
+    {
+        decimal expectedValue = 0m;
+        int totalVariants = 0;
+        int pricedVariants = 0;
+        bool complete = true;
+        foreach (CaseOpeningOddsObj odds in caseData.Odds)
+        {
+            List<CaseOpeningItemObj> rarityItems = caseData.Items.Where(item => item.RarityKey == odds.RarityKey).ToList();
+            if (rarityItems.Count == 0) continue;
+            decimal rarityValue = 0m;
+            foreach (CaseOpeningItemObj item in rarityItems)
+            {
+                List<MarketVariant> variants = MarketVariants(item, caseData.Type);
+                totalVariants += variants.Count;
+                decimal itemValue = 0m;
+                foreach (MarketVariant variant in variants)
+                {
+                    if (!prices.TryGetValue(variant.Name, out decimal price))
+                    {
+                        complete = false;
+                        continue;
+                    }
+                    pricedVariants++;
+                    itemValue += price * variant.Weight;
+                }
+                rarityValue += itemValue / rarityItems.Count;
+            }
+            expectedValue += rarityValue * (odds.Percentage / 100m);
+        }
+
+        decimal? openingCost = prices.TryGetValue(caseData.Name, out decimal cost) ? cost : null;
+        decimal? resolvedExpectedValue = complete && totalVariants > 0 ? decimal.Round(expectedValue, 2) : null;
+        decimal? profit = openingCost is not null && resolvedExpectedValue is not null
+            ? decimal.Round(resolvedExpectedValue.Value - openingCost.Value, 2)
+            : null;
+        return new CaseOpeningCaseMarketValueObj
+        {
+            CaseKey = caseData.CaseKey,
+            CaseName = caseData.Name,
+            OpeningCost = openingCost,
+            ExpectedValue = resolvedExpectedValue,
+            ExpectedProfit = profit,
+            ReturnPercentage = openingCost is > 0 && resolvedExpectedValue is not null
+                ? decimal.Round((resolvedExpectedValue.Value / openingCost.Value) * 100m, 1)
+                : null,
+            PricedVariants = pricedVariants,
+            TotalVariants = totalVariants
+        };
+    }
+
     private static CaseOpeningItemObj Clone(CaseOpeningItemObj item)
     {
         return item.Adapt<CaseOpeningItemObj>();
@@ -1981,7 +2608,11 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             || settings.BotServerBaseCostStars < 0 || settings.BotServerCostIncrementStars < 0
             || settings.BotBaseCostStars < 0 || settings.StorageContainerBaseCostStars < 0
             || settings.StorageContainerCostIncrementStars < 0 || settings.StorageContainerSlots < 1
-            || settings.TradeUpRecipeCostStars < 0)
+            || settings.TradeUpRecipeCostStars < 0 || settings.TradeUpRecipeCostGbpPence < 0
+            || settings.TradeUpSlotUpgradeBaseCostStars < 0 || settings.TradeUpSlotUpgradeCostIncrementStars < 0
+            || settings.TradeUpSlotUpgradeBaseCostGbpPence < 0 || settings.TradeUpSlotUpgradeCostIncrementGbpPence < 0
+            || settings.TradeUpHoldingUpgradeBaseCostStars < 0 || settings.TradeUpHoldingUpgradeCostIncrementStars < 0
+            || settings.TradeUpHoldingUpgradeBaseCostGbpPence < 0 || settings.TradeUpHoldingUpgradeCostIncrementGbpPence < 0)
         {
             throw new InvalidOperationException("Costs and XP requirements cannot be negative.");
         }
@@ -2001,6 +2632,26 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         {
             throw new InvalidOperationException("Bot cost growth rate must be at least 1.0.");
         }
+    }
+
+    private static int StarsFromPence(long pence) => pence <= 0 ? 0 : CaseOpeningBalancePolicy.PenceToStars(pence);
+
+    private static void NormalizeStarDisplaysFromGbp(CaseOpeningGameSettingsObj settings)
+    {
+        settings.SkipAnimationCostStars = StarsFromPence(settings.SkipAnimationCostGbpPence);
+        settings.MultiOpenCostStars = StarsFromPence(settings.MultiOpenCostGbpPence);
+        settings.OpenSpeedUpgradeBaseCostStars = StarsFromPence(settings.OpenSpeedUpgradeBaseCostGbpPence);
+        settings.OpenSpeedUpgradeCostIncrementStars = StarsFromPence(settings.OpenSpeedUpgradeCostIncrementGbpPence);
+        settings.BotServerBaseCostStars = StarsFromPence(settings.BotServerBaseCostGbpPence);
+        settings.BotServerCostIncrementStars = StarsFromPence(settings.BotServerCostIncrementGbpPence);
+        settings.BotBaseCostStars = StarsFromPence(settings.BotBaseCostGbpPence);
+        settings.StorageContainerBaseCostStars = StarsFromPence(settings.StorageContainerBaseCostGbpPence);
+        settings.StorageContainerCostIncrementStars = StarsFromPence(settings.StorageContainerCostIncrementGbpPence);
+        settings.TradeUpRecipeCostStars = StarsFromPence(settings.TradeUpRecipeCostGbpPence);
+        settings.TradeUpSlotUpgradeBaseCostStars = StarsFromPence(settings.TradeUpSlotUpgradeBaseCostGbpPence);
+        settings.TradeUpSlotUpgradeCostIncrementStars = StarsFromPence(settings.TradeUpSlotUpgradeCostIncrementGbpPence);
+        settings.TradeUpHoldingUpgradeBaseCostStars = StarsFromPence(settings.TradeUpHoldingUpgradeBaseCostGbpPence);
+        settings.TradeUpHoldingUpgradeCostIncrementStars = StarsFromPence(settings.TradeUpHoldingUpgradeCostIncrementGbpPence);
     }
 
     private static void ValidateCaseKey(string caseKey)

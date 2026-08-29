@@ -9,6 +9,8 @@
             warning: { title: 'Please check', icon: 'fa-triangle-exclamation' },
             info: { title: 'Personal Tools', icon: 'fa-circle-info' }
         };
+        const pending = [];
+        let active = null;
 
         function normalise(input, fallbackType) {
             if (typeof input === 'string') return { message: input, type: fallbackType || 'info' };
@@ -17,7 +19,15 @@
 
         function show(input, fallbackType) {
             if (!container) return null;
-            const options = normalise(input, fallbackType);
+            pending.push(normalise(input, fallbackType));
+            if (active) active.dataset.queued = String(pending.length);
+            showNext();
+            return null;
+        }
+
+        function showNext() {
+            if (active || !container || pending.length === 0) return;
+            const options = pending.shift();
             const type = types[options.type] ? options.type : 'info';
             const appearance = types[type];
             const element = document.createElement('div');
@@ -25,6 +35,8 @@
             element.setAttribute('role', type === 'error' ? 'alert' : 'status');
             element.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
             element.setAttribute('aria-atomic', 'true');
+            element.setAttribute('tabindex', '0');
+            element.setAttribute('title', 'Click to dismiss');
 
             const accent = document.createElement('span');
             accent.className = 'app-toast-accent';
@@ -51,6 +63,8 @@
 
             element.append(accent, icon, copy, close);
             container.appendChild(element);
+            active = element;
+            element.dataset.queued = String(pending.length);
             const delay = options.delay || (type === 'error' ? 6500 : 4300);
 
             // Do not depend on Bootstrap's internal toast lifecycle here. The application already
@@ -63,15 +77,23 @@
                 window.clearTimeout(removeTimer);
                 element.classList.remove('is-visible');
                 element.classList.add('is-leaving');
-                window.setTimeout(() => element.remove(), 220);
+                window.setTimeout(() => {
+                    element.remove();
+                    if (active === element) active = null;
+                    showNext();
+                }, 220);
             }
 
-            close.addEventListener('click', dismiss, { once: true });
+            element.addEventListener('click', dismiss, { once: true });
+            element.addEventListener('keydown', function (event) {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                dismiss();
+            });
             window.requestAnimationFrame(function () {
                 element.classList.add('show', 'is-visible');
             });
 
-            while (container.children.length > 4) container.firstElementChild?.remove();
             if (options.autohide !== false) removeTimer = window.setTimeout(dismiss, delay);
             return element;
         }
@@ -224,6 +246,41 @@
     })();
 
     window.personalToolsLoader = appLoader;
+
+    const liveWinnersDock = document.getElementById('liveWinnersDock');
+    if (liveWinnersDock) {
+        const trigger = document.getElementById('liveWinnersTrigger');
+        const panel = document.getElementById('liveWinnersPanel');
+        const count = document.getElementById('liveWinnersCount');
+        const list = document.getElementById('liveWinnersList');
+        const visibility = document.getElementById('liveWinnersVisibility');
+        let latest = null;
+        const currency = value => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 }).format(Number(value || 0));
+        function renderWinners(summary) {
+            latest = summary;
+            count.textContent = Number(summary.liveUserCount || 0).toLocaleString();
+            if (visibility) visibility.value = summary.visibility || 'users';
+            const winners = Array.isArray(summary.winners) ? summary.winners : [];
+            list.replaceChildren();
+            if (!winners.length) {
+                const empty = document.createElement('li'); empty.className = 'live-winners-empty'; empty.textContent = summary.visibility === 'admins' && liveWinnersDock.dataset.isAdmin !== 'true' ? 'The winners board is currently reserved for administrators.' : 'No priced wins in the last 24 hours yet.'; list.append(empty); return;
+            }
+            winners.forEach((winner, index) => {
+                const row = document.createElement('li'); row.className = `live-winner rank-${index + 1}`; row.style.setProperty('--winner-color', winner.rarityColor || '#e4ae39');
+                row.innerHTML = `<span class="live-winner-rank"><i class="fa-solid fa-trophy" aria-hidden="true"></i></span><img alt="" loading="lazy"><span class="live-winner-copy"><strong></strong><span></span><small></small></span>`;
+                row.querySelector('img').src = winner.imageUrl || '';
+                row.querySelector('strong').textContent = winner.itemName || 'Unknown item';
+                row.querySelector('span span').textContent = `${winner.displayName || 'Player'} · ${winner.source || 'Case opening'}`;
+                row.querySelector('small').textContent = currency(winner.estimatedPrice);
+                list.append(row);
+            });
+        }
+        function loadWinners() { fetch('/api/live-winners', { credentials: 'same-origin' }).then(response => response.ok ? response.json() : Promise.reject()).then(renderWinners).catch(() => { if (!latest) count.textContent = '—'; }); }
+        trigger.addEventListener('click', () => { const opening = panel.hidden; panel.hidden = !opening; liveWinnersDock.classList.toggle('is-open', opening); trigger.setAttribute('aria-expanded', String(opening)); if (opening) loadWinners(); });
+        document.addEventListener('click', event => { if (!liveWinnersDock.contains(event.target) && !panel.hidden) trigger.click(); });
+        visibility?.addEventListener('change', () => fetch('/api/live-winners/visibility', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || '' }, body: JSON.stringify({ visibility: visibility.value }) }).then(response => { if (!response.ok) throw new Error(); return loadWinners(); }).catch(() => { visibility.value = latest?.visibility || 'users'; }));
+        loadWinners(); window.setInterval(loadWinners, 45000);
+    }
 
     $(document).on('ajaxSend.personalToolsLoader', function (_event, xhr, settings) {
         const method = String(settings.type || settings.method || 'GET').toUpperCase();
