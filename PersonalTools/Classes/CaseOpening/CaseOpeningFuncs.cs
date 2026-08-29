@@ -1,10 +1,13 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using Mapster;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.SignalR;
 using PersonalTools.Classes;
 using PersonalTools.Entities;
 using PersonalTools.Data.CaseOpening;
 using PersonalTools.Entities.CaseOpening;
+using PersonalTools.Hubs;
 
 namespace PersonalTools.Classes.CaseOpening;
 
@@ -24,12 +27,18 @@ public interface ICaseOpeningFuncs
     Task<CaseOpeningResultObj> OpenCaseWithBot(Guid userId, Guid botId, string caseKey, CancellationToken cancellationToken = default);
     Task<CaseOpeningBotCycleResultObj> RunCaseOpeningBotCycle(Guid userId, string caseKey, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressObj> GetCaseOpeningProgress(Guid userId, CancellationToken cancellationToken = default);
+    Task<CaseOpeningProgressObj> ClaimCaseOpeningDailyDrop(Guid userId, List<string> rewardKeys, CancellationToken cancellationToken = default);
+    Task<CaseOpeningProgressObj> UnlockCaseOpeningDailyDropUpgrade(Guid userId, string upgradeKey, CancellationToken cancellationToken = default);
+    Task<int> GetDailyDropRequiredXp(CancellationToken cancellationToken = default);
+    Task SetDailyDropRequiredXp(int requiredXp, CancellationToken cancellationToken = default);
+    Task<CaseOpeningProgressObj> ResetDailyDrop(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryCapacityObj> GetCaseOpeningInventoryCapacity(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningPlayerStatsObj> GetCaseOpeningPlayerStats(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningAchievementSummaryObj> GetCaseOpeningAchievements(Guid userId, CancellationToken cancellationToken = default);
     Task RecordCaseOpeningLogin(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressObj> UnlockCaseOpeningCase(Guid userId, string caseKey, CancellationToken cancellationToken = default);
     Task<CaseOpeningCasePurchaseResultObj> PurchaseCaseOpeningCases(Guid userId, string caseKey, int quantity, CancellationToken cancellationToken = default);
+    Task<CaseOpeningCaseDiscardResultObj> DiscardCaseOpeningCases(Guid userId, string caseKey, int quantity, CancellationToken cancellationToken = default);
     Task<CaseOpeningStoragePurchaseResultObj> PurchaseCaseOpeningStorageContainer(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressObj> UnlockCaseOpeningUpgrade(Guid userId, string upgradeKey, CancellationToken cancellationToken = default);
     Task<CaseOpeningSellResultObj> SellCaseOpeningInventory(Guid userId, List<Guid> openingIds, CancellationToken cancellationToken = default);
@@ -85,6 +94,7 @@ public interface ICaseOpeningFuncs
 
 public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 {
+    private const int DailyDropRequiredXp = 100;
     private const int BotServerCapacity = 4;
     private const int MaximumIndividualBotSpeedLevel = 5;
     private const int BotSpeedUpgradeBaseCost = 300;
@@ -138,16 +148,18 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     private readonly ILogger<CaseOpeningFuncs> _logger;
     private readonly IAppSettingsFuncs _settings;
     private readonly ICSFloatMarketData _csFloat;
+    private readonly IHubContext<LiveWinnersHub> _liveWinners;
 
     public CaseOpeningFuncs(
         ICaseOpeningReferenceData referenceData,
         ICaseOpeningData data,
-        ICS2ItemPriceData prices, IAppSettingsFuncs settings, ICSFloatMarketData csFloat,
+        ICS2ItemPriceData prices, IAppSettingsFuncs settings, ICSFloatMarketData csFloat, IHubContext<LiveWinnersHub> liveWinners,
         ILogger<CaseOpeningFuncs> logger)
     {
         _referenceData = referenceData;
         _data = data;
         _prices = prices;
+        _liveWinners = liveWinners;
         _settings = settings;
         _csFloat = csFloat;
         _logger = logger;
@@ -220,9 +232,8 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         // snapshot in the balance lab so switching snapshots compares the entire inventory fairly.
         foreach (CaseOpeningHistoryDbModel item in history)
         {
-            item.EstimatedPrice = activePrices.TryGetValue(item.MarketHashName, out decimal price)
-                ? price
-                : null;
+            item.EstimatedPrice = item.SpecialVariantPrice
+                ?? (activePrices.TryGetValue(item.MarketHashName, out decimal price) ? price : null);
         }
 
         return history.Adapt<List<CaseOpeningHistoryObj>>();
@@ -463,7 +474,9 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
         Dictionary<string, int> xpByRarity = await GetXpByRarityByKey(cancellationToken);
         HashSet<string> forcedRarityKeys = await GetDevForcedRarityKeys(userId, cancellationToken);
-        return await OpenCase(userId, caseKey, cancellationToken, xpByRarity, settings.XpPerCaseOpen, forcedRarityKeys: forcedRarityKeys);
+        CaseOpeningResultObj result = await OpenCase(userId, caseKey, cancellationToken, xpByRarity, settings.XpPerCaseOpen, forcedRarityKeys: forcedRarityKeys);
+        await NotifyLiveWinnersChanged(cancellationToken);
+        return result;
     }
 
     public async Task<CaseOpeningBotCycleResultObj> RunCaseOpeningBotCycle(Guid userId, string caseKey, CancellationToken cancellationToken = default)
@@ -519,6 +532,7 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
                 break;
             }
         }
+        if (cycle.Results.Count > 0) await NotifyLiveWinnersChanged(cancellationToken);
         return cycle;
     }
 
@@ -761,6 +775,38 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 
         return result.Adapt<CaseOpeningSellResultObj>();
     }
+
+    public async Task<CaseOpeningProgressObj> ClaimCaseOpeningDailyDrop(Guid userId, List<string> rewardKeys, CancellationToken cancellationToken = default)
+    {
+        CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
+        CaseOpeningDailyDropDbModel daily = await _data.GetCaseOpeningDailyDrop(userId, cancellationToken);
+        List<CaseOpeningDailyDropRewardObj> offer = ParseDailyDropOffer(daily.OfferJson);
+        List<CaseOpeningDailyDropRewardObj> selected = offer.Where(reward => rewardKeys.Contains(reward.RewardKey, StringComparer.OrdinalIgnoreCase)).ToList();
+        if (selected.Count != 2 || rewardKeys.Distinct(StringComparer.OrdinalIgnoreCase).Count() != 2)
+            throw new InvalidOperationException("Choose exactly two Daily Drop rewards.");
+        await _data.ClaimCaseOpeningDailyDrop(userId, rewardKeys, settings.EconomyMode, cancellationToken);
+        foreach (CaseOpeningDailyDropRewardObj skin in selected.Where(reward => reward.Kind == "skin" && reward.Item is not null))
+        {
+            CaseOpeningHistoryDbModel history = skin.Item!.Adapt<CaseOpeningHistoryDbModel>();
+            history.OpeningId = Guid.NewGuid(); history.UserId = userId; history.CaseKey = skin.CaseKey ?? string.Empty; history.OpenedUtc = DateTime.UtcNow;
+            await _data.SaveCaseOpening(userId, history, cancellationToken);
+        }
+        if (selected.Any(reward => reward.Kind == "skin" && reward.Item is not null)) await NotifyLiveWinnersChanged(cancellationToken);
+        return await GetCaseOpeningProgress(userId, cancellationToken);
+    }
+
+    public async Task<CaseOpeningProgressObj> UnlockCaseOpeningDailyDropUpgrade(Guid userId, string upgradeKey, CancellationToken cancellationToken = default)
+    {
+        CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
+        Dictionary<string, int> levels = (await _data.GetCaseOpeningDailyDropUpgrades(userId, cancellationToken)).ToDictionary(item => item.UpgradeKey, item => item.Level, StringComparer.OrdinalIgnoreCase);
+        (int max, int stars, long pence) = DailyDropUpgradeCost(upgradeKey, levels.GetValueOrDefault(upgradeKey));
+        if (levels.GetValueOrDefault(upgradeKey) >= max) throw new InvalidOperationException("This Daily Drop upgrade is already maxed.");
+        await _data.UnlockCaseOpeningDailyDropUpgrade(userId, upgradeKey, stars, pence, settings.EconomyMode, cancellationToken);
+        return await GetCaseOpeningProgress(userId, cancellationToken);
+    }
+    public Task<int> GetDailyDropRequiredXp(CancellationToken cancellationToken = default) => _data.GetCaseOpeningDailyDropRequiredXp(cancellationToken);
+    public async Task SetDailyDropRequiredXp(int requiredXp, CancellationToken cancellationToken = default) { if (requiredXp is < 1 or > 10000) throw new InvalidOperationException("Daily Drop XP must be between 1 and 10,000."); await _data.SetCaseOpeningDailyDropRequiredXp(requiredXp, cancellationToken); }
+    public async Task<CaseOpeningProgressObj> ResetDailyDrop(Guid userId, CancellationToken cancellationToken = default) { await _data.ResetCaseOpeningDailyDrop(userId, cancellationToken); return await GetCaseOpeningProgress(userId, cancellationToken); }
 
     public async Task<CaseOpeningInventoryLockObj> SetCaseOpeningInventoryLock(
         Guid userId,
@@ -1194,6 +1240,7 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         await RecordPlayerActivity(userId, skinsObtained: 1, tradeUpsCompleted: 1, cancellationToken: cancellationToken);
         await RecordCollectionMilestones(userId, outputCase, cancellationToken);
         await EvaluateAchievements(userId, cancellationToken);
+        await NotifyLiveWinnersChanged(cancellationToken);
 
         return new CaseOpeningTradeUpResultObj
         {
@@ -1523,6 +1570,7 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         CaseOpeningCaseObj openedCase = await _referenceData.GetCase(caseKey, cancellationToken);
         await RecordCollectionMilestones(userId, openedCase, cancellationToken);
         await EvaluateAchievements(userId, cancellationToken);
+        await NotifyLiveWinnersChanged(cancellationToken);
 
         int remainingQuantity = (await _data.GetCaseOpeningOwnedCases(userId, cancellationToken))
             .FirstOrDefault(item => item.CaseKey.Equals(caseKey, StringComparison.OrdinalIgnoreCase))?.Quantity ?? 0;
@@ -1614,6 +1662,12 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         Dictionary<string, int> resolvedXpByRarity = xpByRarity ?? await GetXpByRarityByKey(cancellationToken);
         int xpAward = resolvedXpByRarity.TryGetValue(rarityKey, out int rarityXp) ? rarityXp : fallbackXp;
         CaseOpeningProgressDbModel? afterXp = await _data.AddCaseOpeningXp(userId, xpAward, cancellationToken);
+        // Daily progress is independently capped by its procedure and resets by UTC date. It is
+        // intentionally awarded from the same server-side XP value as the player level.
+        int focusLevel = (await _data.GetCaseOpeningDailyDropUpgrades(userId, cancellationToken))
+            .FirstOrDefault(item => item.UpgradeKey.Equals("focus", StringComparison.OrdinalIgnoreCase))?.Level ?? 0;
+        int dailyRequiredXp = Math.Max(40, DailyDropRequiredXp - (focusLevel * 10));
+        await _data.AddCaseOpeningDailyDropXp(userId, xpAward, dailyRequiredXp, cancellationToken);
         int totalXp = afterXp?.Xp ?? 0;
         int newLevel = CaseOpeningXpLevels.GetLevel(totalXp);
         int previousLevel = CaseOpeningXpLevels.GetLevel(totalXp - xpAward);
@@ -1870,6 +1924,9 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         await _data.SetInventoryUpgradeSettings(upgradeKey, StarsFromPence(costGbpPence), costGbpPence, requiredLevel, cancellationToken);
     }
 
+    private Task NotifyLiveWinnersChanged(CancellationToken cancellationToken) =>
+        _liveWinners.Clients.All.SendAsync("winnersChanged", cancellationToken);
+
     private async Task<CaseOpeningSpecialVariantRuleDbModel?> ResolveSpecialVariant(CaseOpeningItemObj item, CancellationToken cancellationToken)
     {
         List<CaseOpeningSpecialVariantRuleDbModel> rules = await _data.GetActiveCaseOpeningSpecialVariantRules(cancellationToken);
@@ -1918,7 +1975,7 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             ActiveSnapshotId = snapshots.FirstOrDefault(item => item.IsActive)?.PriceSnapshotId,
             Currency = snapshots.FirstOrDefault(item => item.IsActive)?.Currency ?? "GBP",
             Cases = cases,
-            CanPublish = snapshots.Any(item => item.IsActive) && cases.All(item => item.HasCompletePricing) && prices.All(item => !item.IsFallback) && tierWarnings.Count == 0,
+            CanPublish = snapshots.Any(item => item.IsActive) && cases.All(item => item.HasCompletePricing) && tierWarnings.Count == 0,
             FallbackPriceCount = prices.Count(item => item.IsFallback),
             MissingPriceCount = cases.Sum(item => Math.Max(0, item.TotalVariants - item.PricedVariants)),
             TierWarnings = tierWarnings
@@ -1973,13 +2030,27 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         return result;
     }
 
+    public async Task<CaseOpeningCaseDiscardResultObj> DiscardCaseOpeningCases(Guid userId, string caseKey, int quantity, CancellationToken cancellationToken = default)
+    {
+        ValidateCaseKey(caseKey);
+        await _referenceData.GetCase(caseKey, cancellationToken);
+        if (quantity is not (0 or 10 or 25 or 50 or 100))
+        {
+            throw new InvalidOperationException("Choose 10, 25, 50, 100, or all cases to discard.");
+        }
+
+        CaseOpeningCaseDiscardResultObj? result = await _data.DiscardCaseOpeningCases(userId, caseKey, quantity, cancellationToken);
+        return result ?? throw new InvalidOperationException("Those cases could not be discarded. Please try again.");
+    }
+
     public async Task<CaseOpeningPriceSnapshotSummaryObj> CreatePriceSnapshot(CancellationToken cancellationToken = default)
     {
         List<CaseOpeningCaseObj> catalogue = await _referenceData.GetCuratedCases(cancellationToken);
-        HashSet<string> requiredNames = catalogue
-            .SelectMany(item => new[] { item.Name }.Concat(item.Items.SelectMany(skin => MarketVariants(skin, item.Type).Select(variant => variant.Name))))
-            .ToHashSet(StringComparer.Ordinal);
-        await _prices.CreateSkinportSnapshot(requiredNames, cancellationToken);
+        List<CaseOpeningMarketPriceTarget> targets = catalogue
+            .SelectMany(caseData => caseData.Items.SelectMany(item => MarketVariants(item, caseData.Type)
+                .Select(variant => new CaseOpeningMarketPriceTarget(variant.Name, caseData.CaseKey, item.RarityKey, item.IsRareSpecial))))
+            .ToList();
+        await _prices.CreateSkinportSnapshot(targets, cancellationToken);
         return await GetPriceSnapshots(cancellationToken);
     }
 
@@ -2001,7 +2072,6 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         if (draft.ActiveSnapshotId is null) throw new InvalidOperationException("Create or activate a price snapshot before publishing a balance.");
         List<CaseOpeningCaseMarketValueObj> incomplete = draft.Cases.Where(item => !item.HasCompletePricing).ToList();
         if (incomplete.Count > 0) throw new InvalidOperationException($"Pricing is incomplete for {incomplete.Count} case{(incomplete.Count == 1 ? string.Empty : "s")}. Missing prices must be resolved before publishing.");
-        if (draft.FallbackPriceCount > 0) throw new InvalidOperationException($"Resolve {draft.FallbackPriceCount} fallback price{(draft.FallbackPriceCount == 1 ? string.Empty : "s")} before publishing. Published balancing requires current Skinport median prices.");
         if (draft.TierWarnings.Count > 0) throw new InvalidOperationException(string.Join(" ", draft.TierWarnings));
         Dictionary<string, CaseOpeningCaseSettingsObj> settings = await GetCaseSettingsByKey(cancellationToken);
         foreach (CaseOpeningCaseMarketValueObj item in draft.Cases)
@@ -2149,6 +2219,23 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     {
         Dictionary<string, CaseOpeningCaseSettingsObj> caseSettings = await GetCaseSettingsByKey(cancellationToken);
         CaseOpeningProgressObj result = CreateProgress(progress, settings, unlockedCaseKeys);
+        CaseOpeningDailyDropDbModel daily = await _data.GetCaseOpeningDailyDrop(progress.UserId, cancellationToken);
+        Dictionary<string, int> dailyUpgradeLevels = (await _data.GetCaseOpeningDailyDropUpgrades(progress.UserId, cancellationToken)).ToDictionary(item => item.UpgradeKey, item => item.Level, StringComparer.OrdinalIgnoreCase);
+        if (daily.IsCompleted && !daily.IsClaimed && string.IsNullOrWhiteSpace(daily.OfferJson))
+        {
+            List<CaseOpeningDailyDropRewardObj> offer = await CreateDailyDropOffer(settings, unlockedCaseKeys ?? [], dailyUpgradeLevels, cancellationToken);
+            daily = await _data.SetCaseOpeningDailyDropOffer(progress.UserId, JsonSerializer.Serialize(offer), cancellationToken);
+        }
+        result.DailyDrop = new CaseOpeningDailyDropObj
+        {
+            DropDate = daily.DropDate,
+            Xp = daily.Xp,
+            RequiredXp = Math.Max(40, DailyDropRequiredXp - (dailyUpgradeLevels.GetValueOrDefault("focus") * 10)),
+            IsCompleted = daily.IsCompleted,
+            IsClaimed = daily.IsClaimed,
+            Rewards = ParseDailyDropOffer(daily.OfferJson),
+            Upgrades = DailyDropUpgradeDefinitions(settings, dailyUpgradeLevels)
+        };
         CaseOpeningFreeCaseAllowanceObj allowance = await _data.GetCaseOpeningFreeCaseAllowance(progress.UserId, cancellationToken);
         result.FreeCaseAllowanceEnabled = settings.FreeCaseAllowanceEnabled;
         result.FreeCaseAllowanceRemaining = allowance.Remaining;
@@ -2481,6 +2568,61 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         if (value < .38m) return "Field-Tested";
         if (value < .45m) return "Well-Worn";
         return "Battle-Scarred";
+    }
+
+    private async Task<List<CaseOpeningDailyDropRewardObj>> CreateDailyDropOffer(CaseOpeningGameSettingsObj settings, List<string> unlockedCaseKeys, IReadOnlyDictionary<string, int> levels, CancellationToken cancellationToken)
+    {
+        List<CaseOpeningCaseObj> unlocked = [];
+        foreach (string key in unlockedCaseKeys.Distinct(StringComparer.OrdinalIgnoreCase)) unlocked.Add(await _referenceData.GetCase(key, cancellationToken));
+        List<CaseOpeningCaseObj> paid = unlocked.Where(item => IsGbp(settings) ? item.PurchaseCostGbpPence > 0 : item.PurchaseCostStars > 0).OrderBy(item => item.Tier).ToList();
+        CaseOpeningCaseObj fallback = unlocked.FirstOrDefault() ?? await _referenceData.GetCase(StarterCaseKey, cancellationToken);
+        int qualityLevel = levels.GetValueOrDefault("quality");
+        List<CaseOpeningCaseObj> qualityPool = paid.Skip(Math.Min(qualityLevel, Math.Max(0, paid.Count - 1))).ToList();
+        CaseOpeningCaseObj caseReward = qualityPool.Count == 0 ? fallback : qualityPool[RandomNumberGenerator.GetInt32(qualityPool.Count)];
+        CaseOpeningCaseObj stickerReward = unlocked.FirstOrDefault(item => item.Type.Contains("Sticker", StringComparison.OrdinalIgnoreCase)) ?? caseReward;
+        List<(CaseOpeningCaseObj Case, CaseOpeningItemObj Item)> skins = [];
+        foreach (CaseOpeningCaseObj @case in unlocked)
+            foreach (CaseOpeningItemObj item in @case.Items.Where(item => item.RarityKey is "mil-spec" or "restricted" or "classified"))
+            {
+                item.EstimatedPrice = await _prices.GetEstimatedPrice(item.MarketHashName, cancellationToken);
+                if (item.EstimatedPrice is > 0 and < 50m) skins.Add((@case, item));
+            }
+        (CaseOpeningCaseObj Case, CaseOpeningItemObj Item)? skinReward = skins.Count == 0 ? null : skins[RandomNumberGenerator.GetInt32(skins.Count)];
+        List<CaseOpeningDailyDropRewardObj> result = [
+            new() { RewardKey="money", Kind="money", Name="Cash reward", Description="Add currency to your balance.", AmountMinor=100 + (levels.GetValueOrDefault("cash") * 50) },
+            new() { RewardKey="cases", Kind="cases", Name=$"{10 + (levels.GetValueOrDefault("case-stash") * 5)} × {caseReward.Name}", Description="A paid unlocked case pack.", CaseKey=caseReward.CaseKey, AmountMinor=10 + (levels.GetValueOrDefault("case-stash") * 5), ImageUrl=caseReward.ImageUrl },
+            new() { RewardKey="sticker", Kind="cases", Name=$"5 × {stickerReward.Name}", Description="Sticker capsule reward.", CaseKey=stickerReward.CaseKey, AmountMinor=5, ImageUrl=stickerReward.ImageUrl }
+        ];
+        if (skinReward is not null) result.Add(new() { RewardKey="skin", Kind="skin", Name=skinReward.Value.Item.Name, Description="Blue, purple or pink skin under £50.", CaseKey=skinReward.Value.Case.CaseKey, Item=skinReward.Value.Item, ImageUrl=skinReward.Value.Item.ImageUrl });
+        else result.Add(new() { RewardKey="bonus-cases", Kind="cases", Name=$"5 × {caseReward.Name}", Description="Bonus case pack while no eligible skin is priced below £50.", CaseKey=caseReward.CaseKey, AmountMinor=5, ImageUrl=caseReward.ImageUrl });
+        return result;
+    }
+
+    private static List<CaseOpeningDailyDropRewardObj> ParseDailyDropOffer(string offerJson)
+        => string.IsNullOrWhiteSpace(offerJson) ? [] : JsonSerializer.Deserialize<List<CaseOpeningDailyDropRewardObj>>(offerJson) ?? [];
+
+    private static (int Max, int Stars, long Pence) DailyDropUpgradeCost(string key, int level) => key switch
+    {
+        "focus" => (3, 150 + (level * 100), 150 + (level * 100)),
+        "cash" => (3, 200 + (level * 150), 200 + (level * 150)),
+        "case-stash" => (3, 250 + (level * 175), 250 + (level * 175)),
+        "quality" => (3, 300 + (level * 200), 300 + (level * 200)),
+        _ => throw new InvalidOperationException("That Daily Drop upgrade does not exist.")
+    };
+
+    private static List<CaseOpeningDailyDropUpgradeObj> DailyDropUpgradeDefinitions(CaseOpeningGameSettingsObj settings, IReadOnlyDictionary<string, int> levels)
+    {
+        (string Key, string Name, string Description)[] definitions = [
+            ("focus", "Focused collector", "Reduce the XP needed for each Daily Drop by 10."),
+            ("cash", "Cash cache", "Increase the currency reward."),
+            ("case-stash", "Case stash", "Add 5 cases to the case-pack reward."),
+            ("quality", "Higher stakes", "Bias case packs toward higher unlocked tiers.")];
+        return definitions.Select(definition =>
+        {
+            int level = levels.GetValueOrDefault(definition.Key);
+            (int max, int stars, long pence) = DailyDropUpgradeCost(definition.Key, level);
+            return new CaseOpeningDailyDropUpgradeObj { UpgradeKey=definition.Key, Name=definition.Name, Description=definition.Description, Level=level, MaximumLevel=max, Cost=IsGbp(settings) ? pence : stars };
+        }).ToList();
     }
 
     private static bool IsGbp(CaseOpeningGameSettingsObj settings) =>

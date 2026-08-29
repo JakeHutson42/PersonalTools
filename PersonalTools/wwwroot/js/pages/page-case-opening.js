@@ -45,6 +45,7 @@
     const selectedInventoryIds = new Set();
     const skipAnimationStorageKey = 'personalTools.caseOpeningSkipAnimation';
     let caseProgress = null;
+    let dailyDropMayHaveCompleted = false;
     let caseTweakProgress = null;
     let caseTweakCatalogue = [];
     let selectedOpenQuantity = 1;
@@ -366,7 +367,10 @@
 
     function resultMarketText(result) {
         if (!isGbpEconomy() || result?.winner?.estimatedPrice == null || !Number.isFinite(Number(result.winner.estimatedPrice))) return '';
-        return formatCurrency(saleAmountFor(result.winner), true);
+        // A result is presenting the skin's market value.  The reduced amount is
+        // only relevant when the player later sells it, and is labelled as such
+        // in inventory, so it must not be shown here as the item's price.
+        return formatCurrency(Number(result.winner.estimatedPrice), true);
     }
 
     // Level 5 grants Skip Animation instead of a further multiplier - the reel tops out at 3x
@@ -432,6 +436,8 @@
 
     function renderProgress(progress) {
         caseProgress = progress || null;
+        renderDailyDrop();
+        renderDailyDropUpgrades();
         marketValuationEnabled = isGbpEconomy();
         $page.toggleClass('is-market-valuation', marketValuationEnabled);
         $page.toggleClass('is-gbp-economy', isGbpEconomy());
@@ -454,6 +460,10 @@
 
         $('#caseStarsBalance').text(Number(caseProgress?.stars || 0).toLocaleString());
         $('#caseGbpBalance').text(formatGbpBalance(caseProgress?.gbpPence));
+        const usesGbp = isGbpEconomy();
+        $('#caseHudStars').toggleClass('d-none', usesGbp);
+        $('#caseHudGbp').toggleClass('d-none', !usesGbp);
+        $('#caseHudCurrencies').attr('aria-label', usesGbp ? 'GBP balance' : 'Stars balance');
         $('#caseUpgradeStarsBalance, #caseLegacyUpgradeStarsBalance, #caseShopStarsBalance').text(formatCurrency(balance, true));
         const allowanceEnabled = caseProgress?.freeCaseAllowanceEnabled === true;
         const allowanceRemaining = Number(caseProgress?.freeCaseAllowanceRemaining || 0);
@@ -571,8 +581,9 @@
                 $('<div>', { class: 'case-shop-empty', text: 'No cases or capsules match those filters.' })
             ));
         }
-        $('#caseShopTypeFilter [data-shop-type]').toggleClass('is-active', function () {
-            return String($(this).data('shop-type') || '') === shopType;
+        $('#caseShopTypeFilter [data-shop-type]').each(function () {
+            const isActive = String($(this).data('shop-type') || '') === shopType;
+            $(this).toggleClass('is-active', isActive).attr('aria-pressed', String(isActive));
         });
 
         const capacity = inventoryCapacity || {};
@@ -690,6 +701,82 @@
         $('#caseXpFill').css('width', `${percentage}%`);
         $('#caseXpTrack').attr('aria-valuenow', String(percentage));
         renderPlayerProfile();
+    }
+
+    function renderDailyDrop() {
+        const daily = caseProgress?.dailyDrop || {};
+        const required = Math.max(1, Number(daily.requiredXp || 100));
+        const percentage = Math.min(100, Math.max(0, Math.round((Number(daily.xp || 0) / required) * 100)));
+        const label = percentage >= 100 ? '100% · Ready' : percentage >= 50 ? '50%' : '1%';
+        $('#caseDailyDropFill').css('width', `${percentage}%`);
+        $('#caseDailyDropText').text(label);
+        $('#caseDailyDropTrack').attr('aria-valuenow', String(percentage));
+        const ready = daily.isCompleted && !daily.isClaimed && Array.isArray(daily.rewards) && daily.rewards.length === 4;
+        $('#caseDailyDrop').toggleClass('is-ready', ready)
+            .attr('aria-hidden', 'false')
+            .attr('aria-label', ready ? 'Open Daily Drop rewards' : `Daily Drop progress: ${label}`);
+        $('#caseDailyDropRecall').toggleClass('d-none', !ready);
+        $('.case-game-hud').toggleClass('has-daily-drop-ready', ready);
+        if (ready && dailyDropMayHaveCompleted) {
+            dailyDropMayHaveCompleted = false;
+            window.setTimeout(openDailyDropModal, 250);
+        }
+    }
+
+    function openDailyDropModal() {
+        const rewards = caseProgress?.dailyDrop?.rewards || [];
+        if (rewards.length !== 4) return;
+        const $grid = $('#caseDailyDropRewards').empty();
+        rewards.forEach(function (reward) {
+            const $card = $('<label>', { class: 'col-12 col-md-6 col-xl-3 case-daily-reward-option' });
+            const $input = $('<input>', { type: 'checkbox', class: 'visually-hidden js-daily-drop-choice', value: reward.rewardKey });
+            const $art = $('<span>', { class: 'case-daily-reward-showcase' });
+            if (reward.imageUrl) {
+                $art.append($('<img>', { class: 'case-daily-reward-image', src: reward.imageUrl, alt: '' }));
+            } else {
+                $art.append($('<i>', { class: 'fa-solid fa-gift case-daily-reward-icon', 'aria-hidden': 'true' }));
+            }
+            $card.append($input, $('<span>', { class: 'case-daily-reward-select' }).append($('<i>', { class: 'fa-solid fa-check', 'aria-hidden': 'true' })).append($('<span>', { text: 'Choose' })),
+                $art,
+                $('<span>', { class: 'case-daily-reward-copy' }).append($('<small>', { text: 'Daily reward' })).append($('<strong>').text(reward.name)).append($('<span>').text(reward.description)),
+                $('<span>', { class: 'case-daily-reward-free', text: 'Included' }));
+            $grid.append($card);
+        });
+        $('#caseDailyDropClaim').prop('disabled', true);
+        $('#caseDailyDropSelectionStatus').text('0 / 2 rewards selected');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('caseDailyDropModal')).show();
+    }
+
+    function renderDailyDropUpgrades() {
+        const $tree = $('#caseDailyUpgradeTreeCards').empty();
+        (caseProgress?.dailyDrop?.upgrades || []).forEach(function (upgrade) {
+            const level = Number(upgrade.level || 0);
+            const maximumLevel = Math.max(1, Number(upgrade.maximumLevel || 1));
+            const complete = level >= maximumLevel;
+            const progressed = level > 0 && !complete;
+            const icon = { focus: 'fa-bullseye', cash: 'fa-sack-dollar', 'case-stash': 'fa-box-open', quality: 'fa-gem' }[upgrade.upgradeKey] || 'fa-sparkles';
+            const state = complete ? 'is-complete' : progressed ? 'is-progressed' : 'is-dormant';
+            const $card = $('<article>', { class: `case-daily-tree-node ${state}`, tabindex: '0' })
+                .append($('<span>', { class: 'case-daily-tree-connector', 'aria-hidden': 'true' }))
+                .append($('<span>', { class: 'case-daily-tree-emblem', 'aria-hidden': 'true' }).append($('<i>', { class: `fa-solid ${icon}` })))
+                .append($('<span>', { class: 'case-daily-tree-level' }).text(`Rank ${level} / ${maximumLevel}`))
+                .append($('<strong>').text(upgrade.name))
+                .append($('<p>').text(upgrade.description));
+            const label = complete ? 'Maxed' : `Upgrade · ${formatCurrency(Number(upgrade.cost || 0), true)}`;
+            $card.append($('<span>', { class: 'case-daily-tree-tooltip', role: 'tooltip' }).append($('<b>').text(upgrade.name)).append($('<span>').text(upgrade.description)).append($('<em>').text(complete ? 'Fully attuned' : `${maximumLevel - level} rank${maximumLevel - level === 1 ? '' : 's'} remaining`)));
+            $card.append($('<button>', { type: 'button', class: complete ? 'btn btn-outline-secondary btn-sm' : 'btn btn-warning btn-sm js-daily-upgrade', disabled: complete, 'data-upgrade-key': upgrade.upgradeKey }).text(label));
+            $tree.append($card);
+        });
+    }
+
+    function showDailyDropCarousel() {
+        const $daily = $('#caseDailyDrop');
+        if (!$daily.length || $daily.hasClass('is-ready') || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        $daily.removeClass('is-leaving').addClass('is-showing');
+        window.clearTimeout(showDailyDropCarousel.timer);
+        showDailyDropCarousel.timer = window.setTimeout(function () {
+            $daily.removeClass('is-showing').addClass('is-leaving');
+        }, 2300);
     }
 
     function renderPlayerProfile() {
@@ -852,6 +939,11 @@
         });
 
         const xpGained = results.reduce((sum, item) => sum + Number(item.xpAwarded || 0), 0);
+        // Only arm the reward picker while this opening can actually complete a new Daily Drop.
+        // Once a ready drop has been dismissed, later spins must leave it closed until the user
+        // deliberately reopens it from the Daily Drop control.
+        dailyDropMayHaveCompleted = caseProgress?.dailyDrop?.isCompleted !== true
+            && caseProgress?.dailyDrop?.isClaimed !== true;
         const levelBefore = xpLevelForTotal(Number(caseProgress.xp || 0));
         const totalXp = Number(caseProgress.xp || 0) + xpGained;
         const levelAfter = xpLevelForTotal(totalXp);
@@ -1139,7 +1231,6 @@
             .attr('aria-label', soundState.enabled ? 'Mute case opening sounds' : 'Enable case opening sounds')
             .find('i').attr('class', soundState.enabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark').end()
             .find('span').text(soundState.enabled ? 'On' : 'Off');
-        $('#caseSoundVolume').val(percentage);
         $('#caseSoundVolumeValue').text(`${percentage}%`);
         $('#caseSoundStatus').text(audible ? `${soundState.theme === 'classic' ? 'Classic' : soundState.theme === 'csgo' ? 'CS:GO-style' : 'CS2-style'} audio enabled` : 'Audio muted');
         $('#caseSoundButtonText').text(audible ? 'Sound' : 'Muted');
@@ -1152,11 +1243,15 @@
         });
         const meter = document.getElementById('caseSoundVolumeMeter');
         if (meter) {
+            meter.setAttribute('aria-valuenow', String(percentage));
+            meter.setAttribute('aria-valuetext', `${percentage}% volume`);
+            const fill = meter.querySelector('span');
+            if (!fill) return;
             const targetWidth = `${percentage}%`;
             if (window.anime?.animate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                window.anime.animate(meter, { width: [meter.style.width || '0%', targetWidth], duration: 260, ease: 'out(3)' });
+                window.anime.animate(fill, { width: [fill.style.width || '0%', targetWidth], duration: 260, ease: 'out(3)' });
             } else {
-                meter.style.width = targetWidth;
+                fill.style.width = targetWidth;
             }
         }
     }
@@ -2034,6 +2129,80 @@
         return catalogue.find(item => item.caseKey === key)?.name || key;
     }
 
+    function caseImageFor(key) {
+        return catalogue.find(item => item.caseKey === key)?.imageUrl || '';
+    }
+
+    function inventoryOpenedDate(value) {
+        const opened = new Date(value);
+        if (Number.isNaN(opened.getTime())) return '—';
+        const day = opened.getDate();
+        const suffix = day % 10 === 1 && day !== 11 ? 'st'
+            : day % 10 === 2 && day !== 12 ? 'nd'
+                : day % 10 === 3 && day !== 13 ? 'rd' : 'th';
+        return `${day}${suffix} ${opened.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`;
+    }
+
+    function inventoryOpenedDateTime(value) {
+        const opened = new Date(value);
+        return Number.isNaN(opened.getTime()) ? '' : opened.toLocaleString('en-GB', {
+            day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+    }
+
+    function inventoryDetailsText(item) {
+        return [
+            item.weaponName,
+            item.patternName,
+            item.phase,
+            item.wear,
+            item.floatValue == null ? '' : `Float ${Number(item.floatValue).toFixed(6)}`,
+            item.patternSeed == null ? '' : `Pattern #${item.patternSeed}`,
+            item.isStatTrak ? 'StatTrak™' : ''
+        ].filter(Boolean).join(' · ');
+    }
+
+    function inventoryImagePreview(item, className) {
+        return $('<button>', {
+            class: `case-history-image-preview ${className || ''}`,
+            type: 'button',
+            'data-image-url': item.imageUrl,
+            'data-image-name': item.name,
+            'aria-label': `Preview ${item.name}`
+        }).append($('<img>', { src: item.imageUrl, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }));
+    }
+
+    function inventoryCaseLink(item) {
+        const caseName = caseNameFor(item.caseKey);
+        return $('<button>', {
+            class: 'case-history-case-link',
+            type: 'button',
+            'data-case-key': item.caseKey,
+            'aria-label': `View ${caseName} in the shop`
+        }).append(
+            caseImageFor(item.caseKey) ? $('<img>', { src: caseImageFor(item.caseKey), alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null,
+            $('<span>', { text: caseName })
+        );
+    }
+
+    function openShopCase(caseKeyToShow, focusPurchase) {
+        const selectedCase = catalogue.find(item => item.caseKey === caseKeyToShow);
+        if (!selectedCase) return;
+        shopSearch = selectedCase.name;
+        shopTier = '';
+        shopType = '';
+        $('#caseShopSearch').val(selectedCase.name);
+        $('#caseShopTier').val('');
+        switchDestination('shop');
+        renderShop(catalogue);
+
+        window.setTimeout(function () {
+            const card = document.querySelector(`.case-shop-case[data-case-key="${CSS.escape(caseKeyToShow)}"]`);
+            card?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+            if (focusPurchase) card?.querySelector('.js-shop-buy-case')?.focus({ preventScroll: true });
+        }, activeDestination === 'shop' ? 0 : 280);
+    }
+
     function ownedCaseInventoryCard(item) {
         const quantity = Number(item.ownedQuantity || 0);
         const purchaseCost = activeCaseCost(item, 'purchase');
@@ -2061,7 +2230,15 @@
                         class: 'btn btn-outline-warning btn-sm js-owned-case-buy',
                         type: 'button',
                         'data-case-key': item.caseKey
-                    }).append($('<i>', { class: 'fa-solid fa-cart-plus me-1', 'aria-hidden': 'true' }), document.createTextNode('Buy more'))
+                    }).append($('<i>', { class: 'fa-solid fa-cart-plus me-1', 'aria-hidden': 'true' }), document.createTextNode('Buy more')),
+                    $('<button>', {
+                        class: 'btn btn-outline-danger btn-sm js-owned-case-discard',
+                        type: 'button',
+                        'data-case-key': item.caseKey,
+                        'data-owned-quantity': quantity,
+                        'aria-label': `Discard ${item.name}`,
+                        title: 'Discard cases'
+                    }).append($('<i>', { class: 'fa-solid fa-trash-can me-1', 'aria-hidden': 'true' }), document.createTextNode('Discard'))
                 )
             )
         );
@@ -2118,7 +2295,6 @@
     }
 
     function historyCard(item) {
-        const opened = new Date(item.openedUtc);
         const meta = [item.rarityName, item.phase, item.wear].filter(Boolean).join(' · ');
         const condition = item.floatValue == null || item.patternSeed == null
             ? ''
@@ -2133,9 +2309,9 @@
                 'aria-label': `${item.name}. Selectable inventory item.`,
                 'data-opening-id': item.openingId
             }).append(
-                $('<img>', { src: item.imageUrl, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }),
+                inventoryImagePreview(item, 'case-history-card-image'),
                 inventoryLockButton(item),
-                $('<div>', { class: 'card-body pt-0' }).append(
+                $('<div>', { class: 'card-body p-3' }).append(
                     $('<div>', { class: 'case-history-card-rarity-row mb-1' }).append(
                         $('<p>', { class: 'small fw-semibold rarity-label mb-0', text: item.rarityName }),
                         $statTrak,
@@ -2151,7 +2327,7 @@
                     }),
                     $('<span>', { class: 'badge text-bg-secondary-subtle border mb-2', text: caseNameFor(item.caseKey) }),
                     $('<br>'),
-                    $('<time>', { class: 'small-muted', datetime: item.openedUtc, text: Number.isNaN(opened.getTime()) ? '' : opened.toLocaleString() }),
+                    $('<time>', { class: 'small-muted', datetime: item.openedUtc, title: inventoryOpenedDateTime(item.openedUtc), text: inventoryOpenedDate(item.openedUtc) }),
                     $('<button>', {
                         class: 'btn btn-outline-primary btn-sm w-100 mt-3 js-inspect-case-item',
                         type: 'button',
@@ -2164,13 +2340,7 @@
     }
 
     function historyTableRow(item) {
-        const opened = new Date(item.openedUtc);
-        const condition = item.floatValue == null || item.patternSeed == null
-            ? ''
-            : `Float ${Number(item.floatValue).toFixed(6)} · Pattern #${item.patternSeed}`;
-        const details = [item.weaponName, item.patternName, item.phase, item.wear, condition, item.isStatTrak ? 'StatTrak™' : '']
-            .filter(Boolean)
-            .join(' · ');
+        const details = inventoryDetailsText(item);
         const selected = selectedInventoryIds.has(String(item.openingId));
         return $('<tr>', {
             class: `case-history-row ${rarityClass(item)}${selected ? ' is-selected' : ''}${item.isLocked ? ' is-locked' : ''}`,
@@ -2181,7 +2351,7 @@
             $('<td>').append(inventoryLockButton(item, true)),
             $('<td>').append(
                 $('<span>', { class: 'case-history-item-cell' }).append(
-                    $('<img>', { src: item.imageUrl, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }),
+                    inventoryImagePreview(item),
                     $('<span>').append(
                         $('<strong>', { text: item.name }),
                         item.isStatTrak ? statTrakBadge(item) : $('<small>', { text: 'Standard item' }),
@@ -2189,20 +2359,25 @@
                     )
                 )
             ),
-            $('<td>').append($('<span>', { class: 'badge text-bg-secondary-subtle border', text: caseNameFor(item.caseKey) })),
-            $('<td>').append(
-                $('<span>', { class: 'case-history-rarity d-block', text: item.rarityName }),
-                $('<small>', {
-                    class: 'text-warning js-case-sale-value',
-                    'data-opening-id': item.openingId,
-                    text: inventoryValueText(item, true)
-                })
-            ),
-            $('<td>', { class: 'small', text: details || '—' }),
+            $('<td>').append(inventoryCaseLink(item)),
+            $('<td>').append($('<span>', { class: 'case-history-rarity d-block', text: item.rarityName })),
+            $('<td>', { class: 'text-end' }).append($('<span>', {
+                class: 'text-warning js-case-sale-value',
+                'data-opening-id': item.openingId,
+                text: inventoryValueText(item, true)
+            })),
+            $('<td>').append($('<button>', {
+                class: 'case-history-finish',
+                type: 'button',
+                text: item.wear || '—',
+                title: details || 'No additional finish details',
+                'data-inventory-details': details || 'No additional finish details'
+            })),
             $('<td>').append($('<time>', {
                 class: 'small text-nowrap',
                 datetime: item.openedUtc,
-                text: Number.isNaN(opened.getTime()) ? '—' : opened.toLocaleString()
+                title: inventoryOpenedDateTime(item.openedUtc),
+                text: inventoryOpenedDate(item.openedUtc)
             })),
             $('<td>', { class: 'text-end' }).append(
                 $('<button>', {
@@ -3901,7 +4076,7 @@
         if (!loading) return;
 
         const $loader = $('<div>', {
-            class: 'case-destination-loader',
+            class: 'case-destination-loader case-tab-start',
             'data-case-destination-loader': destination,
             'data-case-destination-panel': destination,
             'aria-label': `Loading ${destination}`,
@@ -4001,14 +4176,19 @@
             return;
         }
 
-        // Keep the new destination mounted and loading behind the fully-expanded void. The
-        // previous implementation changed panels first, which made the new page feel early.
+        // Start the destination's scoped AJAX work as soon as the transition begins. The panel
+        // remains hidden behind the cover until its void has expanded, so the animation masks the
+        // network wait instead of starting it after the visual hand-off.
         $('.case-bottom-nav-link').prop('disabled', true);
         transition.classList.add('is-active');
+        const destinationLoad = settings.deferLoad ? $.Deferred().resolve().promise() : loadDestinationData(destination);
         window.requestAnimationFrame(() => transition.classList.add('is-closing'));
         window.setTimeout(function () {
-            applyDestination(destination, { ...settings, animate: false });
+            applyDestination(destination, { ...settings, animate: false, deferLoad: true });
         }, 245);
+        destinationLoad.always(function () {
+            if (destination === 'tradeups') renderTradeUpWorkspace();
+        });
         window.setTimeout(function () {
             transition.classList.remove('is-active', 'is-closing');
             $('.case-bottom-nav-link').prop('disabled', false);
@@ -4097,11 +4277,34 @@
         .on('show.bs.offcanvas', function () {
             renderPlayerProfile();
             if ($('#caseProfileCollectionsPane').hasClass('active')) loadProfileCollections();
+            if ($('#caseProfileBattlesPane').hasClass('active')) loadProfileBattleHistory();
             $('#caseBottomNav').addClass('is-obscured');
         })
         .on('hidden.bs.offcanvas', function () {
             if (!$('.modal.show').length) $('#caseBottomNav').removeClass('is-obscured');
         });
+
+    function loadProfileBattleHistory() {
+        const $history = $('#caseProfileBattleHistory');
+        const formatBattleValue = value => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 }).format(Number(value || 0));
+        $history.html('<div class="case-profile-collections-empty"><i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span>Loading battle history…</span></div>');
+        request('/api/case-battles/history', 'GET', { showLoader: false }).done(function (battles) {
+            const items = Array.isArray(battles) ? battles : [];
+            if (!items.length) { $history.html('<div class="case-profile-collections-empty"><i class="fa-solid fa-trophy" aria-hidden="true"></i><span>No completed case battles yet.</span></div>'); return; }
+            $history.empty();
+            items.forEach(function (battle) {
+                const value = formatBattleValue(battle.awardedValue || 0);
+                $history.append($('<a>', { class: `case-profile-collection-card${battle.won ? ' is-complete' : ''}`, href: '/CaseOpening/Battles/' + encodeURIComponent(battle.battleId) }).append(
+                    $('<div>', { class: 'case-profile-collection-body' }).append(
+                        $('<div>', { class: 'case-profile-collection-heading' }).append($('<strong>', { text: battle.mode || 'Case battle' }), $('<span>', { text: battle.won ? 'Won' : 'Lost' })),
+                        $('<p>', { class: 'small-muted mb-0', text: `Pull total ${formatBattleValue(battle.personalTotal || 0)} · Awarded ${value}` })
+                    )
+                ));
+            });
+        }).fail(function () { $history.html('<div class="case-profile-collections-empty is-error"><span>Battle history could not be loaded.</span></div>'); });
+    }
+
+    $('#caseProfileBattlesTab').on('shown.bs.tab', loadProfileBattleHistory);
 
     const profileScrollBody = document.querySelector('#casePlayerProfile .offcanvas-body');
     let profileTouchY = null;
@@ -4422,13 +4625,36 @@
         renderSoundControls();
     });
 
-    $('#caseSoundVolume').on('input change', function () {
-        soundState.volume = Math.max(0, Math.min(1, Number(this.value) / 100));
+    function setSoundVolume(percentage) {
+        soundState.volume = Math.max(0, Math.min(1, Number(percentage) / 100));
         if (masterGain && audioContext) {
             masterGain.gain.setTargetAtTime(soundState.enabled ? soundState.volume : 0, audioContext.currentTime, 0.015);
         }
         saveSoundState();
         renderSoundControls();
+    }
+
+    $('#caseSoundVolumeMeter').on('pointerdown', function (event) {
+        const meter = this;
+        const update = function (pointerEvent) {
+            const bounds = meter.getBoundingClientRect();
+            setSoundVolume(Math.round(((pointerEvent.clientX - bounds.left) / Math.max(1, bounds.width)) * 100));
+        };
+        update(event.originalEvent);
+        meter.setPointerCapture?.(event.originalEvent.pointerId);
+        $(meter).on('pointermove.caseSoundVolume', function (moveEvent) { update(moveEvent.originalEvent); })
+            .one('pointerup.caseSoundVolume pointercancel.caseSoundVolume', function () { $(meter).off('pointermove.caseSoundVolume'); });
+    }).on('keydown', function (event) {
+        const current = Math.round(soundState.volume * 100);
+        const step = event.shiftKey ? 10 : 5;
+        let next = current;
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') next -= step;
+        else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') next += step;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = 100;
+        else return;
+        event.preventDefault();
+        setSoundVolume(next);
     });
 
     $('#caseSoundThemes').on('click', '.case-sound-theme', function () {
@@ -4481,27 +4707,14 @@
         const selectedCase = catalogue.find(item => item.caseKey === selectedKey);
         if (!selectedCase || !isCaseUnlocked(selectedCase)) return;
 
-        const openShopCase = function () {
-            shopSearch = selectedCase.name;
-            shopTier = '';
-            $('#caseShopSearch').val(selectedCase.name);
-            $('#caseShopTier').val('');
-            switchDestination('shop');
-            renderShop(catalogue);
-
-            window.requestAnimationFrame(function () {
-                const card = document.querySelector(`.case-shop-case[data-case-key="${CSS.escape(selectedKey)}"]`);
-                card?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
-                card?.querySelector('.js-shop-buy-case')?.focus({ preventScroll: true });
-            });
-        };
+        const showSelectedCaseInShop = function () { openShopCase(selectedKey, true); };
         const selectorModal = document.getElementById('caseSelectorModal');
         const modal = bootstrap.Modal.getInstance(selectorModal);
         if (!modal) {
-            openShopCase();
+            showSelectedCaseInShop();
             return;
         }
-        $(selectorModal).one('hidden.bs.modal', openShopCase);
+        $(selectorModal).one('hidden.bs.modal', showSelectedCaseInShop);
         modal.hide();
     });
 
@@ -4927,20 +5140,116 @@
         if (loadedCaseKey !== selectedKey) loadCase(selectedKey, { showLoader: false });
     }).on('click', '.js-owned-case-buy', function () {
         const selectedKey = String($(this).data('case-key') || '');
-        const selectedCase = catalogue.find(item => item.caseKey === selectedKey);
-        if (!selectedCase) return;
-
-        shopSearch = selectedCase.name;
-        shopTier = '';
-        $('#caseShopSearch').val(selectedCase.name);
-        $('#caseShopTier').val('');
-        switchDestination('shop');
-        renderShop(catalogue);
-        window.requestAnimationFrame(function () {
-            const card = document.querySelector(`.case-shop-case[data-case-key="${CSS.escape(selectedKey)}"]`);
-            card?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
-            card?.querySelector('.js-shop-buy-case')?.focus({ preventScroll: true });
+        openShopCase(selectedKey, true);
+    }).on('click', '.js-owned-case-discard', function (event) {
+        event.stopPropagation();
+        const button = this;
+        const caseKeyToDiscard = String($(button).data('case-key') || '');
+        const ownedQuantity = Number($(button).data('owned-quantity') || 0);
+        const options = [10, 25, 50, 100, 0];
+        const menu = document.createElement('div');
+        menu.className = 'case-discard-menu';
+        const heading = document.createElement('strong');
+        heading.textContent = `${ownedQuantity.toLocaleString()} ready to discard`;
+        menu.append(heading);
+        options.forEach(quantity => {
+            const action = document.createElement('button');
+            const available = quantity === 0 || ownedQuantity >= quantity;
+            action.type = 'button';
+            action.className = 'btn btn-outline-danger btn-sm case-discard-option';
+            action.disabled = !available;
+            action.dataset.caseKey = caseKeyToDiscard;
+            action.dataset.quantity = String(quantity);
+            action.textContent = quantity === 0 ? 'Discard all' : `Discard ${quantity}`;
+            menu.append(action);
         });
+        const existing = bootstrap.Popover.getInstance(button);
+        if (existing) {
+            existing.dispose();
+            return;
+        }
+        // Bootstrap otherwise promotes the trigger's native title into a bright popover header.
+        // The discard menu has its own in-theme heading, so suppress that unrelated chrome.
+        button.removeAttribute('title');
+        bootstrap.Popover.getOrCreateInstance(button, {
+            container: 'body',
+            title: '',
+            content: menu,
+            html: true,
+            placement: 'auto',
+            sanitize: false,
+            trigger: 'manual',
+            customClass: 'case-discard-popover'
+        }).show();
+    });
+
+    $(document).on('click', function (event) {
+        if ($(event.target).closest('.case-discard-popover, .js-owned-case-discard').length) return;
+        $('.js-owned-case-discard').each(function () { bootstrap.Popover.getInstance(this)?.dispose(); });
+    }).on('click', '.case-discard-option', function () {
+        const $option = $(this).prop('disabled', true);
+        const caseKeyToDiscard = String($option.data('case-key') || '');
+        const quantity = Number($option.data('quantity'));
+        const $trigger = $(`.js-owned-case-discard[data-case-key="${CSS.escape(caseKeyToDiscard)}"]`);
+        request(`/api/case-opening/cases/${encodeURIComponent(caseKeyToDiscard)}/discard`, 'POST', {
+            data: JSON.stringify({ quantity: quantity }),
+            contentType: 'application/json; charset=utf-8',
+            showLoader: false
+        }).done(function (result) {
+            const remaining = Number(result.ownedQuantity || 0);
+            const $card = $trigger.closest('.case-owned-inventory-card');
+            const catalogueItem = catalogue.find(item => item.caseKey === caseKeyToDiscard);
+            if (catalogueItem) catalogueItem.ownedQuantity = remaining;
+            if (remaining === 0) {
+                bootstrap.Popover.getInstance($trigger.get(0))?.dispose();
+                $card.addClass('is-discarding');
+                window.setTimeout(() => renderCaseSelector(catalogue), 430);
+            } else {
+                $card.addClass('is-discard-hit');
+                window.setTimeout(() => $card.removeClass('is-discard-hit'), 360);
+                $trigger.data('owned-quantity', remaining).attr('data-owned-quantity', remaining);
+                $card.find('.case-owned-inventory-quantity').text(`×${remaining.toLocaleString()}`);
+                const popover = bootstrap.Popover.getInstance($trigger.get(0));
+                popover?.dispose();
+                if (remaining > 1) $trigger.trigger('click');
+            }
+            loadInventoryCapacity();
+            window.personalToolsToast?.success(`${Number(result.discardedQuantity || 0).toLocaleString()} case${Number(result.discardedQuantity || 0) === 1 ? '' : 's'} discarded.`);
+        }).fail(response => showError(response, 'Those cases could not be discarded.')).always(() => $option.prop('disabled', false));
+    });
+
+    $('#caseHistoryTableBody').on('click', '.case-history-case-link', function () {
+        openShopCase(String($(this).data('case-key') || ''), false);
+    });
+
+    function showInventoryPopover(trigger, options) {
+        if (!window.bootstrap?.Popover) return;
+        bootstrap.Popover.getOrCreateInstance(trigger, Object.assign({
+            container: 'body',
+            placement: 'auto',
+            trigger: 'manual'
+        }, options)).show();
+    }
+
+    $(document).on('mouseenter focusin', '.case-history-finish', function () {
+        showInventoryPopover(this, {
+            customClass: 'case-inventory-detail-popover',
+            content: String($(this).data('inventory-details') || 'No additional finish details')
+        });
+    }).on('mouseleave focusout', '.case-history-finish', function () {
+        bootstrap.Popover.getInstance(this)?.hide();
+    }).on('mouseenter focusin', '.case-history-image-preview', function () {
+        const image = document.createElement('img');
+        image.src = String($(this).data('image-url') || '');
+        image.alt = `Zoomed preview of ${String($(this).data('image-name') || 'inventory item')}`;
+        image.referrerPolicy = 'no-referrer';
+        showInventoryPopover(this, {
+            html: true,
+            customClass: 'case-inventory-image-popover',
+            content: image
+        });
+    }).on('mouseleave focusout', '.case-history-image-preview', function () {
+        bootstrap.Popover.getInstance(this)?.hide();
     });
 
     $('#caseHistorySearch').on('input', function () {
@@ -5737,6 +6046,105 @@
                 window.location.reload();
             })
             .fail(response => window.personalToolsToast?.error(response.responseJSON?.message || 'Your account could not be reset.'));
+    });
+
+    $('#caseDailyDrop').on('click keydown', function (event) {
+        if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;
+        if (event.type === 'keydown') event.preventDefault();
+        openDailyDropModal();
+    });
+
+    $('#caseDailyDropRecall').on('click', openDailyDropModal);
+
+    $('#caseDailyDropRewards').on('change', '.js-daily-drop-choice', function () {
+        const $choices = $('.js-daily-drop-choice:checked');
+        if ($choices.length > 2) $(this).prop('checked', false);
+        const count = $('.js-daily-drop-choice:checked').length;
+        $('#caseDailyDropRewards .case-daily-reward-option').each(function () {
+            $(this).toggleClass('is-selected', $(this).find('.js-daily-drop-choice').prop('checked'));
+        });
+        $('#caseDailyDropClaim').prop('disabled', count !== 2);
+        $('#caseDailyDropSelectionStatus').text(count === 2 ? '2 / 2 selected — ready to claim' : `${count} / 2 rewards selected`);
+    });
+
+    $('#caseDailyDropClaim').on('click', function () {
+        const rewardKeys = $('.js-daily-drop-choice:checked').map(function () { return String($(this).val()); }).get();
+        const $button = $(this).prop('disabled', true);
+        request('/api/case-opening/daily-drop/claim', 'POST', { data: JSON.stringify({ rewardKeys }), contentType: 'application/json; charset=utf-8' })
+            .done(function (progress) {
+                renderProgress(progress);
+                bootstrap.Modal.getInstance(document.getElementById('caseDailyDropModal'))?.hide();
+                window.personalToolsToast?.success('Daily Drop claimed.');
+            })
+            .fail(response => { window.personalToolsToast?.error(response.responseJSON?.message || 'Daily Drop could not be claimed.'); $button.prop('disabled', false); });
+    });
+
+    $('#caseDailyUpgradeTreeCards').on('click', '.js-daily-upgrade', function () {
+        const $button = $(this).prop('disabled', true);
+        request(`/api/case-opening/daily-drop/upgrades/${encodeURIComponent(String($button.data('upgrade-key')))}/unlock`, 'POST', { showLoader: false })
+            .done(function (progress) { renderProgress(progress); window.personalToolsToast?.success('Daily Drop upgrade unlocked.'); })
+            .fail(response => { window.personalToolsToast?.error(response.responseJSON?.message || 'This Daily Drop upgrade could not be unlocked.'); $button.prop('disabled', false); });
+    });
+
+    function syncPlayerSettingsAppearance() {
+        const appearance = window.personalToolsAppearance?.current();
+        if (!appearance) return;
+        $('.case-theme-choice').each(function () {
+            const selected = $(this).data('case-theme') === appearance.theme;
+            $(this).toggleClass('is-selected', selected).attr('aria-pressed', String(selected));
+        });
+        $('.case-mode-choice').each(function () {
+            const selected = $(this).data('case-mode') === appearance.mode;
+            $(this).toggleClass('is-selected', selected).attr('aria-pressed', String(selected));
+        });
+    }
+
+    function savePlayerAppearance(key, value) {
+        window.personalToolsAppearance?.applySetting(key, value);
+        syncPlayerSettingsAppearance();
+        request('/api/settings', 'PUT', {
+            data: JSON.stringify({ key: key, value: value }),
+            contentType: 'application/json; charset=utf-8',
+            showLoader: false,
+            showToast: false
+        }).fail(() => window.personalToolsToast?.error('Your appearance is saved in this browser but could not be synced to your account.'));
+    }
+
+    $('#casePlayerSettingsModal').on('show.bs.modal', syncPlayerSettingsAppearance);
+    $('.case-theme-choice').on('click', function () { savePlayerAppearance('AppearanceTheme', String($(this).data('case-theme'))); });
+    $('.case-mode-choice').on('click', function () { savePlayerAppearance('AppearanceMode', String($(this).data('case-mode'))); });
+
+    function renderCaseBattleAdminStatus(status) {
+        $('#caseTweakBattlesEnabled').prop('checked', Boolean(status.caseBattlesEnabled)).prop('disabled', false);
+        $('#caseTweakBattleBotEnabled').prop('checked', Boolean(status.enabled)).prop('disabled', false);
+        const values = [status.battlesAttempted, status.battlesWon, status.skinsDiscarded, new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(status.valueDiscarded || 0))];
+        $('#caseTweakBattleBotStats strong').each(function (index) { $(this).text(values[index]); });
+    }
+
+    function loadCaseBattleAdmin() {
+        const $rows = $('#caseTweakBattleRows').html('<tr><td colspan="4" class="text-center small-muted py-4">Loading battle health…</td></tr>');
+        $.getJSON('/api/admin/case-battles/bot-status').done(renderCaseBattleAdminStatus).fail(() => window.personalToolsToast?.error('Case Battle controls could not be loaded.'));
+        $.getJSON('/api/admin/case-battles').done(items => {
+            if (!items.length) { $rows.html('<tr><td colspan="4" class="text-center small-muted py-4">No unresolved battles need attention.</td></tr>'); return; }
+            const escape = value => $('<div>').text(value || '').html();
+            $rows.empty();
+            items.forEach(item => $rows.append(`<tr><td><code>${escape(item.battleId)}</code></td><td>${escape(item.creatorDisplayName)}</td><td>${item.joinedPlayers} players · ${item.caseCount} cases</td><td><span class="badge text-bg-${item.status === 'opening' ? 'warning' : 'secondary'}">${escape(item.attention)}</span></td></tr>`));
+        }).fail(() => $rows.html('<tr><td colspan="4" class="text-center text-danger py-4">Could not load battle health.</td></tr>'));
+    }
+
+    $('#caseTweakBattlesTab').on('shown.bs.tab', loadCaseBattleAdmin);
+    $('#caseTweakBattleRefresh').on('click', loadCaseBattleAdmin);
+    $('#caseTweakBattlesEnabled').on('change', function () {
+        const control = $(this).prop('disabled', true);
+        request('/api/admin/case-battles/feature-status', 'PUT', { data: JSON.stringify(control.prop('checked')), contentType: 'application/json' })
+            .done(renderCaseBattleAdminStatus)
+            .fail(() => { window.personalToolsToast?.error('Case Battle visibility could not be saved.'); loadCaseBattleAdmin(); });
+    });
+    $('#caseTweakBattleBotEnabled').on('change', function () {
+        const control = $(this).prop('disabled', true);
+        request('/api/admin/case-battles/bot-status', 'PUT', { data: JSON.stringify(control.prop('checked')), contentType: 'application/json' })
+            .done(renderCaseBattleAdminStatus)
+            .fail(() => { window.personalToolsToast?.error('Battle Bot visibility could not be saved.'); loadCaseBattleAdmin(); });
     });
 
     $('#caseHistoryPageSize').val(String(historyPageSize));

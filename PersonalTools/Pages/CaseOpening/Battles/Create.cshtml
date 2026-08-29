@@ -1,0 +1,11 @@
+@page
+@model PersonalTools.Pages.CaseOpening.Battles.CreateModel
+@{ ViewData["Title"] = "Create case battle"; }
+@section Head { <link rel="stylesheet" href="~/css/pages/page-case-battles.css" asp-append-version="true" /> }
+<main class="case-battles-page" data-case-battle-create>
+ @Html.AntiForgeryToken()
+ <header class="case-battle-room-header"><div><p class="eyebrow mb-1">CS2 Case Simulator</p><h1 class="h3 mb-1">Create case battle</h1><p class="small-muted mb-0">Select an ordered stake. Each player contributes one of every selected case.</p></div><a class="btn btn-outline-secondary" asp-page="/CaseOpening/Index">Cancel</a></header>
+ <div class="row g-3"><section class="col-lg-7"><div class="card case-battle-room"><div class="card-body"><div class="case-battle-section-heading"><div><p class="eyebrow mb-1">Step 1</p><h2 class="h5 mb-0">Add cases</h2></div><span class="small-muted">Up to 20</span></div><div id="caseBattleCreateCases" class="case-battle-catalogue" aria-live="polite"></div></div></div></section>
+ <aside class="col-lg-5"><div class="card case-battle-room"><div class="card-body"><p class="eyebrow mb-1">Step 2</p><h2 class="h5">Invite an opponent</h2><input id="caseBattleMode" type="hidden" value="duel" /><p class="small-muted">Choose any active user. They have 15 seconds to accept before your reserved cases return automatically.</p><label class="form-label" for="caseBattleOpponent">Opponent</label><select class="form-select mb-3" id="caseBattleOpponent" disabled><option value="">Loading users…</option></select><div id="caseBattleSelectedCases" class="case-battle-selected mb-3" aria-live="polite"></div><p class="small-muted mb-2" id="caseBattleCreateSummary">Choose at least one case.</p><button class="btn btn-outline-warning w-100 mb-2" type="button" id="caseBattleBuyAll" disabled><i class="fa-solid fa-cart-shopping me-1" aria-hidden="true"></i>Buy missing cases</button><button class="btn btn-warning w-100" type="button" id="caseBattleCreate" disabled><i class="fa-solid fa-paper-plane me-1" aria-hidden="true"></i>Send invitation</button></div></div></aside></div>
+</main>
+@section Scripts { <script src="~/js/pages/page-case-battle-create.js" asp-append-version="true"></script> }

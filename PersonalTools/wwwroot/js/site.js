@@ -20,7 +20,6 @@
         function show(input, fallbackType) {
             if (!container) return null;
             pending.push(normalise(input, fallbackType));
-            if (active) active.dataset.queued = String(pending.length);
             showNext();
             return null;
         }
@@ -55,16 +54,9 @@
             message.textContent = options.message || '';
             copy.append(heading, message);
 
-            const close = document.createElement('button');
-            close.type = 'button';
-            close.className = 'btn-close app-toast-close';
-            close.dataset.bsDismiss = 'toast';
-            close.setAttribute('aria-label', 'Dismiss notification');
-
-            element.append(accent, icon, copy, close);
+            element.append(accent, icon, copy);
             container.appendChild(element);
             active = element;
-            element.dataset.queued = String(pending.length);
             const delay = options.delay || (type === 'error' ? 6500 : 4300);
 
             // Do not depend on Bootstrap's internal toast lifecycle here. The application already
@@ -252,34 +244,93 @@
         const trigger = document.getElementById('liveWinnersTrigger');
         const panel = document.getElementById('liveWinnersPanel');
         const count = document.getElementById('liveWinnersCount');
+        const countLabel = document.getElementById('liveWinnersLabel');
         const list = document.getElementById('liveWinnersList');
-        const visibility = document.getElementById('liveWinnersVisibility');
+        const scrollCue = document.getElementById('liveWinnersScrollCue');
         let latest = null;
+        let liveWinnerPoll = null;
         const currency = value => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 }).format(Number(value || 0));
-        function renderWinners(summary) {
+        const rankIcon = rank => rank === 1 ? 'fa-trophy' : rank === 2 ? 'fa-medal' : rank === 3 ? 'fa-award' : '';
+        const winnerKey = winner => String(winner.openingId || `${winner.itemName}:${winner.receivedUtc}`);
+        function updateWinnerScrollCue() {
+            const scrollable = list.scrollHeight > list.clientHeight + 1;
+            const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
+            list.classList.toggle('is-scrollable', scrollable);
+            scrollCue.hidden = !scrollable || atBottom;
+        }
+        function createWinnerRow(winner) {
+            const row = document.createElement('li');
+            row.className = 'live-winner';
+            row.dataset.winnerKey = winnerKey(winner);
+            row.innerHTML = '<span class="live-winner-rank"><i aria-hidden="true"></i></span><img alt="" loading="lazy"><span class="live-winner-copy"><strong></strong><span></span><small></small></span>';
+            return row;
+        }
+        function updateWinnerRow(row, winner, rank) {
+            row.className = `live-winner rank-${rank}`;
+            row.style.setProperty('--winner-color', winner.rarityColor || '#e4ae39');
+            const rankElement = row.querySelector('.live-winner-rank');
+            rankElement.hidden = rank > 3;
+            rankElement.setAttribute('aria-label', rank <= 3 ? `Rank ${rank}` : '');
+            rankElement.querySelector('i').className = rank <= 3 ? `fa-solid ${rankIcon(rank)}` : '';
+            row.querySelector('img').src = winner.imageUrl || '';
+            row.querySelector('strong').textContent = winner.itemName || 'Unknown item';
+            row.querySelector('.live-winner-copy span').textContent = `${winner.displayName || 'Player'} · ${winner.source || 'Case opening'}`;
+            row.querySelector('small').textContent = currency(winner.estimatedPrice);
+        }
+        function renderWinners(summary, animate = true) {
             latest = summary;
-            count.textContent = Number(summary.liveUserCount || 0).toLocaleString();
-            if (visibility) visibility.value = summary.visibility || 'users';
+            const liveUserCount = Number(summary.liveUserCount || 0);
+            count.textContent = liveUserCount.toLocaleString();
+            countLabel.textContent = liveUserCount === 1 ? 'player' : 'players';
             const winners = Array.isArray(summary.winners) ? summary.winners : [];
-            list.replaceChildren();
             if (!winners.length) {
-                const empty = document.createElement('li'); empty.className = 'live-winners-empty'; empty.textContent = summary.visibility === 'admins' && liveWinnersDock.dataset.isAdmin !== 'true' ? 'The winners board is currently reserved for administrators.' : 'No priced wins in the last 24 hours yet.'; list.append(empty); return;
+                list.replaceChildren(Object.assign(document.createElement('li'), { className: 'live-winners-empty', textContent: 'No priced wins in the last 24 hours yet.' }));
+                updateWinnerScrollCue();
+                return;
             }
+            const oldRows = new Map([...list.querySelectorAll('.live-winner')].map(row => [row.dataset.winnerKey, row]));
+            const oldRects = new Map([...oldRows].map(([key, row]) => [key, row.getBoundingClientRect()]));
+            const nextKeys = new Set(winners.map(winnerKey));
+            list.querySelector('.live-winners-empty')?.remove();
             winners.forEach((winner, index) => {
-                const row = document.createElement('li'); row.className = `live-winner rank-${index + 1}`; row.style.setProperty('--winner-color', winner.rarityColor || '#e4ae39');
-                row.innerHTML = `<span class="live-winner-rank"><i class="fa-solid fa-trophy" aria-hidden="true"></i></span><img alt="" loading="lazy"><span class="live-winner-copy"><strong></strong><span></span><small></small></span>`;
-                row.querySelector('img').src = winner.imageUrl || '';
-                row.querySelector('strong').textContent = winner.itemName || 'Unknown item';
-                row.querySelector('span span').textContent = `${winner.displayName || 'Player'} · ${winner.source || 'Case opening'}`;
-                row.querySelector('small').textContent = currency(winner.estimatedPrice);
+                const key = winnerKey(winner);
+                const row = oldRows.get(key) || createWinnerRow(winner);
+                updateWinnerRow(row, winner, index + 1);
                 list.append(row);
             });
+            oldRows.forEach((row, key) => { if (!nextKeys.has(key)) row.remove(); });
+            updateWinnerScrollCue();
+            if (!animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            winners.forEach(winner => {
+                const row = list.querySelector(`[data-winner-key="${CSS.escape(winnerKey(winner))}"]`);
+                const oldRect = oldRects.get(winnerKey(winner));
+                if (!row) return;
+                if (!oldRect) window.anime?.animate(row, { opacity: [0, 1], translateX: [30, 0], duration: 420, ease: 'out(4)' });
+                else {
+                    const offset = oldRect.top - row.getBoundingClientRect().top;
+                    if (offset) window.anime?.animate(row, { translateY: [offset, 0], duration: 460, ease: 'out(4)' });
+                }
+            });
         }
-        function loadWinners() { fetch('/api/live-winners', { credentials: 'same-origin' }).then(response => response.ok ? response.json() : Promise.reject()).then(renderWinners).catch(() => { if (!latest) count.textContent = '—'; }); }
-        trigger.addEventListener('click', () => { const opening = panel.hidden; panel.hidden = !opening; liveWinnersDock.classList.toggle('is-open', opening); trigger.setAttribute('aria-expanded', String(opening)); if (opening) loadWinners(); });
+        list.addEventListener('scroll', updateWinnerScrollCue, { passive: true });
+        function loadWinners(animate) { return fetch('/api/live-winners', { credentials: 'same-origin', cache: 'no-store' }).then(response => response.ok ? response.json() : Promise.reject()).then(summary => renderWinners(summary, animate)).catch(() => { if (!latest) count.textContent = '—'; }); }
+        function setLiveWinnerPolling(enabled) {
+            window.clearInterval(liveWinnerPoll);
+            liveWinnerPoll = enabled
+                ? window.setInterval(() => { if (document.visibilityState === 'visible') loadWinners(true); }, 8000)
+                : null;
+        }
+        trigger.addEventListener('click', () => {
+            const opening = panel.hidden;
+            panel.hidden = !opening;
+            liveWinnersDock.classList.toggle('is-open', opening);
+            trigger.setAttribute('aria-expanded', String(opening));
+            setLiveWinnerPolling(opening);
+            if (opening) loadWinners(true);
+        });
         document.addEventListener('click', event => { if (!liveWinnersDock.contains(event.target) && !panel.hidden) trigger.click(); });
-        visibility?.addEventListener('change', () => fetch('/api/live-winners/visibility', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || '' }, body: JSON.stringify({ visibility: visibility.value }) }).then(response => { if (!response.ok) throw new Error(); return loadWinners(); }).catch(() => { visibility.value = latest?.visibility || 'users'; }));
-        loadWinners(); window.setInterval(loadWinners, 45000);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') return; if (!panel.hidden) loadWinners(true); });
+        loadWinners(false);
     }
 
     $(document).on('ajaxSend.personalToolsLoader', function (_event, xhr, settings) {
@@ -556,8 +607,8 @@
         return {
             theme: ['personal', 'tactical', 'matrix'].includes(document.documentElement.dataset.appTheme)
                 ? document.documentElement.dataset.appTheme
-                : 'personal',
-            mode: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
+                : 'tactical',
+            mode: document.documentElement.dataset.theme === 'light' ? 'light' : 'dark',
             matrixAmbient: document.documentElement.dataset.matrixAmbient === 'true'
         };
     }
@@ -859,5 +910,61 @@
         };
         setNotesView(localStorage.getItem(viewKey) || 'grid');
         viewButtons.forEach((button) => button.addEventListener('click', () => setNotesView(button.dataset.notesView)));
+    }
+
+    // Case-battle invitations are fetched from the server even when SignalR delivered the nudge.
+    // That keeps the signed-in user's pending invitation authoritative across reconnects and tabs.
+    const invitationHost = document.createElement('div');
+    invitationHost.className = 'case-battle-invitation-host';
+    document.body.append(invitationHost);
+    let inviteTimer = null;
+    function requestToken() { return document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''; }
+    function clearInvitation() { window.clearInterval(inviteTimer); inviteTimer = null; delete invitationHost.dataset.battleId; invitationHost.replaceChildren(); }
+    function loadBattleInvitation() {
+        return fetch('/api/case-battles/invitations/pending', { credentials: 'same-origin', cache: 'no-store' })
+            .then(response => response.ok ? response.json() : null)
+            .then(invitation => { if (invitation?.battleId) renderBattleInvitation(invitation); else clearInvitation(); })
+            .catch(() => {});
+    }
+    function renderBattleInvitation(invitation) {
+        if (invitationHost.dataset.battleId === invitation.battleId) return;
+        clearInvitation();
+        invitationHost.dataset.battleId = invitation.battleId;
+        const card = document.createElement('section');
+        card.className = 'case-battle-invitation';
+        card.setAttribute('role', 'alertdialog');
+        card.setAttribute('aria-label', 'Case battle invitation');
+        const label = document.createElement('p'); label.className = 'eyebrow mb-1'; label.textContent = 'Incoming case battle';
+        const title = document.createElement('strong'); title.textContent = `${invitation.creatorDisplayName} challenged you`;
+        const copy = document.createElement('span'); copy.textContent = `${(invitation.caseKeys || []).length} round${(invitation.caseKeys || []).length === 1 ? '' : 's'} · both players stake the same cases`;
+        const clock = document.createElement('span'); clock.className = 'case-battle-invitation-clock';
+        const actions = document.createElement('div'); actions.className = 'case-battle-invitation-actions';
+        const decline = document.createElement('button'); decline.className = 'btn btn-sm btn-outline-light'; decline.type = 'button'; decline.textContent = 'Decline';
+        const accept = document.createElement('button'); accept.className = 'btn btn-sm btn-warning'; accept.type = 'button'; accept.innerHTML = '<i class="fa-solid fa-bolt me-1" aria-hidden="true"></i>Accept';
+        actions.append(decline, accept); card.append(label, title, copy, clock, actions); invitationHost.append(card);
+        const action = (name) => {
+            accept.disabled = true; decline.disabled = true;
+            const request = fetch(`/api/case-battles/${encodeURIComponent(invitation.battleId)}/invite/${name}`, { method: 'POST', credentials: 'same-origin', headers: { RequestVerificationToken: requestToken() } });
+            return window.personalToolsLoader.wrap(request, { title: name === 'accept' ? 'Joining case battle' : 'Declining invitation', message: 'Confirming the battle state…' })
+                .then(async response => response.ok ? response.json() : Promise.reject((await response.json()).message))
+                .then(result => { clearInvitation(); if (name === 'accept') window.location.assign(`/CaseOpening/Battles/${encodeURIComponent(result.battleId)}`); else appToast.info('Case battle invitation declined.'); })
+                .catch(message => { appToast.error(message || 'This invitation is no longer available.'); loadBattleInvitation(); });
+        };
+        accept.addEventListener('click', () => action('accept'));
+        decline.addEventListener('click', () => action('decline'));
+        const tick = () => {
+            const seconds = Math.max(0, Math.ceil((new Date(invitation.expiresUtc).getTime() - Date.now()) / 1000));
+            clock.textContent = seconds ? `Expires in ${seconds}s` : 'Expired';
+            card.style.setProperty('--invite-progress', `${Math.min(1, seconds / 15)}`);
+            if (!seconds) { window.clearInterval(inviteTimer); action('decline'); }
+        };
+        tick(); inviteTimer = window.setInterval(tick, 250);
+        window.requestAnimationFrame(() => card.classList.add('is-visible'));
+    }
+    if (window.signalR) {
+        const connection = new window.signalR.HubConnectionBuilder().withUrl('/hubs/case-battles').withAutomaticReconnect([0, 1000, 3000, 8000]).build();
+        connection.on('CaseBattleInvitation', loadBattleInvitation);
+        connection.onreconnected(() => connection.invoke('JoinNotifications').then(loadBattleInvitation).catch(() => {}));
+        connection.start().then(() => connection.invoke('JoinNotifications')).then(loadBattleInvitation).catch(() => {});
     }
 })();

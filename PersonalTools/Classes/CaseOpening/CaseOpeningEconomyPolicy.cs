@@ -11,11 +11,15 @@ public static class CaseOpeningEconomyPolicy
     public static int RemainingFreeCases(bool enabled, int quantity, int claimed, DateTime windowStartedUtc, int windowHours, DateTime nowUtc)
         => !enabled ? 0 : windowStartedUtc <= nowUtc.AddHours(-Math.Max(1, windowHours)) ? Math.Max(0, quantity) : Math.Max(0, quantity - claimed);
 
-    public static (decimal? Price, bool IsFallback) SelectMarketPrice(decimal? medianPrice, decimal? suggestedPrice)
+    public static (decimal? Price, bool IsFallback) SelectMarketPrice(decimal? medianPrice, decimal? suggestedPrice, decimal? meanPrice, decimal? minimumPrice)
     {
         decimal? median = Positive(medianPrice);
         if (median is not null) return (median, false);
-        return (Positive(suggestedPrice), true);
+        decimal? suggested = Positive(suggestedPrice);
+        if (suggested is not null) return (suggested, true);
+        decimal? mean = Positive(meanPrice);
+        if (mean is not null) return (mean, true);
+        return (Positive(minimumPrice), true);
     }
 
     public static List<string> ValidateTierCoverage(IEnumerable<int> tiers)

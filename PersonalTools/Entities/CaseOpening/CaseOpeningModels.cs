@@ -347,6 +347,7 @@ public class CaseOpeningProgressDbModel
 
 public sealed class CaseOpeningProgressObj : CaseOpeningProgressDbModel
 {
+    public CaseOpeningDailyDropObj DailyDrop { get; set; } = new();
     public string EconomyMode { get; set; } = CaseOpeningEconomyModes.Stars;
     public string CurrencyCode { get; set; } = "STAR";
     public long ActiveBalanceMinor { get; set; }
@@ -414,6 +415,54 @@ public sealed class CaseOpeningPlayerStatsDbModel
     public long TotalGbpSalePenceEarned { get; set; }
     public long TotalGbpLevelRewardPence { get; set; }
     public long TotalGbpAchievementRewardPence { get; set; }
+}
+
+public sealed class CaseOpeningDailyDropDbModel
+{
+    public DateTime DropDate { get; set; }
+    public int Xp { get; set; }
+    public bool IsCompleted { get; set; }
+    public bool IsClaimed { get; set; }
+    public string OfferJson { get; set; } = string.Empty;
+}
+
+public sealed class CaseOpeningDailyDropObj
+{
+    public DateTime DropDate { get; set; }
+    public int Xp { get; set; }
+    public int RequiredXp { get; set; } = 100;
+    public bool IsCompleted { get; set; }
+    public bool IsClaimed { get; set; }
+    public List<CaseOpeningDailyDropRewardObj> Rewards { get; set; } = [];
+    public List<CaseOpeningDailyDropUpgradeObj> Upgrades { get; set; } = [];
+}
+
+public sealed class CaseOpeningDailyDropUpgradeDbModel
+{
+    public string UpgradeKey { get; set; } = string.Empty;
+    public int Level { get; set; }
+}
+
+public sealed class CaseOpeningDailyDropRewardObj
+{
+    public string RewardKey { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public string? ImageUrl { get; set; }
+    public long AmountMinor { get; set; }
+    public string? CaseKey { get; set; }
+    public CaseOpeningItemObj? Item { get; set; }
+}
+
+public sealed class CaseOpeningDailyDropUpgradeObj
+{
+    public string UpgradeKey { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public int Level { get; set; }
+    public int MaximumLevel { get; set; }
+    public long Cost { get; set; }
 }
 
 public sealed class CaseOpeningFreeCaseAllowanceObj
@@ -569,6 +618,12 @@ public sealed class CaseOpeningCasePurchaseRequestObj
     public int Quantity { get; set; } = 1;
 }
 
+public sealed class CaseOpeningCaseDiscardRequestObj
+{
+    // Zero represents the player's entire current stock and is resolved atomically in MariaDB.
+    public int Quantity { get; set; }
+}
+
 public sealed class CaseOpeningCasePurchaseResultObj
 {
     public string CaseKey { get; set; } = string.Empty;
@@ -596,6 +651,13 @@ public sealed class CaseOpeningStoragePurchaseResultObj
 public sealed class CaseOpeningSellRequestObj
 {
     public List<Guid> OpeningIds { get; set; } = [];
+}
+
+public sealed class CaseOpeningCaseDiscardResultObj
+{
+    public string CaseKey { get; set; } = string.Empty;
+    public int DiscardedQuantity { get; set; }
+    public int OwnedQuantity { get; set; }
 }
 
 public sealed class CaseOpeningInventoryLockRequestObj

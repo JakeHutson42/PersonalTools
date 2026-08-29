@@ -148,6 +148,15 @@
 
     runSplashSequence();
 
+    function warmDestination(returnUrl) {
+        const destination = new URL(returnUrl || '/', window.location.origin);
+        // The login endpoint has already validated the return URL, but keep the speculative
+        // request same-origin so the launch screen never preloads an untrusted destination.
+        if (destination.origin !== window.location.origin) return '/';
+        fetch(destination.href, { credentials: 'same-origin', cache: 'force-cache' }).catch(() => { });
+        return `${destination.pathname}${destination.search}${destination.hash}`;
+    }
+
     form.on('submit', function (event) {
         event.preventDefault();
 
@@ -174,10 +183,10 @@
         })
             .done((response) => {
                 showLaunchGreeting(response?.displayName);
-                const returnUrl = $('#ReturnUrl').val();
+                const destination = warmDestination($('#ReturnUrl').val());
                 const minimumDuration = window.personalToolsMotion?.reducedMotion() ? 120 : 1600;
                 const remaining = Math.max(0, minimumDuration - (Date.now() - launchStartedAt));
-                window.setTimeout(() => window.location.assign(returnUrl || '/'), remaining);
+                window.setTimeout(() => window.location.assign(destination), remaining);
             })
             .fail((xhr) => {
                 clearLaunchSequence();

@@ -7,7 +7,6 @@ public interface ILiveWinnersData
 {
     Task TouchPresence(Guid userId, CancellationToken cancellationToken = default);
     Task<LiveWinnersSummaryObj> GetSummary(CancellationToken cancellationToken = default);
-    Task SetVisibility(string visibility, CancellationToken cancellationToken = default);
 }
 
 public sealed class LiveWinnersData : ILiveWinnersData
@@ -17,14 +16,13 @@ public sealed class LiveWinnersData : ILiveWinnersData
     public Task TouchPresence(Guid userId, CancellationToken cancellationToken = default) => _database.ExecuteSP("sp_live_winners_presence_touch", [new MySqlParameter("p_user_id", userId.ToString("D"))], cancellationToken);
     public async Task<LiveWinnersSummaryObj> GetSummary(CancellationToken cancellationToken = default)
     {
-        LiveWinnersSummaryObj summary = await _database.GetDataSP("sp_live_winners_summary_get", reader => new LiveWinnersSummaryObj { LiveUserCount = reader.GetInt32("LiveUserCount"), Visibility = reader.GetString("Visibility") }, cancellationToken: cancellationToken) ?? new();
+        LiveWinnersSummaryObj summary = await _database.GetDataSP("sp_live_winners_summary_get", reader => new LiveWinnersSummaryObj { LiveUserCount = reader.GetInt32("LiveUserCount") }, cancellationToken: cancellationToken) ?? new();
         summary.Winners = await _database.GetBulkDataSP("sp_live_winners_top_get", ReadWinner, cancellationToken: cancellationToken);
         return summary;
     }
-    public Task SetVisibility(string visibility, CancellationToken cancellationToken = default) => _database.ExecuteSP("sp_live_winners_visibility_set", [new MySqlParameter("p_visibility", visibility)], cancellationToken);
     private static LiveWinnerObj ReadWinner(MySqlDataReader reader) => new()
     {
-        DisplayName = reader.GetString("DisplayName"), ItemName = reader.GetString("ItemName"), ImageUrl = reader.GetString("ImageUrl"),
+        OpeningId = reader.GetGuid("OpeningId"), DisplayName = reader.GetString("DisplayName"), ItemName = reader.GetString("ItemName"), ImageUrl = reader.GetString("ImageUrl"),
         RarityColor = reader.GetString("RarityColor"), EstimatedPrice = reader.GetDecimal("EstimatedPrice"),
         ReceivedUtc = DateTime.SpecifyKind(reader.GetDateTime("OpenedUtc"), DateTimeKind.Utc), Source = reader.GetString("Source")
     };

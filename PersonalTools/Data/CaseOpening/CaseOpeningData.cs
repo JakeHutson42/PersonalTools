@@ -1,6 +1,6 @@
 using MySqlConnector;
-using PersonalTools.Entities.CaseOpening;
 using System.Text.Json;
+using PersonalTools.Entities.CaseOpening;
 
 namespace PersonalTools.Data.CaseOpening;
 
@@ -68,6 +68,15 @@ public interface ICaseOpeningData
     Task DeleteCaseOpeningSpecialVariantPriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
     Task<CaseOpeningStatisticsDbModel> GetCaseOpeningStatistics(Guid userId, string caseKey, string targetRarityKey, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressDbModel?> AddCaseOpeningXp(Guid userId, int xpDelta, CancellationToken cancellationToken = default);
+    Task<CaseOpeningDailyDropDbModel> GetCaseOpeningDailyDrop(Guid userId, CancellationToken cancellationToken = default);
+    Task<CaseOpeningDailyDropDbModel> AddCaseOpeningDailyDropXp(Guid userId, int xpDelta, int requiredXp, CancellationToken cancellationToken = default);
+    Task<CaseOpeningDailyDropDbModel> SetCaseOpeningDailyDropOffer(Guid userId, string offerJson, CancellationToken cancellationToken = default);
+    Task ClaimCaseOpeningDailyDrop(Guid userId, List<string> rewardKeys, string economyMode, CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningDailyDropUpgradeDbModel>> GetCaseOpeningDailyDropUpgrades(Guid userId, CancellationToken cancellationToken = default);
+    Task UnlockCaseOpeningDailyDropUpgrade(Guid userId, string upgradeKey, int costStars, long costGbpPence, string economyMode, CancellationToken cancellationToken = default);
+    Task<int> GetCaseOpeningDailyDropRequiredXp(CancellationToken cancellationToken = default);
+    Task SetCaseOpeningDailyDropRequiredXp(int requiredXp, CancellationToken cancellationToken = default);
+    Task ResetCaseOpeningDailyDrop(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningGameSettingsObj> GetGameSettings(CancellationToken cancellationToken = default);
     Task SetGameSettings(CaseOpeningGameSettingsObj settings, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningCaseSettingsObj>> GetCaseSettings(CancellationToken cancellationToken = default);
@@ -77,6 +86,7 @@ public interface ICaseOpeningData
     Task<List<CaseOpeningUpgradeDefinitionObj>> GetInventoryUpgradeSettings(CancellationToken cancellationToken = default);
     Task SetInventoryUpgradeSettings(string upgradeKey, int costStars, long costGbpPence, int requiredLevel, CancellationToken cancellationToken = default);
     Task<CaseOpeningCasePurchaseResultObj?> PurchaseCaseOpeningCases(Guid userId, string caseKey, int quantity, int purchaseCostStars, long purchaseCostGbpPence, CancellationToken cancellationToken = default);
+    Task<CaseOpeningCaseDiscardResultObj?> DiscardCaseOpeningCases(Guid userId, string caseKey, int quantity, CancellationToken cancellationToken = default);
     Task<CaseOpeningStoragePurchaseResultObj?> PurchaseCaseOpeningStorageContainer(Guid userId, Guid storageContainerId, int costStars, long costGbpPence, int slots, int maximumContainers, CancellationToken cancellationToken = default);
     Task<CaseOpeningProgressDbModel?> SetCaseOpeningProgressDev(Guid userId, int stars, long gbpPence, int xp, CancellationToken cancellationToken = default);
     Task<CaseOpeningFreeCaseAllowanceObj> GetCaseOpeningFreeCaseAllowance(Guid userId, CancellationToken cancellationToken = default);
@@ -865,17 +875,20 @@ public sealed class CaseOpeningData : ICaseOpeningData
             cancellationToken);
     }
 
-    public Task<CaseOpeningProgressDbModel?> SetCaseOpeningUpgradesDev(Guid userId, bool skipAnimationUnlocked, int multiOpenLevel, int openSpeedLevel, CancellationToken cancellationToken = default)
+    public async Task<CaseOpeningProgressDbModel?> SetCaseOpeningUpgradesDev(Guid userId, bool skipAnimationUnlocked, int multiOpenLevel, int openSpeedLevel, CancellationToken cancellationToken = default)
     {
-        return _database.GetDataSP(
+        // Older deployed copies of this admin-only procedure return the pre-dual-economy shape
+        // (without GbpPence). Execute the update without mapping its stale result, then reload
+        // progress through the canonical procedure which always has the complete shape.
+        await _database.ExecuteSP(
             "sp_case_opening_upgrades_dev_set",
-            ReadProgress,
             Parameters(
                 ("p_user_id", userId),
                 ("p_skip_animation_unlocked", skipAnimationUnlocked),
                 ("p_multi_open_level", multiOpenLevel),
                 ("p_open_speed_level", openSpeedLevel)),
             cancellationToken);
+        return await GetCaseOpeningProgress(userId, cancellationToken);
     }
 
     public Task SetCaseOpeningCaseUnlockDev(Guid userId, string caseKey, bool unlock, CancellationToken cancellationToken = default)
@@ -885,6 +898,40 @@ public sealed class CaseOpeningData : ICaseOpeningData
             Parameters(("p_user_id", userId), ("p_case_key", caseKey), ("p_unlock", unlock)),
             cancellationToken);
     }
+
+    public Task<CaseOpeningCaseDiscardResultObj?> DiscardCaseOpeningCases(Guid userId, string caseKey, int quantity, CancellationToken cancellationToken = default)
+    {
+        return _database.GetDataSP("sp_case_opening_cases_discard", reader => new CaseOpeningCaseDiscardResultObj
+        {
+            CaseKey = reader.GetString("CaseKey"),
+            DiscardedQuantity = reader.GetInt32("DiscardedQuantity"),
+            OwnedQuantity = reader.GetInt32("OwnedQuantity")
+        }, Parameters(("p_user_id", userId), ("p_case_key", caseKey), ("p_quantity", quantity)), cancellationToken);
+    }
+
+    public async Task<CaseOpeningDailyDropDbModel> GetCaseOpeningDailyDrop(Guid userId, CancellationToken cancellationToken = default)
+        => await _database.GetDataSP("sp_case_opening_daily_drop_get", ReadDailyDrop, Parameters(("p_user_id", userId)), cancellationToken)
+           ?? new CaseOpeningDailyDropDbModel();
+
+    public async Task<CaseOpeningDailyDropDbModel> AddCaseOpeningDailyDropXp(Guid userId, int xpDelta, int requiredXp, CancellationToken cancellationToken = default)
+        => await _database.GetDataSP("sp_case_opening_daily_drop_xp_add", ReadDailyDrop, Parameters(("p_user_id", userId), ("p_xp_delta", xpDelta), ("p_required_xp", requiredXp)), cancellationToken)
+           ?? new CaseOpeningDailyDropDbModel();
+
+    public async Task<CaseOpeningDailyDropDbModel> SetCaseOpeningDailyDropOffer(Guid userId, string offerJson, CancellationToken cancellationToken = default)
+        => await _database.GetDataSP("sp_case_opening_daily_drop_offer_set", ReadDailyDrop, Parameters(("p_user_id", userId), ("p_offer", offerJson)), cancellationToken)
+           ?? new CaseOpeningDailyDropDbModel();
+
+    public Task ClaimCaseOpeningDailyDrop(Guid userId, List<string> rewardKeys, string economyMode, CancellationToken cancellationToken = default)
+        => _database.ExecuteSP("sp_case_opening_daily_drop_claim", Parameters(("p_user_id", userId), ("p_reward_keys", JsonSerializer.Serialize(rewardKeys)), ("p_economy_mode", economyMode)), cancellationToken);
+
+    public Task<List<CaseOpeningDailyDropUpgradeDbModel>> GetCaseOpeningDailyDropUpgrades(Guid userId, CancellationToken cancellationToken = default)
+        => _database.GetBulkDataSP("sp_case_opening_daily_drop_upgrades_get", reader => new CaseOpeningDailyDropUpgradeDbModel { UpgradeKey=reader.GetString("UpgradeKey"), Level=reader.GetInt32("Level") }, Parameters(("p_user_id", userId)), cancellationToken);
+
+    public Task UnlockCaseOpeningDailyDropUpgrade(Guid userId, string upgradeKey, int costStars, long costGbpPence, string economyMode, CancellationToken cancellationToken = default)
+        => _database.ExecuteSP("sp_case_opening_daily_drop_upgrade_unlock", Parameters(("p_user_id", userId), ("p_upgrade_key", upgradeKey), ("p_cost_stars", costStars), ("p_cost_gbp_pence", costGbpPence), ("p_economy_mode", economyMode)), cancellationToken);
+    public Task<int> GetCaseOpeningDailyDropRequiredXp(CancellationToken cancellationToken = default) => _database.GetDataSP("sp_case_opening_daily_drop_settings_get", reader => reader.GetInt32("RequiredXp"), cancellationToken: cancellationToken);
+    public Task SetCaseOpeningDailyDropRequiredXp(int requiredXp, CancellationToken cancellationToken = default) => _database.ExecuteSP("sp_case_opening_daily_drop_settings_set", Parameters(("p_required_xp", requiredXp)), cancellationToken);
+    public Task ResetCaseOpeningDailyDrop(Guid userId, CancellationToken cancellationToken = default) => _database.ExecuteSP("sp_case_opening_daily_drop_reset", Parameters(("p_user_id", userId)), cancellationToken);
 
     public Task<List<string>> GetCaseOpeningDevDropRarityGroups(Guid userId, CancellationToken cancellationToken = default)
     {
@@ -1104,6 +1151,18 @@ public sealed class CaseOpeningData : ICaseOpeningData
             PurchaseCostStars = reader.GetInt32("PurchaseCostStars"),
             PurchaseCostGbpPence = reader.GetInt64("PurchaseCostGbpPence"),
             XpRequirement = reader.GetInt32("XpRequirement")
+        };
+    }
+
+    private static CaseOpeningDailyDropDbModel ReadDailyDrop(MySqlDataReader reader)
+    {
+        return new CaseOpeningDailyDropDbModel
+        {
+            DropDate = reader.GetDateTime("DropDate"),
+            Xp = reader.GetInt32("Xp"),
+            IsCompleted = reader.GetBoolean("IsCompleted"),
+            IsClaimed = reader.GetBoolean("IsClaimed"),
+            OfferJson = reader.IsDBNull(reader.GetOrdinal("OfferJson")) ? string.Empty : reader.GetString("OfferJson")
         };
     }
 

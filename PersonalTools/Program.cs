@@ -32,6 +32,9 @@ using PersonalTools.Classes.CaseOpening;
 using PersonalTools.Data.CaseOpening;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
+using PersonalTools.Hubs;
+using PersonalTools.Classes.CaseBattles;
+using PersonalTools.Data.CaseBattles;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,6 +59,8 @@ builder.Services.AddDataProtection()
     .SetApplicationName("PersonalTools");
 
 builder.Services.AddRazorPages();
+builder.Services.Configure<PersonalTools.Entities.CaseBattles.CaseBattleFeatureOptions>(builder.Configuration.GetSection("CaseBattles"));
+builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddControllersWithViews(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()))
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -63,11 +68,22 @@ builder.Services.AddMemoryCache();
 builder.Services.AddRateLimiter(options =>
 {
     const string loginPolicy = "login";
+    const string caseBattleWritePolicy = "case-battles-write";
 
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.AddPolicy(loginPolicy, context =>
         RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 12,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            }));
+    options.AddPolicy(caseBattleWritePolicy, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 12,
@@ -283,6 +299,8 @@ builder.Services.AddHttpClient<ICaseOpeningReferenceData, CaseOpeningReferenceDa
     client.DefaultRequestHeaders.UserAgent.ParseAdd("PersonalTools/1.0 (+https://jakehutson.me)");
 });
 builder.Services.AddScoped<ICaseOpeningFuncs, CaseOpeningFuncs>();
+builder.Services.AddScoped<ICaseBattleData, CaseBattleData>();
+builder.Services.AddScoped<ICaseBattleFuncs, CaseBattleFuncs>();
 
 var app = builder.Build();
 
@@ -327,5 +345,7 @@ app.UseAuthorization();
 
 app.MapRazorPages();
 app.MapControllers();
+app.MapHub<LiveWinnersHub>("/hubs/live-winners");
+app.MapHub<CaseBattleHub>("/hubs/case-battles");
 
 app.Run();

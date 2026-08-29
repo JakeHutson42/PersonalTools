@@ -1,0 +1,29 @@
+@page "{battleId:guid?}"
+@model PersonalTools.Pages.CaseOpening.Battles.IndexModel
+@{
+    ViewData["Title"] = "Case battle";
+}
+@section Head { <link rel="stylesheet" href="~/css/pages/page-case-battles.css" asp-append-version="true" /> }
+<main class="case-battles-page" data-case-battles-page data-case-battle-id="@Model.BattleId">
+    @Html.AntiForgeryToken()
+    <header class="case-battle-room-header">
+        <div><p class="eyebrow mb-1">CS2 Case Simulator</p><h1 class="h3 mb-1">Case battle</h1><p class="small-muted mb-0" id="caseBattleStatus">Restoring your battle…</p></div>
+        <a class="btn btn-outline-secondary" asp-page="/CaseOpening/Index"><i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i>Simulator</a>
+    </header>
+    <section class="case-battle-room card" aria-labelledby="caseBattleTitle"><div class="card-body">
+        <div class="case-battle-scoreboard" id="caseBattleScoreboard" aria-live="polite"></div>
+        <div class="case-battle-case-track" id="caseBattleCaseTrack"></div>
+        <section class="case-battle-arena" id="caseBattleArena" aria-live="polite" aria-label="Case battle opening animation"></section>
+        <div class="case-battle-actions" id="caseBattleActions" aria-live="polite"></div>
+        <div class="case-battle-notice"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>Results, prices and ownership are locked server-side when the battle starts.</span></div>
+    </div></section>
+    <section class="case-battle-room card mt-3" aria-labelledby="caseBattleResultsTitle">
+        <div class="card-body"><div class="case-battle-section-heading"><div><p class="eyebrow mb-1">Persisted result feed</p><h2 class="h5 mb-0" id="caseBattleResultsTitle">Results so far</h2></div><span id="caseBattlePot" class="case-battle-pot">Locked value pending</span></div>
+        <div class="case-battle-results" id="caseBattleResults" aria-live="polite"></div></div>
+    </section>
+    <section class="case-battle-showcase d-none" id="caseBattleShowcase" aria-live="polite" aria-label="Battle winner reveal"></section>
+</main>
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="~/js/pages/page-case-battles.js" asp-append-version="true"></script>
+}

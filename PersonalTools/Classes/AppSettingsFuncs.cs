@@ -117,8 +117,8 @@ public sealed class AppSettingsFuncs : IAppSettingsFuncs
     /// <returns></returns>
     private static string Default(AppSettingKey key) => key switch 
     { 
-        AppSettingKey.AppearanceTheme => "personal", 
-        AppSettingKey.AppearanceMode => "light", 
+        AppSettingKey.AppearanceTheme => "tactical",
+        AppSettingKey.AppearanceMode => "dark",
         AppSettingKey.MatrixAmbientBackground => "false",
         AppSettingKey.DashboardDefaultView => "cards", 
         AppSettingKey.DashboardMotion => "true", 

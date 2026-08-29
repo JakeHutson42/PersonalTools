@@ -10,10 +10,13 @@ public interface ICS2ItemPriceData
     Task<decimal?> GetEstimatedPrice(string marketHashName, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningPriceSnapshotDbModel>> GetSnapshots(CancellationToken cancellationToken = default);
     Task<List<CaseOpeningSnapshotPriceDbModel>> GetActivePrices(CancellationToken cancellationToken = default);
-    Task CreateSkinportSnapshot(IReadOnlySet<string> requiredMarketHashNames, CancellationToken cancellationToken = default);
+    Task CreateSkinportSnapshot(IReadOnlyCollection<CaseOpeningMarketPriceTarget> targets, CancellationToken cancellationToken = default);
     Task ActivateSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
     Task DeleteSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
 }
+
+/// <summary>One game item variant that must receive a snapshot price.</summary>
+public sealed record CaseOpeningMarketPriceTarget(string MarketHashName, string CaseKey, string RarityKey, bool IsUltraRare);
 
 /// <summary>
 /// Openings only read the active immutable database snapshot. Skinport is contacted solely from
@@ -38,7 +41,7 @@ public sealed class SkinportCS2ItemPriceData(HttpClient client, ICaseOpeningData
     public Task<List<CaseOpeningSnapshotPriceDbModel>> GetActivePrices(CancellationToken cancellationToken = default)
         => _activePrices ??= _data.GetActiveCaseOpeningSnapshotPrices(cancellationToken);
 
-    public async Task CreateSkinportSnapshot(IReadOnlySet<string> requiredMarketHashNames, CancellationToken cancellationToken = default)
+    public async Task CreateSkinportSnapshot(IReadOnlyCollection<CaseOpeningMarketPriceTarget> targets, CancellationToken cancellationToken = default)
     {
         List<SkinportItem>? response = await _client.GetFromJsonAsync<List<SkinportItem>>(
             "v1/items?app_id=730&currency=GBP&tradable=0",
@@ -61,18 +64,34 @@ public sealed class SkinportCS2ItemPriceData(HttpClient client, ICaseOpeningData
             .GroupBy(item => ParseMarketHashName(item.MarketHashName).BaseName, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
 
+        List<CaseOpeningMarketPriceTarget> requiredTargets = targets
+            .Where(target => !string.IsNullOrWhiteSpace(target.MarketHashName))
+            .GroupBy(target => target.MarketHashName, StringComparer.Ordinal)
+            .Select(group =>
+            {
+                CaseOpeningMarketPriceTarget first = group.First();
+                return first with { IsUltraRare = group.Any(target => target.IsUltraRare) };
+            })
+            .OrderBy(target => target.MarketHashName, StringComparer.Ordinal)
+            .ToList();
+        if (requiredTargets.Count == 0) throw new InvalidOperationException("No game item variants were supplied for pricing.");
+
         Guid snapshotId = Guid.NewGuid();
         List<CaseOpeningSnapshotPriceDbModel> prices = [];
-        foreach (string marketHashName in requiredMarketHashNames.Order(StringComparer.Ordinal))
+        HashSet<string> resolvedNames = new(StringComparer.Ordinal);
+        foreach (CaseOpeningMarketPriceTarget target in requiredTargets)
         {
-            (SkinportItem? item, bool isNameFallback) = ResolveMarketItem(marketHashName, byName, byNormalisedName, byBaseName);
+            (SkinportItem? item, bool isNameFallback) = ResolveMarketItem(target.MarketHashName, byName, byNormalisedName, byBaseName);
+            // A knife/glove or pattern-sensitive ultra must never inherit the value of a nearby
+            // wear or StatTrak listing. It needs an exact market match or its curated rule price.
+            if (target.IsUltraRare && isNameFallback) continue;
             if (item is null) continue;
-            (decimal? selectedPrice, bool isFallback) = CaseOpeningEconomyPolicy.SelectMarketPrice(item.MedianPrice, item.SuggestedPrice);
+            (decimal? selectedPrice, bool isFallback) = CaseOpeningEconomyPolicy.SelectMarketPrice(item.MedianPrice, item.SuggestedPrice, item.MeanPrice, item.MinimumPrice);
             if (selectedPrice is null) continue;
             prices.Add(new CaseOpeningSnapshotPriceDbModel
             {
                 PriceSnapshotId = snapshotId,
-                MarketHashName = marketHashName,
+                MarketHashName = target.MarketHashName,
                 Price = selectedPrice.Value,
                 MinimumPrice = Positive(item.MinimumPrice),
                 MeanPrice = Positive(item.MeanPrice),
@@ -81,6 +100,36 @@ public sealed class SkinportCS2ItemPriceData(HttpClient client, ICaseOpeningData
                 Quantity = Math.Max(0, item.Quantity),
                 SourceUpdatedUtc = item.UpdatedAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(item.UpdatedAt).UtcDateTime : null,
                 IsFallback = isFallback || isNameFallback
+            });
+            resolvedNames.Add(target.MarketHashName);
+        }
+
+        // A missing listing must not make a normal drop unpriced. Reuse the median value of
+        // matched items in its own case/capsule and rarity; if that bucket is empty, use the
+        // catalogue-wide rarity median. Ultra rares are deliberately excluded: they retain
+        // their exact market or curated special-variant price rather than an ordinary fallback.
+        Dictionary<string, CaseOpeningMarketPriceTarget> targetByName = requiredTargets.ToDictionary(target => target.MarketHashName, StringComparer.Ordinal);
+        IEnumerable<(CaseOpeningSnapshotPriceDbModel Price, CaseOpeningMarketPriceTarget Target)> normalPrices = prices
+            .Where(price => !targetByName[price.MarketHashName].IsUltraRare)
+            .Select(price => (price, targetByName[price.MarketHashName]));
+        Dictionary<(string CaseKey, string RarityKey), decimal> localFallbacks = normalPrices
+            .GroupBy(item => (item.Target.CaseKey, item.Target.RarityKey))
+            .ToDictionary(group => group.Key, group => Median(group.Select(item => item.Price.Price)));
+        Dictionary<string, decimal> rarityFallbacks = normalPrices
+            .GroupBy(item => item.Target.RarityKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => Median(group.Select(item => item.Price.Price)), StringComparer.OrdinalIgnoreCase);
+
+        foreach (CaseOpeningMarketPriceTarget target in requiredTargets.Where(target => !target.IsUltraRare && !resolvedNames.Contains(target.MarketHashName)))
+        {
+            decimal fallback = localFallbacks.GetValueOrDefault((target.CaseKey, target.RarityKey),
+                rarityFallbacks.GetValueOrDefault(target.RarityKey, RaritySafetyFloor(target.RarityKey)));
+            prices.Add(new CaseOpeningSnapshotPriceDbModel
+            {
+                PriceSnapshotId = snapshotId,
+                MarketHashName = target.MarketHashName,
+                Price = decimal.Round(fallback, 2, MidpointRounding.AwayFromZero),
+                Quantity = 0,
+                IsFallback = true
             });
         }
 
@@ -96,7 +145,7 @@ public sealed class SkinportCS2ItemPriceData(HttpClient client, ICaseOpeningData
             Name = $"Skinport GBP · {now:yyyy-MM-dd HH:mm} UTC",
             Source = "Skinport",
             Currency = "GBP",
-            PriceBasis = "median, suggested/name fallback",
+            PriceBasis = "median, suggested/mean/minimum, matching-name, case-rarity fallback",
             SourceItemCount = response.Count,
             MatchedItemCount = prices.Count,
             IsActive = true,
@@ -118,6 +167,22 @@ public sealed class SkinportCS2ItemPriceData(HttpClient client, ICaseOpeningData
     }
 
     private static decimal? Positive(decimal? value) => value is > 0 ? decimal.Round(value.Value, 2, MidpointRounding.AwayFromZero) : null;
+
+    private static decimal Median(IEnumerable<decimal> values)
+    {
+        decimal[] ordered = values.OrderBy(value => value).ToArray();
+        int middle = ordered.Length / 2;
+        return ordered.Length % 2 == 0 ? (ordered[middle - 1] + ordered[middle]) / 2m : ordered[middle];
+    }
+
+    private static decimal RaritySafetyFloor(string rarityKey) => rarityKey.ToLowerInvariant() switch
+    {
+        "mil-spec" or "high-grade" => .10m,
+        "restricted" or "remarkable" => .35m,
+        "classified" or "exotic" => 1.00m,
+        "covert" => 3.00m,
+        _ => .10m
+    };
 
     private static (SkinportItem? Item, bool IsNameFallback) ResolveMarketItem(
         string marketHashName,

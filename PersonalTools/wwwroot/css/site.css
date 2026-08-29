@@ -203,8 +203,8 @@ body {
 
 .live-winners-dock {
     position: fixed;
-    right: 1rem;
-    bottom: 1rem;
+    left: calc(var(--pt-sidebar-width) + 1rem);
+    top: 5.5rem;
     z-index: 1040;
     font-variant-numeric: tabular-nums;
 }
@@ -213,19 +213,20 @@ body {
     display: flex;
     align-items: center;
     gap: .42rem;
-    min-height: 2.7rem;
-    padding: .5rem .75rem;
+    min-height: 2.25rem;
+    padding: .35rem .75rem;
     color: var(--pt-ink);
     border: 1px solid color-mix(in srgb,var(--case-gold,#e4ae39) 60%,var(--pt-line));
-    border-radius: 999px;
+    border-radius: .55rem;
     background: color-mix(in srgb,var(--pt-surface) 88%,var(--case-gold,#e4ae39));
     box-shadow: 0 .55rem 1.5rem rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.35);
     font-weight: 800;
-    transition: transform .2s ease,box-shadow .2s ease;
+    transition: border-color .2s ease,background-color .2s ease,box-shadow .2s ease;
 }
 
     .live-winners-trigger:hover {
-        transform: translateY(-2px);
+        border-color: color-mix(in srgb,var(--case-gold,#e4ae39) 88%,var(--pt-line));
+        background: color-mix(in srgb,var(--pt-surface) 78%,var(--case-gold,#e4ae39));
         box-shadow: 0 .8rem 1.8rem rgba(0,0,0,.3),0 0 1.5rem color-mix(in srgb,var(--case-gold,#e4ae39) 28%,transparent);
     }
 
@@ -255,19 +256,19 @@ body {
 
 .live-winners-panel {
     position: absolute;
-    right: 0;
-    bottom: calc(100% + .7rem);
+    left: 0;
+    top: calc(100% + .7rem);
     width: min(23rem,calc(100vw - 2rem));
-    max-height: calc(100dvh - 6rem);
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
     padding: 1rem;
     color: var(--pt-ink);
     border: 1px solid color-mix(in srgb,var(--case-gold,#e4ae39) 58%,var(--pt-line));
     border-radius: 1rem;
     background: linear-gradient(145deg,color-mix(in srgb,var(--pt-surface) 85%,var(--case-gold,#e4ae39)),var(--pt-surface) 48%,color-mix(in srgb,var(--pt-surface) 92%,var(--case-purple,#8847ff)));
     box-shadow: 0 1.2rem 3rem rgba(0,0,0,.32);
-    transform-origin: bottom right;
+    transform-origin: top left;
+    display: flex;
+    flex-direction: column;
 }
 
 .live-winners-dock.is-open .live-winners-panel {
@@ -296,22 +297,24 @@ body {
         font-size: 1.05rem;
     }
 
-    .live-winners-header > span {
-        padding: .24rem .45rem;
-        color: #0b2116;
-        border-radius: 999px;
-        background: #7df0a8;
-        font-size: .65rem;
-        font-weight: 800;
-    }
-
 .live-winners-list {
     display: grid;
     gap: .55rem;
+    height: 13.35rem;
+    overflow-y: auto;
     padding: 0;
     margin: 0;
     list-style: none;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
+
+    .live-winners-list::-webkit-scrollbar {
+        display: none;
+    }
+
+.live-winners-scroll-cue { display:grid; flex:0 0 .72rem; height:.72rem; margin-top:.18rem; place-items:center; color:var(--case-gold,#e4ae39); background:linear-gradient(to bottom,transparent,color-mix(in srgb,var(--case-gold,#e4ae39) 14%,var(--pt-surface))); font-size:.58rem; pointer-events:none; }.live-winners-scroll-cue:not([hidden]) { animation:live-winners-scroll-cue 1.5s ease-in-out infinite; }
+.live-winners-scroll-cue[hidden] { display:none; }
 
 .live-winner {
     display: grid;
@@ -323,17 +326,12 @@ body {
     border-left: 3px solid var(--winner-color);
     border-radius: .7rem;
     background: color-mix(in srgb,var(--pt-surface) 92%,var(--winner-color));
-    opacity: 0;
-    animation: live-winner-reveal .42s cubic-bezier(.18,.8,.25,1) forwards;
+    opacity: 1;
 }
 
-    .live-winner:nth-child(2) {
-        animation-delay: .12s
-    }
-
-    .live-winner:nth-child(3) {
-        animation-delay: .24s
-    }
+.live-winner:has(.live-winner-rank[hidden]) {
+    grid-template-columns: 3rem minmax(0,1fr);
+}
 
 .live-winner-rank {
     display: grid;
@@ -395,28 +393,6 @@ body {
     text-align: center;
 }
 
-.live-winners-visibility {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: .75rem;
-    padding-top: .8rem;
-    margin-top: .8rem;
-    border-top: 1px solid var(--pt-line);
-    color: var(--pt-ink-soft);
-    font-size: .7rem;
-    font-weight: 750;
-}
-
-    .live-winners-visibility select {
-        padding: .25rem .4rem;
-        color: var(--pt-ink);
-        border: 1px solid var(--pt-line);
-        border-radius: .35rem;
-        background: var(--pt-surface);
-        font-size: .72rem;
-    }
-
 @keyframes live-winners-pulse {
     50% {
         transform: scale(.72);
@@ -436,36 +412,31 @@ body {
     }
 }
 
-@keyframes live-winner-reveal {
-    from {
-        opacity: 0;
-        transform: translateX(1rem);
-    }
+@keyframes live-winners-scroll-cue { 50% { opacity:.45; } }
 
-    to {
-        opacity: 1;
-        transform: none;
-    }
-}
 
 @media (max-width:575.98px) {
     .live-winners-dock {
-        right: .75rem;
-        bottom: 5.75rem;
+        left: .75rem;
+        top: 4.75rem;
     }
 
     .live-winners-panel {
         width: calc(100vw - 1.5rem);
-        max-height: calc(100dvh - 10rem);
+        max-height: calc(100dvh - 9rem);
     }
 
+    body:has(.case-opening-page) .live-winners-panel { max-height:none; }
+
     .live-winners-trigger {
-        min-height: 2.5rem;
+        height: 2.55rem;
+        min-height: 2.55rem;
+        border-radius: .6rem;
     }
 }
 
 @media (prefers-reduced-motion:reduce) {
-    .live-winners-live-dot, .live-winners-dock.is-open .live-winners-panel, .live-winner {
+    .live-winners-live-dot, .live-winners-dock.is-open .live-winners-panel {
         animation: none;
         opacity: 1;
     }
@@ -2384,6 +2355,12 @@ body {
 }
 
 /* Application toasts */
+.case-battle-invitation-host { position:fixed; z-index:1090; right:1rem; bottom:1rem; width:min(24rem,calc(100vw - 2rem)); pointer-events:none; }
+.case-battle-invitation { --invite-progress:1; position:relative; overflow:hidden; display:grid; gap:.35rem; padding:1rem 1.1rem; border:1px solid color-mix(in srgb,#f4ba32 62%,var(--pt-line)); border-radius:1rem; background:linear-gradient(135deg,#172237,#101722); box-shadow:0 1.25rem 3rem rgba(0,0,0,.34); color:#fff; pointer-events:auto; opacity:0; transform:translateX(2rem) scale(.96); transition:opacity .3s ease,transform .38s cubic-bezier(.2,.8,.2,1); }
+.case-battle-invitation::after { content:""; position:absolute; inset:auto 0 0; height:3px; transform-origin:left; transform:scaleX(var(--invite-progress)); background:#f4ba32; transition:transform .2s linear; }
+.case-battle-invitation.is-visible { opacity:1; transform:none; }
+.case-battle-invitation > strong { font-size:1.05rem; }.case-battle-invitation > span { color:#b8c4d6; font-size:.86rem; }.case-battle-invitation-clock { color:#f9d77f !important; font-weight:700; }.case-battle-invitation-actions { display:flex; justify-content:flex-end; gap:.5rem; margin-top:.35rem; }
+@media (prefers-reduced-motion:reduce) { .case-battle-invitation { transition:none; } }
 .app-toast-container {
     bottom: 1.15rem;
     margin-top: .4rem;
@@ -2404,7 +2381,7 @@ body {
     color: var(--pt-ink);
     display: grid;
     gap: .75rem;
-    grid-template-columns: .22rem 2rem minmax(0, 1fr) auto;
+    grid-template-columns: .22rem 2rem minmax(0, 1fr);
     min-height: 3.65rem;
     overflow: hidden;
     padding: .58rem .65rem .58rem 0;
@@ -2414,48 +2391,6 @@ body {
     transition: opacity .2s ease, transform .22s cubic-bezier(.2, .8, .2, 1);
     isolation: isolate;
 }
-
-    .app-toast[data-queued]:not([data-queued="0"])::before, .app-toast[data-queued]:not([data-queued="0"])::after {
-        position: absolute;
-        right: .55rem;
-        left: .55rem;
-        z-index: -1;
-        height: 100%;
-        border: 1px solid color-mix(in srgb,var(--app-toast-accent) 30%,var(--pt-line));
-        border-radius: inherit;
-        background: color-mix(in srgb,var(--pt-surface) 87%,var(--app-toast-accent));
-        box-shadow: 0 .45rem 1.2rem rgba(13,21,38,.12);
-        content: '';
-    }
-
-    .app-toast[data-queued]:not([data-queued="0"])::before {
-        top: .38rem;
-        opacity: .7;
-    }
-
-    .app-toast[data-queued]:not([data-queued="0"])::after {
-        top: .72rem;
-        opacity: .38;
-    }
-
-    .app-toast[data-queued]:not([data-queued="0"]) .app-toast-close {
-        display: flex;
-        align-items: center;
-    }
-
-        .app-toast[data-queued]:not([data-queued="0"]) .app-toast-close::before {
-            display: inline-grid;
-            place-items: center;
-            min-width: 1.15rem;
-            height: 1.15rem;
-            margin-right: .25rem;
-            color: var(--pt-ink-soft);
-            border-radius: 999px;
-            background: color-mix(in srgb,var(--app-toast-accent) 16%,transparent);
-            content: '+';
-            font-size: .7rem;
-            font-weight: 800;
-        }
 
     /* This is deliberately independent of Bootstrap's .toast display rules. It means success
        feedback stays visible even if a CDN component has not initialised yet. */
@@ -2533,19 +2468,14 @@ body {
         overflow-wrap: anywhere;
     }
 
-.app-toast-close {
-    align-self: start;
-    font-size: .7rem;
-    margin: .15rem 0 0 .2rem;
-}
-
 @media (max-width: 575.98px) {
     .app-toast-container {
         bottom: max(.75rem, env(safe-area-inset-bottom));
-        left: .75rem;
-        max-width: none;
-        right: .75rem;
-        width: auto;
+        left: 50%;
+        max-width: min(22rem, calc(100vw - 1.5rem));
+        right: auto;
+        transform: translateX(-50%);
+        width: min(22rem, calc(100vw - 1.5rem));
     }
 
     .app-toast {
@@ -2561,8 +2491,10 @@ body {
             transform: translateY(.85rem) scale(.98);
         }
 
-    body:has(.case-bottom-nav) .app-toast-container {
-        bottom: calc(var(--case-mobile-dock-bottom, 1.1rem) + 5.05rem);
+    /* The case page marks its body explicitly.  Do not rely on :has() here: older in-app
+       mobile browsers can otherwise leave feedback sitting underneath the fixed game dock. */
+    body.case-tycoon-page .app-toast-container {
+        bottom: calc(var(--case-mobile-dock-bottom, 1.1rem) + 5.65rem);
     }
 }
 

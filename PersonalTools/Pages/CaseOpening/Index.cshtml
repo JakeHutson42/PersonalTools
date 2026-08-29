@@ -2,6 +2,9 @@
 @model PersonalTools.Pages.CaseOpening.IndexModel
 @using System.Security.Claims
 @using PersonalTools.Security
+@using Microsoft.Extensions.Options
+@using PersonalTools.Entities.CaseBattles
+@inject IOptions<CaseBattleFeatureOptions> CaseBattleOptions
 @{
     ViewData["Title"] = "CS2 Case Simulator";
     bool canManageCaseOpening = User.IsUserAllowedHere(AppRole.Admin);
@@ -9,36 +12,43 @@
 }
 
 @section Head {
-    <link rel="stylesheet" href="~/css/pages/page-case-opening.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/pages/page-case-opening.css?rev=daily-drop-picker" asp-append-version="true" />
 }
 
 <div class="container px-3 px-lg-4 case-opening-page" data-case-key="kilowatt">
     @Html.AntiForgeryToken()
 
     <section class="case-game-hud shadow-sm section-spacing" aria-label="Case simulator player status">
-        <button class="case-hud-player case-hud-profile-trigger" type="button" data-bs-toggle="offcanvas" data-bs-target="#casePlayerProfile" aria-controls="casePlayerProfile" aria-label="Open player profile, achievements, statistics and collections">
-            <span class="case-xp-level-badge" id="caseXpLevelBadge">Lv 0</span>
-            <span class="case-hud-xp">
-                <span class="case-xp-bar-head">
-                    <strong>Player profile</strong>
-                    <span class="case-xp-text" id="caseXpText">0 / 100 XP</span>
+        <div class="case-hud-progression">
+            <button class="case-hud-player case-hud-profile-trigger" type="button" data-bs-toggle="offcanvas" data-bs-target="#casePlayerProfile" aria-controls="casePlayerProfile" aria-label="Open player profile, achievements, statistics and collections">
+                <span class="case-xp-level-badge" id="caseXpLevelBadge">Lv 0</span>
+                <span class="case-hud-xp">
+                    <span class="case-xp-bar-head">
+                        <strong>Player profile</strong>
+                        <span class="case-xp-text" id="caseXpText">0 / 100 XP</span>
+                    </span>
+                    <span class="case-xp-track" role="progressbar" aria-label="Level progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="caseXpTrack">
+                        <span class="case-xp-fill" id="caseXpFill"></span>
+                    </span>
                 </span>
-                <span class="case-xp-track" role="progressbar" aria-label="Level progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="caseXpTrack">
-                    <span class="case-xp-fill" id="caseXpFill"></span>
-                </span>
-            </span>
-            <span class="case-hud-profile-cta" aria-hidden="true"><span>Open</span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span>
-        </button>
+                <span class="case-hud-profile-cta" aria-hidden="true"><span>Open</span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span>
+            </button>
+            <button class="case-hud-daily-drop" id="caseDailyDrop" type="button" aria-live="polite" aria-hidden="true" aria-label="Daily Drop progress">
+                <span class="case-xp-bar-head"><strong>Daily Drop</strong><span class="case-xp-text" id="caseDailyDropText">1%</span></span>
+                <span class="case-xp-track case-daily-drop-track" role="progressbar" aria-label="Daily Drop progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="caseDailyDropTrack"><span class="case-xp-fill" id="caseDailyDropFill"></span></span>
+            </button>
+        </div>
+
 
         <div class="case-hud-status" aria-live="polite">
             <span class="case-hud-simulation"><i class="fa-solid fa-flask" aria-hidden="true"></i>Simulator</span>
             <span class="case-hud-metric" id="caseHudCapacity"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i><span>0 / 1,000</span></span>
-            <span class="case-hud-currencies" aria-label="Case-opening currency balances">
-                <span class="case-hud-stars" aria-label="Stars balance">
+            <span class="case-hud-currencies" id="caseHudCurrencies" aria-label="Active case-opening currency balance">
+                <span class="case-hud-stars" id="caseHudStars" aria-label="Stars balance">
                     <span class="case-stars-icon"><i class="fa-solid fa-star" aria-hidden="true"></i></span>
                     <strong id="caseStarsBalance">0</strong>
                 </span>
-                <span class="case-hud-gbp" aria-label="GBP balance">
+                <span class="case-hud-gbp d-none" id="caseHudGbp" aria-label="GBP balance">
                     <span class="case-gbp-icon" aria-hidden="true">£</span>
                     <strong id="caseGbpBalance">£0</strong>
                 </span>
@@ -49,6 +59,12 @@
                     <i class="fa-solid fa-wrench" aria-hidden="true"></i>
                 </button>
             }
+            else
+            {
+                <button class="case-tweak-button" id="casePlayerSettingsButton" type="button" data-bs-toggle="modal" data-bs-target="#casePlayerSettingsModal" aria-label="Open player settings" title="Player settings">
+                    <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                </button>
+            }
         </div>
 
         <div class="case-level-up-toast d-none" id="caseLevelUpToast" aria-live="polite" aria-atomic="true">
@@ -56,9 +72,22 @@
             <i class="fa-solid fa-star" aria-hidden="true"></i>
             <div><p>Level up!</p><strong id="caseLevelUpText">Level 1</strong></div>
         </div>
+        <button class="case-daily-drop-recall d-none" id="caseDailyDropRecall" type="button" aria-label="Reopen Daily Drop rewards" title="Daily Drop ready">
+            <i class="fa-solid fa-parachute-box" aria-hidden="true"></i>
+        </button>
+        <aside class="live-winners-dock case-live-winners-dock" id="liveWinnersDock" aria-label="Live Case Simulator winners">
+            <button class="live-winners-trigger" id="liveWinnersTrigger" type="button" aria-expanded="false" aria-controls="liveWinnersPanel">
+                <span class="live-winners-live-dot" aria-hidden="true"></span><span class="live-winners-count" id="liveWinnersCount">—</span><span class="live-winners-label" id="liveWinnersLabel">players</span>
+            </button>
+            <section class="live-winners-panel" id="liveWinnersPanel" hidden>
+                <div class="live-winners-header"><div><p>24-hour hall of fame</p><h2>Recent winners</h2></div></div>
+                <ol class="live-winners-list" id="liveWinnersList"><li class="live-winners-empty">Loading the latest wins…</li></ol>
+                <span class="live-winners-scroll-cue" id="liveWinnersScrollCue" aria-hidden="true" hidden><i class="fa-solid fa-chevron-down"></i></span>
+            </section>
+        </aside>
     </section>
 
-    <section class="case-game-panel case-shop section-spacing d-none" id="caseShop" data-case-destination-panel="shop" aria-labelledby="caseShopTitle">
+    <section class="case-game-panel case-shop case-tab-start section-spacing d-none" id="caseShop" data-case-destination-panel="shop" aria-labelledby="caseShopTitle">
         <div class="card-body p-3 p-lg-4">
             <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
                 <div>
@@ -83,10 +112,10 @@
                 </div>
             </div>
             <div class="case-shop-type-filter mb-3" id="caseShopTypeFilter" role="group" aria-label="Filter shop catalogue">
-                <button class="is-active" type="button" data-shop-type="">All</button>
-                <button type="button" data-shop-type="case">Cases</button>
-                <button type="button" data-shop-type="sticker">Sticker capsules</button>
-                <button type="button" data-shop-type="souvenir">Souvenir packages</button>
+                <button class="btn btn-outline-secondary btn-sm is-active" type="button" data-shop-type="" aria-pressed="true">All</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" data-shop-type="case" aria-pressed="false">Cases</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" data-shop-type="sticker" aria-pressed="false">Sticker capsules</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" data-shop-type="souvenir" aria-pressed="false">Souvenir packages</button>
             </div>
             <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
                 <span class="small-muted" id="caseShopResultCount">0 cases</span>
@@ -96,7 +125,7 @@
         </div>
     </section>
 
-    <section class="case-game-panel case-upgrades-store section-spacing d-none" id="caseUpgradeStore" data-case-destination-panel="upgrades" aria-labelledby="caseUpgradeStoreTitle">
+    <section class="case-game-panel case-upgrades-store case-tab-start section-spacing d-none" id="caseUpgradeStore" data-case-destination-panel="upgrades" aria-labelledby="caseUpgradeStoreTitle">
         <div class="card-body p-3 p-lg-4">
             <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
                 <div>
@@ -123,6 +152,16 @@
                             <button class="btn btn-warning btn-sm d-block ms-lg-auto mt-2" id="purchaseStorageContainer" type="button">Buy storage</button>
                         </div>
                     </article>
+                </div>
+                <div class="col-12">
+                    <section class="case-daily-upgrade-panel" aria-labelledby="caseDailyUpgradeTitle">
+                        <button class="case-daily-upgrade-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#caseDailyUpgradeTree" aria-expanded="false" aria-controls="caseDailyUpgradeTree">
+                            <span class="case-daily-upgrade-toggle-icon"><i class="fa-solid fa-sun" aria-hidden="true"></i></span>
+                            <span><span class="eyebrow d-block mb-1">Daily progression</span><strong id="caseDailyUpgradeTitle">Daily Drop mastery</strong><small>Spend Stars to shape the rewards waiting at the end of each Daily Drop.</small></span>
+                            <i class="fa-solid fa-chevron-down case-daily-upgrade-chevron" aria-hidden="true"></i>
+                        </button>
+                        <div class="collapse" id="caseDailyUpgradeTree"><div class="case-daily-upgrade-tree" id="caseDailyUpgradeTreeCards"></div></div>
+                    </section>
                 </div>
                 <div class="col-12">
                     <div class="case-upgrade-section-heading mt-2 mb-3"><span class="case-shop-icon"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span><div><p class="eyebrow mb-1">Permanent capacity</p><h3 class="h5 mb-1">Workshop shelving</h3><p class="small-muted mb-0">Cases and skins both use one inventory slot. Add permanent shelving as your collection and case stock grow.</p></div></div>
@@ -211,7 +250,7 @@
         </div>
     </section>
 
-    <section class="case-game-panel case-stage section-spacing" data-case-destination-panel="open" aria-labelledby="caseName">
+    <section class="case-game-panel case-stage case-tab-start section-spacing" data-case-destination-panel="open" aria-labelledby="caseName">
         <canvas class="case-effects-canvas" id="caseEffectsCanvas" aria-hidden="true"></canvas>
         <div class="case-gold-reveal d-none" id="caseGoldReveal" role="dialog" aria-modal="true" aria-labelledby="caseGoldRevealName" aria-describedby="caseGoldRevealMeta" aria-live="polite" aria-atomic="true" tabindex="-1">
             <span class="case-gold-ring case-gold-ring-one" aria-hidden="true"></span>
@@ -263,9 +302,8 @@
                                     <button class="case-sound-theme" type="button" role="radio" aria-checked="false" data-sound-theme="cs2"><i class="fa-solid fa-wave-square" aria-hidden="true"></i><span>CS2 style<small>Crisp &amp; modern</small></span></button>
                                 </div>
                                 <div class="case-sound-volume-block">
-                                    <div class="case-sound-volume-head"><label for="caseSoundVolume">Volume</label><output id="caseSoundVolumeValue" for="caseSoundVolume">45%</output></div>
-                                    <div class="case-sound-meter" aria-hidden="true"><span id="caseSoundVolumeMeter"></span></div>
-                                    <div class="case-sound-volume-control"><i class="fa-solid fa-volume-low" aria-hidden="true"></i><input class="form-range case-sound-range" id="caseSoundVolume" type="range" min="0" max="100" step="1" value="45" /><i class="fa-solid fa-volume-high" aria-hidden="true"></i></div>
+                                    <div class="case-sound-volume-head"><span id="caseSoundVolumeLabel">Volume</span><output id="caseSoundVolumeValue" for="caseSoundVolumeMeter">45%</output></div>
+                                    <div class="case-sound-meter" id="caseSoundVolumeMeter" role="slider" tabindex="0" aria-labelledby="caseSoundVolumeLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="45"><span></span></div>
                                 </div>
                                 <button class="case-sound-preview" id="caseSoundPreview" type="button"><i class="fa-solid fa-play" aria-hidden="true"></i>Preview selected cue</button>
                             </div>
@@ -274,6 +312,12 @@
                     <button class="btn btn-outline-primary btn-sm case-stage-tool" id="chooseCaseButton" type="button" data-bs-toggle="modal" data-bs-target="#caseSelectorModal">
                         <i class="fa-solid fa-boxes-stacked me-1"></i>Choose case
                     </button>
+                    @if (CaseBattleOptions.Value.Enabled)
+                    {
+                        <a class="btn btn-outline-primary btn-sm case-stage-tool" asp-page="/CaseOpening/Battles/Create">
+                            <i class="fa-solid fa-box-open me-1" aria-hidden="true"></i>Case battle
+                        </a>
+                    }
                     <button class="btn btn-outline-secondary btn-sm case-stage-tool" id="caseOddsButton" type="button" data-bs-toggle="popover" data-bs-placement="bottom" data-bs-html="true" title="Case rarity odds">
                         <i class="fa-solid fa-circle-info me-1"></i>View odds
                     </button>
@@ -613,7 +657,7 @@
         <p class="case-luck-explanation small-muted mb-0 mt-3"><i class="fa-solid fa-circle-info me-1"></i>Past openings do not make the next result more likely. This tracker describes your history; it never changes the server-side odds.</p>
     </section>
 
-    <section class="case-game-panel case-trade-up-workspace section-spacing d-none" data-case-destination-panel="tradeups" aria-labelledby="caseTradeUpWorkspaceTitle">
+    <section class="case-game-panel case-trade-up-workspace case-tab-start section-spacing d-none" data-case-destination-panel="tradeups" aria-labelledby="caseTradeUpWorkspaceTitle">
         <div class="card-body p-3 p-lg-4">
             <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
                 <div><p class="eyebrow mb-1">Inventory crafting</p><h2 class="h4 mb-1" id="caseTradeUpWorkspaceTitle">Trade Up Contracts</h2><p class="small-muted mb-0">Choose ten matching skins. Collection odds follow the source of every input and output wear uses the average float.</p></div>
@@ -659,7 +703,7 @@
         </div>
     </section>
 
-    <section class="section-spacing case-history-section d-none" data-case-destination-panel="inventory" aria-labelledby="caseHistoryTitle">
+    <section class="section-spacing case-history-section case-tab-start d-none" data-case-destination-panel="inventory" aria-labelledby="caseHistoryTitle">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
             <div>
                 <p class="eyebrow mb-1">Your collection</p>
@@ -679,10 +723,7 @@
         <div id="caseHistoryPanel" role="region" aria-labelledby="caseHistoryTitle">
             <div class="case-inventory-actions d-none mb-3" id="caseInventoryActions">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                    <div>
-                        <button class="case-inventory-select-all" id="caseInventorySelectAll" type="button" aria-pressed="false"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i><span id="caseInventorySelectLabel">Select sellable items</span></button>
-                        <small class="case-inventory-selection-hint">Selects up to your current sale limit. Protected items stay safe; item cards remain individually selectable.</small>
-                    </div>
+                    <button class="case-inventory-select-all" id="caseInventorySelectAll" type="button" aria-pressed="false"><span id="caseInventorySelectLabel">Select sellable items</span></button>
                     <div class="d-flex align-items-center gap-2">
                         <span class="small-muted" id="caseInventorySelectionText">0 selected</span>
                         <button class="btn btn-warning btn-sm" id="sellCaseInventory" type="button" disabled>
@@ -761,6 +802,7 @@
                             <th>Item</th>
                             <th>Case</th>
                             <th>Rarity</th>
+                            <th class="text-end">Value</th>
                             <th>Finish</th>
                             <th>Opened</th>
                             <th class="text-end">Details</th>
@@ -851,6 +893,7 @@
                         <button class="nav-link" id="caseProfileStatisticsTab" data-bs-toggle="pill" data-bs-target="#caseProfileStatisticsPane" type="button" role="tab" aria-controls="caseProfileStatisticsPane" aria-selected="false"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Statistics</span></button>
                         <button class="nav-link" id="caseProfileCollectionsTab" data-bs-toggle="pill" data-bs-target="#caseProfileCollectionsPane" type="button" role="tab" aria-controls="caseProfileCollectionsPane" aria-selected="false"><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span>Collections</span></button>
                         <button class="nav-link" id="caseProfileProgressionTab" data-bs-toggle="pill" data-bs-target="#caseProfileProgressionPane" type="button" role="tab" aria-controls="caseProfileProgressionPane" aria-selected="false"><i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i><span>Progression</span></button>
+                        <button class="nav-link" id="caseProfileBattlesTab" data-bs-toggle="pill" data-bs-target="#caseProfileBattlesPane" type="button" role="tab" aria-controls="caseProfileBattlesPane" aria-selected="false"><i class="fa-solid fa-trophy" aria-hidden="true"></i><span>Battles</span></button>
                     </div>
                 </nav>
             </div>
@@ -934,6 +977,10 @@
                         <div><span><i class="fa-solid fa-clone" aria-hidden="true"></i>Simultaneous openings</span><strong id="caseProfileMultiOpen">1</strong></div>
                         <div><span><i class="fa-solid fa-robot" aria-hidden="true"></i>Opening bots</span><strong id="caseProfileBots">0</strong></div>
                     </div>
+                </section>
+                <section class="tab-pane fade" id="caseProfileBattlesPane" role="tabpanel" aria-labelledby="caseProfileBattlesTab" tabindex="0">
+                    <div class="case-profile-pane-heading"><div><p class="eyebrow mb-1">Case battles</p><h3 class="h5 mb-1">Battle history</h3><p class="small-muted mb-0">Your completed battles and locked settlement values.</p></div></div>
+                    <div class="case-profile-collections-grid" id="caseProfileBattleHistory" aria-live="polite"><div class="case-profile-collections-empty"><i class="fa-solid fa-trophy" aria-hidden="true"></i><span>No completed case battles yet.</span></div></div>
                 </section>
             </div>
         </div>
@@ -1121,6 +1168,45 @@
     </div>
 </div>
 
+@if (!canManageCaseOpening)
+{
+    <div class="modal fade" id="casePlayerSettingsModal" tabindex="-1" aria-labelledby="casePlayerSettingsTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content case-player-settings-modal">
+                <div class="modal-header">
+                    <div>
+                        <p class="eyebrow mb-1">Player settings</p>
+                        <h2 class="modal-title fs-5" id="casePlayerSettingsTitle">Your loadout</h2>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <section aria-labelledby="caseAppearanceTitle">
+                        <h3 class="h6 mb-1" id="caseAppearanceTitle">Theme</h3>
+                        <p class="small-muted mb-3">Applied straight away and saved to your account.</p>
+                        <div class="case-theme-choices" role="group" aria-label="Workspace theme">
+                            <button class="btn btn-outline-secondary case-theme-choice" type="button" data-case-theme="tactical"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i><span>Tactical</span></button>
+                            <button class="btn btn-outline-secondary case-theme-choice" type="button" data-case-theme="personal"><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span>Personal</span></button>
+                            <button class="btn btn-outline-secondary case-theme-choice" type="button" data-case-theme="matrix"><i class="fa-solid fa-terminal" aria-hidden="true"></i><span>Matrix</span></button>
+                        </div>
+                        <div class="case-mode-choices mt-2" role="group" aria-label="Colour mode">
+                            <button class="btn btn-outline-secondary case-mode-choice" type="button" data-case-mode="dark"><i class="fa-solid fa-moon" aria-hidden="true"></i>Dark</button>
+                            <button class="btn btn-outline-secondary case-mode-choice" type="button" data-case-mode="light"><i class="fa-solid fa-sun" aria-hidden="true"></i>Light</button>
+                        </div>
+                    </section>
+                    <section class="case-player-settings-account mt-4" aria-labelledby="caseAccountSettingsTitle">
+                        <div>
+                            <h3 class="h6 mb-1" id="caseAccountSettingsTitle">Account settings</h3>
+                            <p class="small-muted mb-0">Update your sign-in and account details.</p>
+                        </div>
+                        <a class="btn btn-outline-secondary btn-sm" asp-page="/Account"><i class="fa-solid fa-user-gear me-1" aria-hidden="true"></i>Manage</a>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @if (canManageCaseOpening)
 {
     <div class="modal fade" id="caseTweakResetModal" tabindex="-1" aria-labelledby="caseTweakResetTitle" aria-hidden="true">
@@ -1172,6 +1258,9 @@
                             </li>
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link" id="caseTweakPricesTab" data-bs-toggle="tab" data-bs-target="#caseTweakPricesPane" type="button" role="tab" aria-controls="caseTweakPricesPane" aria-selected="false"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Market lab</span><small>Snapshots &amp; variants</small></button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="caseTweakBattlesTab" data-bs-toggle="tab" data-bs-target="#caseTweakBattlesPane" type="button" role="tab" aria-controls="caseTweakBattlesPane" aria-selected="false"><i class="fa-solid fa-trophy" aria-hidden="true"></i><span>Case battles</span><small>Visibility &amp; recovery</small></button>
                             </li>
                         </ul>
 
@@ -1482,6 +1571,23 @@
                                     </div>
                                 </section>
                             </div>
+                            <div class="tab-pane fade" id="caseTweakBattlesPane" role="tabpanel" aria-labelledby="caseTweakBattlesTab">
+                                <section class="case-admin-section case-battle-admin-section" aria-labelledby="caseTweakBattlesTitle">
+                                    <div class="case-admin-section-title"><i class="fa-solid fa-trophy" aria-hidden="true"></i><div><strong id="caseTweakBattlesTitle">Case Battles control</strong><span>Publish the feature, manage the instant Battle Bot and recover interrupted rooms.</span></div></div>
+                                    <div class="row g-3 align-items-center">
+                                        <div class="col-12 col-md-6"><div class="case-admin-toggle-card"><div><strong>Case Battles</strong><span>Allow players to create battles and Buy all required cases.</span></div><div class="form-check form-switch pt-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="caseTweakBattlesEnabled" disabled><label class="visually-hidden" for="caseTweakBattlesEnabled">Case Battles visible to players</label></div></div></div>
+                                        <div class="col-12 col-md-6"><div class="case-admin-toggle-card"><div><strong>Battle Bot</strong><span>Offer an instant system opponent once Case Battles are live.</span></div><div class="form-check form-switch pt-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="caseTweakBattleBotEnabled" disabled><label class="visually-hidden" for="caseTweakBattleBotEnabled">Battle Bot visible to players</label></div></div></div>
+                                    </div>
+                                </section>
+                                <section class="case-admin-section case-battle-admin-section" aria-labelledby="caseTweakBattleBotStatsTitle">
+                                    <div class="case-admin-section-title"><i class="fa-solid fa-robot" aria-hidden="true"></i><div><strong id="caseTweakBattleBotStatsTitle">Battle Bot record</strong><span>Bot wins are tracked for oversight; its items and value are discarded.</span></div></div>
+                                    <div class="row g-2" id="caseTweakBattleBotStats"><div class="col-6 col-lg-3"><div class="case-admin-stat"><span>Attempted</span><strong>—</strong></div></div><div class="col-6 col-lg-3"><div class="case-admin-stat"><span>Won</span><strong>—</strong></div></div><div class="col-6 col-lg-3"><div class="case-admin-stat"><span>Skins discarded</span><strong>—</strong></div></div><div class="col-6 col-lg-3"><div class="case-admin-stat"><span>Value discarded</span><strong>—</strong></div></div></div>
+                                </section>
+                                <section class="case-admin-section case-battle-admin-section mb-0" aria-labelledby="caseTweakBattleRecoveryTitle">
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3"><div class="case-admin-section-title mb-0"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><div><strong id="caseTweakBattleRecoveryTitle">Recovery queue</strong><span>Only expired waiting rooms and interrupted openings appear here. Results are never re-rolled.</span></div></div><button class="btn btn-outline-warning btn-sm" id="caseTweakBattleRefresh" type="button"><i class="fa-solid fa-rotate me-1" aria-hidden="true"></i>Refresh</button></div>
+                                    <div class="case-admin-table-wrap"><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Battle</th><th>Creator</th><th>Progress</th><th>State</th></tr></thead><tbody id="caseTweakBattleRows"><tr><td colspan="4" class="text-center small-muted py-4">Open this tab to load battle health.</td></tr></tbody></table></div></div>
+                                </section>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1489,6 +1595,31 @@
         </div>
     </div>
 }
+
+<div class="modal fade" id="caseDailyDropModal" tabindex="-1" aria-labelledby="caseDailyDropModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content case-daily-drop-modal">
+            <div class="modal-header">
+                <div>
+                    <p class="eyebrow mb-1">
+                        <i class="fa-solid fa-parachute-box me-1" aria-hidden="true"></i>Daily Reward
+                    </p>
+                    <h2 class="modal-title h3" id="caseDailyDropModalTitle">Choose 2 rewards</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 case-daily-drop-picker" id="caseDailyDropRewards"></div>
+            </div>
+            <div class="modal-footer">
+                <span class="case-daily-drop-selection-status" id="caseDailyDropSelectionStatus">0 / 2 rewards selected</span>
+                <button class="btn case-open-button case-daily-drop-claim" id="caseDailyDropClaim" type="button" disabled>
+                    <i class="fa-solid fa-gift me-1" aria-hidden="true"></i>Claim selected rewards
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Scripts {
     <script src="~/js/pages/page-case-opening.js" asp-append-version="true"></script>

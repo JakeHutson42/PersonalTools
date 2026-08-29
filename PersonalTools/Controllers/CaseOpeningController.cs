@@ -115,6 +115,28 @@ public sealed class CaseOpeningController : ControllerBase
             "selected");
     }
 
+    [HttpPost("daily-drop/claim")]
+    public Task<ActionResult<CaseOpeningProgressObj>> ClaimDailyDrop([FromBody] CaseOpeningDailyDropClaimRequest request, CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.ClaimCaseOpeningDailyDrop(UserId, request?.RewardKeys ?? [], cancellationToken), "claim daily drop", "daily");
+    }
+
+    [HttpPost("daily-drop/upgrades/{upgradeKey}/unlock")]
+    public Task<ActionResult<CaseOpeningProgressObj>> UnlockDailyDropUpgrade(string upgradeKey, CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.UnlockCaseOpeningDailyDropUpgrade(UserId, upgradeKey, cancellationToken), "unlock daily drop upgrade", upgradeKey);
+    }
+
+    [HttpGet("daily-drop/settings")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<int>> GetDailyDropSettings(CancellationToken cancellationToken) => Execute(() => _caseOpening.GetDailyDropRequiredXp(cancellationToken), "load daily drop settings", "daily");
+    [HttpPut("daily-drop/settings")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public async Task<ActionResult<ApiResponse>> SetDailyDropSettings([FromBody] CaseOpeningDailyDropSettingsRequest request, CancellationToken cancellationToken) { await _caseOpening.SetDailyDropRequiredXp(request.RequiredXp, cancellationToken); return Ok(new ApiResponse(true, "Daily Drop XP threshold saved.")); }
+    [HttpPost("daily-drop/reset")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningProgressObj>> ResetDailyDrop(CancellationToken cancellationToken) => Execute(() => _caseOpening.ResetDailyDrop(UserId, cancellationToken), "reset daily drop", "daily");
+
     [HttpPut("inventory/{openingId:guid}/lock")]
     public Task<ActionResult<CaseOpeningInventoryLockObj>> SetInventoryLock(
         Guid openingId,
@@ -328,6 +350,12 @@ public sealed class CaseOpeningController : ControllerBase
     public Task<ActionResult<List<CaseOpeningCaseSettingsObj>>> GetCaseSettings(CancellationToken cancellationToken)
     {
         return Execute(() => _caseOpening.GetCaseSettings(cancellationToken), "load case settings", "all");
+    }
+
+    [HttpPost("cases/{caseKey}/discard")]
+    public Task<ActionResult<CaseOpeningCaseDiscardResultObj>> DiscardCases(string caseKey, [FromBody] CaseOpeningCaseDiscardRequestObj? request, CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.DiscardCaseOpeningCases(UserId, caseKey, request?.Quantity ?? -1, cancellationToken), "discard cases", caseKey);
     }
 
     [HttpPost("bots/{botId:guid}/speed")]
@@ -620,6 +648,8 @@ public sealed class CaseOpeningController : ControllerBase
 }
 
 public sealed record CaseOpeningCaseSettingsRequest(int Tier, int UnlockCostStars, long UnlockCostGbpPence, int PurchaseCostStars, long PurchaseCostGbpPence, int XpRequirement);
+public sealed record CaseOpeningDailyDropClaimRequest(List<string> RewardKeys);
+public sealed record CaseOpeningDailyDropSettingsRequest(int RequiredXp);
 public sealed record CaseOpeningInventoryUpgradeSettingsRequest(int CostStars, long CostGbpPence, int RequiredLevel);
 public sealed record CaseOpeningXpByRarityRequest(int XpAwarded);
 public sealed record CaseOpeningDevProgressRequest(int Stars, long GbpPence, int Xp);
