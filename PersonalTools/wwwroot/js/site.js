@@ -253,6 +253,14 @@
         let liveWinnerPoll = null;
         const currency = value => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 }).format(Number(value || 0));
         const rankIcon = rank => rank === 1 ? 'fa-trophy' : rank === 2 ? 'fa-medal' : rank === 3 ? 'fa-award' : '';
+        function updateRank(rankElement, rank) {
+            const ranked = rank <= 3;
+            rankElement.hidden = false;
+            rankElement.classList.toggle('is-placeholder', !ranked);
+            rankElement.toggleAttribute('aria-hidden', !ranked);
+            if (ranked) rankElement.setAttribute('aria-label', `Rank ${rank}`); else rankElement.removeAttribute('aria-label');
+            rankElement.querySelector('i').className = ranked ? `fa-solid ${rankIcon(rank)}` : '';
+        }
         const winnerKey = winner => String(winner.openingId || `${winner.itemName}:${winner.receivedUtc}`);
         function updateWinnerScrollCue() {
             const scrollable = list.scrollHeight > list.clientHeight + 1;
@@ -271,9 +279,7 @@
             row.className = `live-winner rank-${rank}`;
             row.style.setProperty('--winner-color', winner.rarityColor || '#e4ae39');
             const rankElement = row.querySelector('.live-winner-rank');
-            rankElement.hidden = rank > 3;
-            rankElement.setAttribute('aria-label', rank <= 3 ? `Rank ${rank}` : '');
-            rankElement.querySelector('i').className = rank <= 3 ? `fa-solid ${rankIcon(rank)}` : '';
+            updateRank(rankElement, rank);
             row.querySelector('img').src = winner.imageUrl || '';
             row.querySelector('strong').textContent = winner.itemName || 'Unknown item';
             row.querySelector('.live-winner-copy span').textContent = `${winner.displayName || 'Player'} · ${winner.source || 'Case opening'}`;
@@ -330,7 +336,7 @@
                 let row = oldRows.get(key);
                 if (!row) { row = document.createElement('li'); row.innerHTML = '<span class="live-winner-rank"><i aria-hidden="true"></i></span><span class="live-winner-copy"><strong></strong><span></span><small></small></span>'; }
                 row.className = `live-winner live-battle-winner rank-${rank}`; row.dataset.winnerKey = key;
-                const rankElement = row.querySelector('.live-winner-rank'); rankElement.hidden = rank > 3; rankElement.setAttribute('aria-label', rank <= 3 ? `Rank ${rank}` : ''); rankElement.querySelector('i').className = rank <= 3 ? `fa-solid ${rankIcon(rank)}` : '';
+                updateRank(row.querySelector('.live-winner-rank'), rank);
                 row.querySelector('strong').textContent = winner.displayName || 'Player';
                 row.querySelector('.live-winner-copy span').textContent = `${Number(winner.caseCount || 0)} case${Number(winner.caseCount || 0) === 1 ? '' : 's'} · Case battle`;
                 row.querySelector('small').textContent = currency(winner.awardedValue);

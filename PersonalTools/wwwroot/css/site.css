@@ -329,7 +329,7 @@ body {
     opacity: 1;
 }
 
-.live-winner-rank[hidden] {
+.live-winner-rank.is-placeholder {
     display: grid;
     visibility: hidden;
 }
