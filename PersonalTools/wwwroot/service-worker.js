@@ -1,6 +1,6 @@
 'use strict';
 
-const staticCacheName = 'personal-tools-static-v3';
+const staticCacheName = 'personal-tools-static-v4';
 const caseImageCacheName = 'personal-tools-case-images-v1';
 const maximumCaseImages = 250;
 let caseImageWritesSinceTrim = 0;
@@ -8,13 +8,20 @@ const offlineFallbackUrl = '/offline.html';
 const precacheUrls = [
     offlineFallbackUrl,
     '/manifest.webmanifest',
+    '/case-tycoon.webmanifest',
     '/favicon.svg',
     '/css/pwa.css',
     '/icons/apple-touch-icon.png',
     '/icons/pwa-icon-192.png',
     '/icons/pwa-icon-512.png',
     '/icons/pwa-maskable-192.png',
-    '/icons/pwa-maskable-512.png'
+    '/icons/pwa-maskable-512.png',
+    '/icons/case-tycoon-apple-touch-icon.png',
+    '/icons/case-tycoon-favicon-64.png',
+    '/icons/case-tycoon-icon-192.png',
+    '/icons/case-tycoon-icon-512.png',
+    '/icons/case-tycoon-maskable-192.png',
+    '/icons/case-tycoon-maskable-512.png'
 ];
 const staticPathPrefixes = ['/css/', '/js/', '/images/', '/lib/', '/icons/'];
 

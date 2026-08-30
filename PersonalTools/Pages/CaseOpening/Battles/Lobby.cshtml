@@ -1,0 +1,12 @@
+@page "{battleId:guid}"
+@model PersonalTools.Pages.CaseOpening.Battles.LobbyModel
+@{ ViewData["Title"] = "Case battle lobby"; }
+@section Head { <link rel="stylesheet" href="~/css/pages/page-case-opening.css" asp-append-version="true" /><link rel="stylesheet" href="~/css/pages/page-case-battles.css" asp-append-version="true" /> }
+<main class="container px-3 px-lg-4 case-opening-page case-battle-game-page case-battles-page" data-case-battle-lobby data-case-battle-id="@Model.BattleId">
+    @Html.AntiForgeryToken()
+    <partial name="_CaseBattleHud" />
+    <header class="case-battle-page-hero"><div class="case-battle-page-hero-icon"><i class="fa-solid fa-people-group" aria-hidden="true"></i></div><div class="case-battle-page-hero-copy"><p class="eyebrow mb-1">Case battle</p><h1>Battle lobby</h1><p id="caseBattleLobbyStatus">Preparing your lobby…</p></div><div class="case-battle-page-hero-meta"><span class="case-battle-elapsed"><i class="fa-regular fa-clock" aria-hidden="true"></i><span>Lobby time</span><strong id="caseBattleLobbyElapsed">00:00</strong></span><a class="btn btn-outline-secondary" asp-page="/CaseOpening/Index" data-case-battle-transition-link><i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i>Simulator</a></div></header>
+    <section class="case-battle-room card case-battle-lobby-room"><div class="card-body"><div class="case-battle-scoreboard" id="caseBattleLobbyScoreboard" aria-live="polite"></div><div class="case-battle-lobby-stage"><div><p class="eyebrow mb-1">Case track</p><h2 class="h5 mb-1">Both players open every case in this order</h2><div class="case-battle-case-track" id="caseBattleLobbyTrack"></div></div><aside class="case-battle-lobby-ready" id="caseBattleLobbyReady" aria-live="polite"></aside></div><div class="case-battle-actions" id="caseBattleLobbyActions" aria-live="polite"></div></div></section>
+</main>
+<partial name="_CaseBattleTransition" />
+@section Scripts { <script src="~/js/pages/page-case-battle-transition.js" asp-append-version="true"></script><script src="~/js/pages/page-case-battle-hud.js" asp-append-version="true"></script><script src="~/js/pages/page-case-battle-lobby.js" asp-append-version="true"></script> }

@@ -18,6 +18,11 @@ public sealed class LiveWinnersData : ILiveWinnersData
     {
         LiveWinnersSummaryObj summary = await _database.GetDataSP("sp_live_winners_summary_get", reader => new LiveWinnersSummaryObj { LiveUserCount = reader.GetInt32("LiveUserCount") }, cancellationToken: cancellationToken) ?? new();
         summary.Winners = await _database.GetBulkDataSP("sp_live_winners_top_get", ReadWinner, cancellationToken: cancellationToken);
+        summary.BattleWinners = await _database.GetBulkDataSP("sp_live_winners_case_battles_top_get", reader => new LiveCaseBattleWinnerObj
+        {
+            BattleId = reader.GetGuid("BattleId"), DisplayName = reader.GetString("DisplayName"), AwardedValue = reader.GetDecimal("AwardedValue"),
+            CaseCount = reader.GetInt32("CaseCount"), SettledUtc = DateTime.SpecifyKind(reader.GetDateTime("SettledUtc"), DateTimeKind.Utc)
+        }, cancellationToken: cancellationToken);
         return summary;
     }
     private static LiveWinnerObj ReadWinner(MySqlDataReader reader) => new()

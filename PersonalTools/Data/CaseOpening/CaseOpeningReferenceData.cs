@@ -18,46 +18,6 @@ public sealed class CaseOpeningReferenceData : ICaseOpeningReferenceData
     private const string CaseApiUrl = "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/crates.json";
     private const string SkinApiUrl = "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins.json";
     private const string CacheKey = "case-opening-curated-catalogue";
-    private static readonly IReadOnlyDictionary<string, string> CuratedCases = new Dictionary<string, string>
-    {
-        ["esports-2013"] = "crate-4002",
-        ["esports-2013-winter"] = "crate-4005",
-        ["weapon-case-1"] = "crate-4001",
-        ["weapon-case-2"] = "crate-4004",
-        ["weapon-case-3"] = "crate-4010",
-        ["katowice-2014-challengers"] = "crate-4014",
-        ["katowice-2014-legends"] = "crate-4015",
-        ["esports-2014-summer"] = "crate-4019",
-        ["cologne-2014-legends"] = "crate-4020",
-        ["cologne-2014-cobblestone-souvenir"] = "crate-4027",
-        ["breakout"] = "crate-4018",
-        ["chroma-2"] = "crate-4089",
-        ["gamma-2"] = "crate-4281",
-        ["atlanta-2017-legends"] = "crate-4323",
-        ["glove"] = "crate-4288",
-        ["hydra"] = "crate-4352",
-        ["spectrum-2"] = "crate-4403",
-        ["clutch"] = "crate-4471",
-        ["prisma"] = "crate-4598",
-        ["shattered-web"] = "crate-4620",
-        ["cs20"] = "crate-4669",
-        ["prisma-2"] = "crate-4695",
-        ["fracture"] = "crate-4698",
-        ["broken-fang"] = "crate-4717",
-        ["snakebite"] = "crate-4747",
-        ["riptide"] = "crate-4790",
-        ["stockholm-2021-legends"] = "crate-4803",
-        ["antwerp-2022-legends"] = "crate-4832",
-        ["recoil"] = "crate-4846",
-        ["paris-2023-legends"] = "crate-4890",
-        ["copenhagen-2024-legends"] = "crate-4923",
-        ["dreams-and-nightmares"] = "crate-4818",
-        ["revolution"] = "crate-4880",
-        ["kilowatt"] = "crate-4904",
-        ["gallery"] = "crate-7003",
-        ["fever"] = "crate-7007",
-        ["austin-2025-legends"] = "crate-5117"
-    };
     private readonly HttpClient _httpClient;
     private readonly IMemoryCache _cache;
 
@@ -82,7 +42,7 @@ public sealed class CaseOpeningReferenceData : ICaseOpeningReferenceData
             List<ApiCrate> crates = JsonSerializer.Deserialize<List<ApiCrate>>(await cratesRequest) ?? [];
             List<ApiSkin> skins = JsonSerializer.Deserialize<List<ApiSkin>>(await skinsRequest) ?? [];
             Dictionary<string, ApiSkin> skinsById = skins.ToDictionary(skin => skin.Id, StringComparer.Ordinal);
-            return CuratedCases.Select(configured =>
+            return CaseOpeningCatalogue.Containers.Select(configured =>
             {
                 ApiCrate crate = crates.FirstOrDefault(value => value.Id == configured.Value)
                     ?? throw new InvalidOperationException($"The {configured.Key} catalogue is unavailable right now.");

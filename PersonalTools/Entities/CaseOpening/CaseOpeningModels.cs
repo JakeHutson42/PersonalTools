@@ -135,6 +135,9 @@ public sealed class CaseOpeningSnapshotPriceDbModel
     public int Quantity { get; set; }
     public DateTime? SourceUpdatedUtc { get; set; }
     public bool IsFallback { get; set; }
+    public string PriceSource { get; set; } = "Skinport";
+    public string PriceMethod { get; set; } = string.Empty;
+    public string SourceMarketHashName { get; set; } = string.Empty;
 }
 
 public sealed class CaseOpeningCaseMarketValueObj
@@ -144,18 +147,25 @@ public sealed class CaseOpeningCaseMarketValueObj
     public decimal? OpeningCost { get; set; }
     public decimal? ExpectedValue { get; set; }
     public decimal? ExpectedProfit { get; set; }
+    public decimal InferredExpectedValue { get; set; }
+    public decimal InferredValuePercentage { get; set; }
+    public string ContainerPriceMethod { get; set; } = string.Empty;
+    public string PriceQualityWarning { get; set; } = string.Empty;
     public decimal? ReturnPercentage { get; set; }
     public decimal? ExpectedSaleValuePence { get; set; }
     public decimal? TargetReturnPercentage { get; set; }
     public int PricedVariants { get; set; }
     public int TotalVariants { get; set; }
     public int Tier { get; set; }
+    public int PublishedTier { get; set; }
+    public int RecommendedTier { get; set; }
     public long RecommendedPurchaseGbpPence { get; set; }
     public long RecommendedUnlockGbpPence { get; set; }
     public int RecommendedPurchaseStars { get; set; }
     public int RecommendedUnlockStars { get; set; }
     public long PublishedPurchaseGbpPence { get; set; }
     public bool HasCompletePricing { get; set; }
+    public bool HasPublishablePricing { get; set; }
 }
 
 public sealed class CaseOpeningPriceSnapshotSummaryObj
@@ -167,6 +177,11 @@ public sealed class CaseOpeningPriceSnapshotSummaryObj
     public bool CanPublish { get; set; }
     public int FallbackPriceCount { get; set; }
     public int MissingPriceCount { get; set; }
+    public int MissingContainerPriceCount { get; set; }
+    public int PriceQualityWarningCount { get; set; }
+    public int SkinportPriceCount { get; set; }
+    public int CsFloatPriceCount { get; set; }
+    public int InferredPriceCount { get; set; }
     public List<string> TierWarnings { get; set; } = [];
 }
 
@@ -550,6 +565,8 @@ public sealed class CaseOpeningGameSettingsObj
 {
     public string EconomyMode { get; set; } = CaseOpeningEconomyModes.Stars;
     public int SkinSaleRateBasisPoints { get; set; } = 9250;
+    public int GlobalReturnMultiplierBasisPoints { get; set; } = 10300;
+    public int CsFloatUsdToGbpBasisPoints { get; set; } = 7800;
     public bool FreeCaseAllowanceEnabled { get; set; }
     public int FreeCaseAllowanceQuantity { get; set; } = 25;
     public int FreeCaseAllowanceHours { get; set; } = 24;
@@ -616,6 +633,13 @@ public sealed class CaseOpeningXpByRarityObj
 public sealed class CaseOpeningCasePurchaseRequestObj
 {
     public int Quantity { get; set; } = 1;
+}
+
+public sealed class CaseOpeningTierEconomySettingsObj
+{
+    public int Tier { get; set; }
+    public int TargetProfitBasisPoints { get; set; }
+    public int PriceRoundingPence { get; set; } = 5;
 }
 
 public sealed class CaseOpeningCaseDiscardRequestObj

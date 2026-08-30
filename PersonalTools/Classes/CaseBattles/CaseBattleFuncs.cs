@@ -24,11 +24,17 @@ public interface ICaseBattleFuncs
     Task<List<CaseBattleHistoryObj>> GetHistory(Guid userId, CancellationToken cancellationToken = default);
     Task<List<CaseBattleAdminReconciliationObj>> GetAdminReconciliation(CancellationToken cancellationToken = default);
     Task ReconcileExpired(Guid battleId, CancellationToken cancellationToken = default);
+    Task CancelPendingAsAdmin(Guid battleId, CancellationToken cancellationToken = default);
     Task<List<CaseBattleInvitableUserObj>> GetInvitableUsers(Guid userId, CancellationToken cancellationToken = default);
-    Task<CaseBattleInvitationObj?> GetPendingInvitation(Guid userId, CancellationToken cancellationToken = default);
+    Task<List<string>> GetInvitableUserUnlockedCases(Guid userId, Guid invitedUserId, CancellationToken cancellationToken = default);
+    Task<List<CaseBattleInvitationObj>> GetPendingInvitations(Guid userId, CancellationToken cancellationToken = default);
+    Task<List<CaseBattlePendingCreatedObj>> GetPendingCreated(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseBattleSummaryObj> AcceptInvite(Guid userId, Guid battleId, CancellationToken cancellationToken = default);
+    Task<CaseBattleSummaryObj> BuyMissingCasesAndAcceptInvite(Guid userId, Guid battleId, CancellationToken cancellationToken = default);
     Task DeclineInvite(Guid userId, Guid battleId, CancellationToken cancellationToken = default);
     Task<CaseBattleBotStatusObj> GetBotStatus(CancellationToken cancellationToken = default);
+    Task<CaseBattleTimingSettingsObj> GetTimingSettings(CancellationToken cancellationToken = default);
+    Task SetTimingSettings(CaseBattleTimingSettingsObj settings, CancellationToken cancellationToken = default);
     Task SetFeatureEnabled(bool enabled, CancellationToken cancellationToken = default);
     Task SetBotEnabled(bool enabled, CancellationToken cancellationToken = default);
 }
@@ -47,19 +53,40 @@ public sealed class CaseBattleFuncs(
         if (!request.UseBot && (!request.InvitedUserId.HasValue || request.InvitedUserId.Value == Guid.Empty || request.InvitedUserId.Value == userId)) throw new InvalidOperationException("Choose another active user to invite.");
         if (request.UseBot && !(await data.GetBotStatus(cancellationToken)).Enabled) throw new InvalidOperationException("Battle Bot is not currently available.");
         List<string> cases = NormaliseCases(request.CaseKeys);
-        ValidateMode(request.Mode, cases.Count);
+        await ValidateMode(request.Mode, cases.Count, cancellationToken);
+        if (!request.UseBot)
+        {
+            HashSet<string> opponentUnlockedCases = (await GetInvitableUserUnlockedCases(userId, request.InvitedUserId!.Value, cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            string? unavailableCase = cases.FirstOrDefault(caseKey => !opponentUnlockedCases.Contains(caseKey));
+            if (unavailableCase is not null) throw new InvalidOperationException($"The invited player has not unlocked {unavailableCase}.");
+        }
         await RequireOwnership(userId, cases, cancellationToken);
         Guid battleId = Guid.NewGuid();
         await data.Create(battleId, userId, request.Mode, cases, cancellationToken);
         if (request.UseBot)
         {
-            await data.JoinBot(battleId, cancellationToken);
+            try { await data.JoinBot(battleId, cancellationToken); }
+            catch
+            {
+                await data.Cancel(battleId, userId, CancellationToken.None);
+                throw;
+            }
             await SetReady(userId, battleId, true, cancellationToken);
             await Start(userId, battleId, cancellationToken);
         }
         else
         {
-            await data.SetInvite(battleId, userId, request.InvitedUserId!.Value, cancellationToken);
+            try
+            {
+                await data.SetInvite(battleId, userId, request.InvitedUserId!.Value, cancellationToken);
+            }
+            catch
+            {
+                // Creation escrows cases in its own transaction. Unwind it if invitation
+                // validation loses a race so a failed request cannot strand the escrow.
+                await data.Cancel(battleId, userId, CancellationToken.None);
+                throw;
+            }
             await PublishInvitation(request.InvitedUserId.Value, battleId, cancellationToken);
         }
         logger.LogInformation("Case battle {BattleId} was created by {UserId}.", battleId, userId);
@@ -133,10 +160,34 @@ public sealed class CaseBattleFuncs(
 
     public Task<List<CaseBattleHistoryObj>> GetHistory(Guid userId, CancellationToken cancellationToken = default) => data.GetHistory(userId, cancellationToken);
     public Task<List<CaseBattleInvitableUserObj>> GetInvitableUsers(Guid userId, CancellationToken cancellationToken = default) => data.GetInvitableUsers(userId, cancellationToken);
+    public async Task<List<string>> GetInvitableUserUnlockedCases(Guid userId, Guid invitedUserId, CancellationToken cancellationToken = default)
+    {
+        if (!(await data.GetInvitableUsers(userId, cancellationToken)).Any(item => item.UserId == invitedUserId))
+            throw new InvalidOperationException("That user is no longer available to invite.");
+        return await caseOpeningData.GetCaseOpeningUnlockedCases(invitedUserId, cancellationToken);
+    }
     public Task<CaseBattleBotStatusObj> GetBotStatus(CancellationToken cancellationToken = default) => data.GetBotStatus(cancellationToken);
+    public Task<CaseBattleTimingSettingsObj> GetTimingSettings(CancellationToken cancellationToken = default) => data.GetTimingSettings(cancellationToken);
+    public Task SetTimingSettings(CaseBattleTimingSettingsObj settings, CancellationToken cancellationToken = default)
+    {
+        settings.MaxCasesPerBattle = ClampTiming(settings.MaxCasesPerBattle, 1, 50);
+        settings.ReadyPauseMs = ClampTiming(settings.ReadyPauseMs, 0, 10000);
+        settings.ReadyCountdownMs = ClampTiming(settings.ReadyCountdownMs, 0, 15000);
+        settings.PreSpinPauseMs = ClampTiming(settings.PreSpinPauseMs, 0, 10000);
+        settings.SpinDurationMs = ClampTiming(settings.SpinDurationMs, 3000, 5000);
+        settings.LandedResultPauseMs = ClampTiming(settings.LandedResultPauseMs, 0, 5000);
+        settings.RoundRevealPauseMs = ClampTiming(settings.RoundRevealPauseMs, 0, 10000);
+        settings.ResultsPauseMs = ClampTiming(settings.ResultsPauseMs, 0, 10000);
+        settings.WinnerIntroPauseMs = ClampTiming(settings.WinnerIntroPauseMs, 0, 10000);
+        settings.WinnerTallyDurationMs = ClampTiming(settings.WinnerTallyDurationMs, 250, 20000);
+        settings.WinnerVerdictPauseMs = ClampTiming(settings.WinnerVerdictPauseMs, 0, 10000);
+        settings.WinnerTransferDurationMs = ClampTiming(settings.WinnerTransferDurationMs, 250, 20000);
+        return data.SetTimingSettings(settings, cancellationToken);
+    }
     public Task SetFeatureEnabled(bool enabled, CancellationToken cancellationToken = default) => data.SetFeatureEnabled(enabled, cancellationToken);
     public Task SetBotEnabled(bool enabled, CancellationToken cancellationToken = default) => data.SetBotEnabled(enabled, cancellationToken);
-    public Task<CaseBattleInvitationObj?> GetPendingInvitation(Guid userId, CancellationToken cancellationToken = default) => data.GetPendingInvitation(userId, cancellationToken);
+    public Task<List<CaseBattleInvitationObj>> GetPendingInvitations(Guid userId, CancellationToken cancellationToken = default) => data.GetPendingInvitations(userId, cancellationToken);
+    public Task<List<CaseBattlePendingCreatedObj>> GetPendingCreated(Guid userId, CancellationToken cancellationToken = default) => data.GetPendingCreated(userId, cancellationToken);
     public async Task<CaseBattleSummaryObj> AcceptInvite(Guid userId, Guid battleId, CancellationToken cancellationToken = default)
     {
         await data.AcceptInvite(battleId, userId, cancellationToken);
@@ -144,6 +195,24 @@ public sealed class CaseBattleFuncs(
         await PublishChanged(battleId, "invite-accepted", cancellationToken);
         await PublishInvitation(result.CreatorUserId, battleId, cancellationToken);
         return result;
+    }
+    public async Task<CaseBattleSummaryObj> BuyMissingCasesAndAcceptInvite(Guid userId, Guid battleId, CancellationToken cancellationToken = default)
+    {
+        await EnsureFeatureEnabled(cancellationToken);
+        if (!(await data.GetPendingInvitations(userId, cancellationToken)).Any(item => item.BattleId == battleId))
+            throw new InvalidOperationException("This invitation has expired or is unavailable.");
+        CaseBattleSummaryObj? invitation = await data.Get(battleId, userId, cancellationToken);
+        if (invitation is null || invitation.Status != "waiting") throw new InvalidOperationException("This invitation has expired or is unavailable.");
+
+        Dictionary<string, int> owned = (await caseOpeningData.GetCaseOpeningOwnedCases(userId, cancellationToken))
+            .ToDictionary(item => item.CaseKey, item => item.Quantity, StringComparer.OrdinalIgnoreCase);
+        List<string> missingCases = invitation.CaseKeys.GroupBy(key => key, StringComparer.OrdinalIgnoreCase)
+            .SelectMany(group => Enumerable.Repeat(group.Key, Math.Max(0, group.Count() - (owned.TryGetValue(group.Key, out int quantity) ? quantity : 0))))
+            .ToList();
+        if (missingCases.Count > 0)
+            await BuyAll(userId, new CaseBattleBuyAllRequestObj { CaseKeys = missingCases }, cancellationToken);
+
+        return await AcceptInvite(userId, battleId, cancellationToken);
     }
     public async Task DeclineInvite(Guid userId, Guid battleId, CancellationToken cancellationToken = default)
     {
@@ -156,12 +225,21 @@ public sealed class CaseBattleFuncs(
         await data.Expire(battleId, cancellationToken);
         logger.LogInformation("Expired case battle {BattleId} was reconciled by an administrator.", battleId);
     }
+    public async Task CancelPendingAsAdmin(Guid battleId, CancellationToken cancellationToken = default)
+    {
+        await data.CancelPendingAsAdmin(battleId, cancellationToken);
+        await PublishChanged(battleId, "battle-cancelled", cancellationToken);
+        logger.LogInformation("Pending case battle {BattleId} was cancelled by an administrator.", battleId);
+    }
 
     public async Task<CaseBattleBuyAllResultObj> BuyAll(Guid userId, CaseBattleBuyAllRequestObj request, CancellationToken cancellationToken = default)
     {
         await EnsureFeatureEnabled(cancellationToken);
         List<string> cases = NormaliseCases(request.CaseKeys);
         if (cases.Count is < 1 or > 500) throw new InvalidOperationException("Choose between 1 and 500 cases to buy.");
+        HashSet<string> unlockedCases = (await caseOpeningData.GetCaseOpeningUnlockedCases(userId, cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        string? lockedCase = cases.FirstOrDefault(caseKey => !unlockedCases.Contains(caseKey));
+        if (lockedCase is not null) throw new InvalidOperationException($"Unlock {lockedCase} before buying it for a case battle.");
         Dictionary<string, CaseOpeningCaseSettingsObj> settings = (await caseOpeningData.GetCaseSettings(cancellationToken)).ToDictionary(item => item.CaseKey, StringComparer.OrdinalIgnoreCase);
         List<(string CaseKey, int Quantity, int CostStars, long CostGbpPence)> purchases = cases.GroupBy(item => item, StringComparer.OrdinalIgnoreCase).Select(group =>
         {
@@ -186,11 +264,13 @@ public sealed class CaseBattleFuncs(
             throw new InvalidOperationException("Case battles are temporarily unavailable.");
     }
     private static List<string> NormaliseCases(IEnumerable<string>? raw) => (raw ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim().ToLowerInvariant()).ToList();
-    private static void ValidateMode(string? mode, int caseCount)
+    private static int ClampTiming(int value, int minimum, int maximum) => Math.Clamp(value, minimum, maximum);
+    private async Task ValidateMode(string? mode, int caseCount, CancellationToken cancellationToken)
     {
         if (CaseBattleModes.PlayerCount(mode ?? string.Empty) == 0) throw new InvalidOperationException("Choose a supported battle mode.");
         if (!CaseBattleModes.IsEnabled(mode ?? string.Empty)) throw new InvalidOperationException("Only 1v1 case battles are available during the initial rollout.");
-        if (caseCount is < 1 or > 20) throw new InvalidOperationException("Choose between 1 and 20 cases.");
+        int maximum = (await data.GetTimingSettings(cancellationToken)).MaxCasesPerBattle;
+        if (caseCount < 1 || caseCount > maximum) throw new InvalidOperationException($"Choose between 1 and {maximum} cases.");
     }
 
     private async Task ExecuteStartedDuel(Guid userId, Guid battleId, CancellationToken cancellationToken)

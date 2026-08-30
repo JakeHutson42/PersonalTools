@@ -66,13 +66,15 @@ public interface ICaseOpeningFuncs
     Task<CaseOpeningGameSettingsObj> GetGameSettings(CancellationToken cancellationToken = default);
     Task<CaseOpeningGameSettingsObj> SetGameSettings(CaseOpeningGameSettingsObj settings, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningCaseSettingsObj>> GetCaseSettings(CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningTierEconomySettingsObj>> GetTierEconomySettings(CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningTierEconomySettingsObj>> SetTierEconomySettings(int tier, CaseOpeningTierEconomySettingsObj settings, CancellationToken cancellationToken = default);
     Task SetCaseSettings(string caseKey, int tier, int unlockCostStars, long unlockCostGbpPence, int purchaseCostStars, long purchaseCostGbpPence, int xpRequirement, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningXpByRarityObj>> GetXpByRarity(CancellationToken cancellationToken = default);
     Task SetXpByRarity(string rarityKey, int xpAwarded, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningUpgradeDefinitionObj>> GetInventoryUpgradeSettings(CancellationToken cancellationToken = default);
     Task SetInventoryUpgradeSettings(string upgradeKey, int costStars, long costGbpPence, int requiredLevel, CancellationToken cancellationToken = default);
     Task<CaseOpeningPriceSnapshotSummaryObj> GetPriceSnapshots(CancellationToken cancellationToken = default);
-    Task<CaseOpeningPriceSnapshotSummaryObj> CreatePriceSnapshot(CancellationToken cancellationToken = default);
+    Task<CaseOpeningPriceSnapshotSummaryObj> CreatePriceSnapshot(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningPriceSnapshotSummaryObj> ActivatePriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
     Task<CaseOpeningPriceSnapshotSummaryObj> DeletePriceSnapshot(Guid snapshotId, CancellationToken cancellationToken = default);
     Task<CaseOpeningPriceSnapshotSummaryObj> PublishPriceSnapshotBalance(CancellationToken cancellationToken = default);
@@ -217,7 +219,8 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             caseData.OwnedQuantity = ownedQuantities.GetValueOrDefault(caseData.CaseKey);
         });
         return cases
-            .OrderBy(caseData => caseData.UnlockCostStars)
+            .OrderBy(caseData => caseData.Tier)
+            .ThenBy(caseData => caseData.PurchaseCost)
             .ThenBy(caseData => caseData.Name, StringComparer.OrdinalIgnoreCase)
             .Adapt<List<CaseOpeningCaseSummaryObj>>();
     }
@@ -1924,6 +1927,21 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         await _data.SetInventoryUpgradeSettings(upgradeKey, StarsFromPence(costGbpPence), costGbpPence, requiredLevel, cancellationToken);
     }
 
+    public Task<List<CaseOpeningTierEconomySettingsObj>> GetTierEconomySettings(CancellationToken cancellationToken = default)
+        => _data.GetTierEconomySettings(cancellationToken);
+
+    public async Task<List<CaseOpeningTierEconomySettingsObj>> SetTierEconomySettings(int tier, CaseOpeningTierEconomySettingsObj settings, CancellationToken cancellationToken = default)
+    {
+        if (tier is < 1 or > 10 || settings.Tier != tier)
+            throw new InvalidOperationException("Choose a valid tier from 1 to 10.");
+        if (settings.TargetProfitBasisPoints is < 0 or > 20_000)
+            throw new InvalidOperationException("Tier target profit must be between 0% and 200%.");
+        if (settings.PriceRoundingPence is < 1 or > 10_000)
+            throw new InvalidOperationException("Tier price rounding must be between 1p and £100.");
+        await _data.SetTierEconomySettings(tier, settings.TargetProfitBasisPoints, settings.PriceRoundingPence, cancellationToken);
+        return await _data.GetTierEconomySettings(cancellationToken);
+    }
+
     private Task NotifyLiveWinnersChanged(CancellationToken cancellationToken) =>
         _liveWinners.Clients.All.SendAsync("winnersChanged", cancellationToken);
 
@@ -1944,40 +1962,85 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     {
         List<CaseOpeningPriceSnapshotDbModel> snapshots = await _prices.GetSnapshots(cancellationToken);
         List<CaseOpeningSnapshotPriceDbModel> prices = await _prices.GetActivePrices(cancellationToken);
-        Dictionary<string, decimal> priceByName = prices.ToDictionary(item => item.MarketHashName, item => item.Price, StringComparer.Ordinal);
+        Dictionary<string, CaseOpeningSnapshotPriceDbModel> priceByName = prices.ToDictionary(item => item.MarketHashName, StringComparer.Ordinal);
         List<CaseOpeningCaseObj> catalogue = await _referenceData.GetCuratedCases(cancellationToken);
         Dictionary<string, CaseOpeningCaseSettingsObj> settings = await GetCaseSettingsByKey(cancellationToken);
         CaseOpeningGameSettingsObj gameSettings = await _data.GetGameSettings(cancellationToken);
+        Dictionary<int, CaseOpeningTierEconomySettingsObj> tierSettings = (await _data.GetTierEconomySettings(cancellationToken))
+            .ToDictionary(item => item.Tier);
         List<CaseOpeningCaseMarketValueObj> cases = catalogue.Select(item =>
         {
             CaseOpeningCaseSettingsObj configured = settings.GetValueOrDefault(item.CaseKey) ?? new CaseOpeningCaseSettingsObj { CaseKey = item.CaseKey };
-            item.Tier = configured.Tier;
             CaseOpeningCaseMarketValueObj value = BuildCaseMarketValue(item, priceByName);
-            value.Tier = configured.Tier;
+            value.PublishedTier = configured.Tier;
             value.PublishedPurchaseGbpPence = configured.PurchaseCostGbpPence;
-            value.HasCompletePricing = value.ExpectedValue is not null;
+            value.HasCompletePricing = value.ExpectedValue is not null && value.OpeningCost is not null;
             if (value.ExpectedValue is decimal expectedValue)
             {
-                CaseOpeningBalanceRecommendation recommendation = CaseOpeningBalancePolicy.RecommendCasePrices(expectedValue, configured.Tier, gameSettings.SkinSaleRateBasisPoints);
-                value.ExpectedSaleValuePence = recommendation.ExpectedSaleValuePence;
-                value.TargetReturnPercentage = recommendation.TargetReturnPercentage;
-                value.RecommendedPurchaseGbpPence = recommendation.RecommendedPurchaseGbpPence;
-                value.RecommendedUnlockGbpPence = recommendation.RecommendedUnlockGbpPence;
-                value.RecommendedPurchaseStars = recommendation.RecommendedPurchaseStars;
-                value.RecommendedUnlockStars = recommendation.RecommendedUnlockStars;
+                value.ExpectedSaleValuePence = decimal.Round(expectedValue * 100m * Math.Clamp(gameSettings.SkinSaleRateBasisPoints, 0, 10_000) / 10_000m, 2, MidpointRounding.AwayFromZero);
             }
             return value;
         }).ToList();
-        List<string> tierWarnings = CaseOpeningEconomyPolicy.ValidateTierCoverage(cases.Select(item => item.Tier));
+
+        List<CaseOpeningCaseMarketValueObj> ordered = cases
+            .OrderBy(item => item.ExpectedSaleValuePence > 0 ? item.ExpectedSaleValuePence : decimal.MaxValue)
+            .ThenBy(item => item.CaseKey, StringComparer.Ordinal)
+            .ToList();
+        for (int index = 0; index < ordered.Count; index++)
+            ordered[index].RecommendedTier = Math.Min(10, index * 10 / Math.Max(1, ordered.Count) + 1);
+
+        // The reset and free-case flows are intentionally anchored to Kilowatt. Keep it in the
+        // starter tier while retaining equal-sized EV bands by swapping with Tier 1's top case.
+        CaseOpeningCaseMarketValueObj? starter = ordered.FirstOrDefault(item => item.CaseKey == StarterCaseKey);
+        if (starter is not null && starter.RecommendedTier != 1)
+        {
+            CaseOpeningCaseMarketValueObj? tierOneBoundary = ordered.LastOrDefault(item => item.RecommendedTier == 1);
+            if (tierOneBoundary is not null)
+            {
+                tierOneBoundary.RecommendedTier = starter.RecommendedTier;
+                starter.RecommendedTier = 1;
+            }
+        }
+
+        foreach (CaseOpeningCaseMarketValueObj value in cases)
+        {
+            value.Tier = value.RecommendedTier;
+            value.HasPublishablePricing = value.HasCompletePricing && MeetsPriceQualityGate(value, value.RecommendedTier);
+            if (value.ExpectedValue is not decimal expectedValue) continue;
+            CaseOpeningTierEconomySettingsObj tier = tierSettings.GetValueOrDefault(value.RecommendedTier)
+                ?? DefaultTierEconomySettings(value.RecommendedTier);
+            CaseOpeningBalanceRecommendation recommendation = CaseOpeningBalancePolicy.RecommendCasePrices(
+                expectedValue,
+                value.RecommendedTier,
+                gameSettings.SkinSaleRateBasisPoints,
+                tier.TargetProfitBasisPoints,
+                gameSettings.GlobalReturnMultiplierBasisPoints,
+                tier.PriceRoundingPence,
+                value.CaseKey == StarterCaseKey);
+            value.ExpectedSaleValuePence = recommendation.ExpectedSaleValuePence;
+            value.TargetReturnPercentage = recommendation.TargetReturnPercentage;
+            value.RecommendedPurchaseGbpPence = recommendation.RecommendedPurchaseGbpPence;
+            value.RecommendedUnlockGbpPence = recommendation.RecommendedUnlockGbpPence;
+            value.RecommendedPurchaseStars = recommendation.RecommendedPurchaseStars;
+            value.RecommendedUnlockStars = recommendation.RecommendedUnlockStars;
+        }
+
+        cases = cases.OrderBy(item => item.RecommendedTier).ThenBy(item => item.ExpectedSaleValuePence).ThenBy(item => item.CaseName, StringComparer.OrdinalIgnoreCase).ToList();
+        List<string> tierWarnings = CaseOpeningEconomyPolicy.ValidateTierCoverage(cases.Select(item => item.RecommendedTier));
         return new CaseOpeningPriceSnapshotSummaryObj
         {
             Snapshots = snapshots,
             ActiveSnapshotId = snapshots.FirstOrDefault(item => item.IsActive)?.PriceSnapshotId,
             Currency = snapshots.FirstOrDefault(item => item.IsActive)?.Currency ?? "GBP",
             Cases = cases,
-            CanPublish = snapshots.Any(item => item.IsActive) && cases.All(item => item.HasCompletePricing) && tierWarnings.Count == 0,
+            CanPublish = snapshots.Any(item => item.IsActive) && cases.All(item => item.HasPublishablePricing) && tierWarnings.Count == 0,
             FallbackPriceCount = prices.Count(item => item.IsFallback),
             MissingPriceCount = cases.Sum(item => Math.Max(0, item.TotalVariants - item.PricedVariants)),
+            MissingContainerPriceCount = cases.Count(item => item.OpeningCost is null),
+            PriceQualityWarningCount = cases.Count(item => item.HasCompletePricing && !item.HasPublishablePricing),
+            SkinportPriceCount = prices.Count(item => item.PriceSource.StartsWith("Skinport", StringComparison.OrdinalIgnoreCase)),
+            CsFloatPriceCount = prices.Count(item => item.PriceSource.Equals("CSFloat", StringComparison.OrdinalIgnoreCase)),
+            InferredPriceCount = prices.Count(IsInferredPrice),
             TierWarnings = tierWarnings
         };
     }
@@ -2043,14 +2106,17 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         return result ?? throw new InvalidOperationException("Those cases could not be discarded. Please try again.");
     }
 
-    public async Task<CaseOpeningPriceSnapshotSummaryObj> CreatePriceSnapshot(CancellationToken cancellationToken = default)
+    public async Task<CaseOpeningPriceSnapshotSummaryObj> CreatePriceSnapshot(Guid userId, CancellationToken cancellationToken = default)
     {
         List<CaseOpeningCaseObj> catalogue = await _referenceData.GetCuratedCases(cancellationToken);
         List<CaseOpeningMarketPriceTarget> targets = catalogue
             .SelectMany(caseData => caseData.Items.SelectMany(item => MarketVariants(item, caseData.Type)
                 .Select(variant => new CaseOpeningMarketPriceTarget(variant.Name, caseData.CaseKey, item.RarityKey, item.IsRareSpecial))))
+            .Concat(catalogue.Select(caseData => new CaseOpeningMarketPriceTarget(caseData.Name, caseData.CaseKey, "container", false, true)))
             .ToList();
-        await _prices.CreateSkinportSnapshot(targets, cancellationToken);
+        string? csFloatApiKey = await _settings.GetSecret(userId, AppSettingKey.CSFloatApiKey, cancellationToken);
+        CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
+        await _prices.CreateSkinportSnapshot(targets, csFloatApiKey, settings.CsFloatUsdToGbpBasisPoints, cancellationToken);
         return await GetPriceSnapshots(cancellationToken);
     }
 
@@ -2072,12 +2138,14 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         if (draft.ActiveSnapshotId is null) throw new InvalidOperationException("Create or activate a price snapshot before publishing a balance.");
         List<CaseOpeningCaseMarketValueObj> incomplete = draft.Cases.Where(item => !item.HasCompletePricing).ToList();
         if (incomplete.Count > 0) throw new InvalidOperationException($"Pricing is incomplete for {incomplete.Count} case{(incomplete.Count == 1 ? string.Empty : "s")}. Missing prices must be resolved before publishing.");
+        List<CaseOpeningCaseMarketValueObj> lowQuality = draft.Cases.Where(item => !item.HasPublishablePricing).ToList();
+        if (lowQuality.Count > 0) throw new InvalidOperationException($"{lowQuality.Count} case{(lowQuality.Count == 1 ? string.Empty : "s")} exceed the inferred-price quality limit. Resolve their marketplace prices before publishing.");
         if (draft.TierWarnings.Count > 0) throw new InvalidOperationException(string.Join(" ", draft.TierWarnings));
         Dictionary<string, CaseOpeningCaseSettingsObj> settings = await GetCaseSettingsByKey(cancellationToken);
         foreach (CaseOpeningCaseMarketValueObj item in draft.Cases)
         {
             CaseOpeningCaseSettingsObj current = settings[item.CaseKey];
-            await _data.SetCaseSettings(item.CaseKey, current.Tier, item.RecommendedUnlockStars, item.RecommendedUnlockGbpPence, item.RecommendedPurchaseStars, item.RecommendedPurchaseGbpPence, current.XpRequirement, cancellationToken);
+            await _data.SetCaseSettings(item.CaseKey, item.RecommendedTier, item.RecommendedUnlockStars, item.RecommendedUnlockGbpPence, item.RecommendedPurchaseStars, item.RecommendedPurchaseGbpPence, current.XpRequirement, cancellationToken);
         }
         return await GetPriceSnapshots(cancellationToken);
     }
@@ -2685,9 +2753,10 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         return variants;
     }
 
-    private static CaseOpeningCaseMarketValueObj BuildCaseMarketValue(CaseOpeningCaseObj caseData, IReadOnlyDictionary<string, decimal> prices)
+    private static CaseOpeningCaseMarketValueObj BuildCaseMarketValue(CaseOpeningCaseObj caseData, IReadOnlyDictionary<string, CaseOpeningSnapshotPriceDbModel> prices)
     {
         decimal expectedValue = 0m;
+        decimal inferredExpectedValue = 0m;
         int totalVariants = 0;
         int pricedVariants = 0;
         bool complete = true;
@@ -2703,20 +2772,21 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
                 decimal itemValue = 0m;
                 foreach (MarketVariant variant in variants)
                 {
-                    if (!prices.TryGetValue(variant.Name, out decimal price))
+                    if (!prices.TryGetValue(variant.Name, out CaseOpeningSnapshotPriceDbModel? snapshotPrice))
                     {
                         complete = false;
                         continue;
                     }
                     pricedVariants++;
-                    itemValue += price * variant.Weight;
+                    itemValue += snapshotPrice.Price * variant.Weight;
+                    if (IsInferredPrice(snapshotPrice)) inferredExpectedValue += snapshotPrice.Price * variant.Weight / rarityItems.Count * (odds.Percentage / 100m);
                 }
                 rarityValue += itemValue / rarityItems.Count;
             }
             expectedValue += rarityValue * (odds.Percentage / 100m);
         }
 
-        decimal? openingCost = prices.TryGetValue(caseData.Name, out decimal cost) ? cost : null;
+        decimal? openingCost = prices.TryGetValue(caseData.Name, out CaseOpeningSnapshotPriceDbModel? containerPrice) ? containerPrice.Price : null;
         decimal? resolvedExpectedValue = complete && totalVariants > 0 ? decimal.Round(expectedValue, 2) : null;
         decimal? profit = openingCost is not null && resolvedExpectedValue is not null
             ? decimal.Round(resolvedExpectedValue.Value - openingCost.Value, 2)
@@ -2727,12 +2797,53 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             CaseName = caseData.Name,
             OpeningCost = openingCost,
             ExpectedValue = resolvedExpectedValue,
+            InferredExpectedValue = decimal.Round(inferredExpectedValue, 2),
+            InferredValuePercentage = resolvedExpectedValue is > 0 ? decimal.Round(inferredExpectedValue / resolvedExpectedValue.Value * 100m, 2) : 0m,
+            ContainerPriceMethod = containerPrice?.PriceMethod ?? string.Empty,
             ExpectedProfit = profit,
             ReturnPercentage = openingCost is > 0 && resolvedExpectedValue is not null
                 ? decimal.Round((resolvedExpectedValue.Value / openingCost.Value) * 100m, 1)
                 : null,
             PricedVariants = pricedVariants,
             TotalVariants = totalVariants
+        };
+    }
+
+    private static bool IsInferredPrice(CaseOpeningSnapshotPriceDbModel price)
+    {
+        // Same-item wear substitutions, same-case rarity medians and representative knife/glove
+        // market medians are deliberate blanket valuations. Keep their provenance, but reserve
+        // the blocking inferred-EV gate for broad catalogue estimates and safety floors.
+        return CaseOpeningEconomyPolicy.IsBlockingInferredPriceMethod(price.PriceMethod);
+    }
+
+    private static bool MeetsPriceQualityGate(CaseOpeningCaseMarketValueObj value, int tier)
+    {
+        if (!value.ContainerPriceMethod.Contains("exact-", StringComparison.OrdinalIgnoreCase))
+        {
+            value.PriceQualityWarning = "Container price is not an exact marketplace match.";
+            return false;
+        }
+
+        decimal allowedInferredPercentage = tier switch { <= 2 => 10m, <= 5 => 5m, <= 8 => 2m, _ => 1m };
+        if (value.InferredValuePercentage > allowedInferredPercentage)
+        {
+            value.PriceQualityWarning = $"{value.InferredValuePercentage:0.##}% of expected value is inferred; Tier {tier} allows {allowedInferredPercentage:0.##}%.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static CaseOpeningTierEconomySettingsObj DefaultTierEconomySettings(int tier)
+    {
+        int resolved = Math.Clamp(tier, 1, 10);
+        int rounding = resolved switch { <= 1 => 1, <= 4 => 5, <= 6 => 10, <= 8 => 25, 9 => 50, _ => 100 };
+        return new CaseOpeningTierEconomySettingsObj
+        {
+            Tier = resolved,
+            TargetProfitBasisPoints = resolved * 200,
+            PriceRoundingPence = rounding
         };
     }
 
@@ -2743,6 +2854,16 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 
     private static void ValidateGameSettings(CaseOpeningGameSettingsObj settings)
     {
+        if (settings.GlobalReturnMultiplierBasisPoints is < 5000 or > 20000)
+        {
+            throw new InvalidOperationException("The global return multiplier must be between 50% and 200%.");
+        }
+
+        if (settings.CsFloatUsdToGbpBasisPoints is < 1000 or > 20000)
+        {
+            throw new InvalidOperationException("The CSFloat USD to GBP conversion must be between 10% and 200%.");
+        }
+
         if (settings.XpPerCaseOpen < 0 || settings.SkipAnimationCostStars < 0 || settings.MultiOpenCostStars < 0
             || settings.SkipAnimationXpRequirement < 0 || settings.MultiOpenXpRequirement < 0
             || settings.OpenSpeedUpgradeBaseCostStars < 0 || settings.OpenSpeedUpgradeCostIncrementStars < 0

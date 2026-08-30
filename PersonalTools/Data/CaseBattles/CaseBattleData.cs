@@ -23,12 +23,16 @@ public interface ICaseBattleData
     Task<List<CaseBattleHistoryObj>> GetHistory(Guid userId, CancellationToken cancellationToken = default);
     Task<List<CaseBattleAdminReconciliationObj>> GetAdminReconciliation(CancellationToken cancellationToken = default);
     Task Expire(Guid battleId, CancellationToken cancellationToken = default);
+    Task CancelPendingAsAdmin(Guid battleId, CancellationToken cancellationToken = default);
     Task<List<CaseBattleInvitableUserObj>> GetInvitableUsers(Guid userId, CancellationToken cancellationToken = default);
     Task SetInvite(Guid battleId, Guid creatorUserId, Guid invitedUserId, CancellationToken cancellationToken = default);
-    Task<CaseBattleInvitationObj?> GetPendingInvitation(Guid userId, CancellationToken cancellationToken = default);
+    Task<List<CaseBattleInvitationObj>> GetPendingInvitations(Guid userId, CancellationToken cancellationToken = default);
+    Task<List<CaseBattlePendingCreatedObj>> GetPendingCreated(Guid userId, CancellationToken cancellationToken = default);
     Task AcceptInvite(Guid battleId, Guid userId, CancellationToken cancellationToken = default);
     Task DeclineInvite(Guid battleId, Guid userId, CancellationToken cancellationToken = default);
     Task<CaseBattleBotStatusObj> GetBotStatus(CancellationToken cancellationToken = default);
+    Task<CaseBattleTimingSettingsObj> GetTimingSettings(CancellationToken cancellationToken = default);
+    Task SetTimingSettings(CaseBattleTimingSettingsObj settings, CancellationToken cancellationToken = default);
     Task SetFeatureEnabled(bool enabled, CancellationToken cancellationToken = default);
     Task SetBotEnabled(bool enabled, CancellationToken cancellationToken = default);
     Task JoinBot(Guid battleId, CancellationToken cancellationToken = default);
@@ -62,7 +66,7 @@ public sealed class CaseBattleData(IMariaDbDataAccess database) : ICaseBattleDat
         {
             BattleRollId = reader.GetGuid("BattleRollId"), OriginalOwnerUserId = reader.GetGuid("OriginalOwnerUserId"),
             OriginalOwnerDisplayName = reader.GetString("OriginalOwnerDisplayName"), RoundNumber = reader.GetInt32("RoundNumber"),
-            ItemName = reader.GetString("ItemName"), ImageUrl = reader.GetString("ImageUrl"), RarityColor = reader.GetString("RarityColor"),
+            ItemName = reader.GetString("ItemName"), Wear = reader.GetString("Wear"), ImageUrl = reader.GetString("ImageUrl"), RarityColor = reader.GetString("RarityColor"),
             LockedValue = reader.GetDecimal("LockedValue"), Delivery = reader.IsDBNull(reader.GetOrdinal("Delivery")) ? null : reader.GetString("Delivery")
         }, Parameters(("p_battle_id", battleId), ("p_user_id", userId)), cancellationToken);
         detail.LockedPotValue = detail.Pulls.Sum(item => item.LockedValue);
@@ -105,12 +109,17 @@ public sealed class CaseBattleData(IMariaDbDataAccess database) : ICaseBattleDat
         }, [], cancellationToken);
     public Task Expire(Guid battleId, CancellationToken cancellationToken = default) =>
         database.ExecuteSP("sp_case_battles_expire", Parameters(("p_battle_id", battleId)), cancellationToken);
+    public Task CancelPendingAsAdmin(Guid battleId, CancellationToken cancellationToken = default) =>
+        database.ExecuteSP("sp_case_battles_admin_cancel_pending", Parameters(("p_battle_id", battleId)), cancellationToken);
     public Task<List<CaseBattleInvitableUserObj>> GetInvitableUsers(Guid userId, CancellationToken cancellationToken = default) => database.GetBulkDataSP("sp_case_battles_invitable_users_get", reader => new CaseBattleInvitableUserObj { UserId=reader.GetGuid("UserId"), DisplayName=reader.GetString("DisplayName") }, Parameters(("p_user_id", userId)), cancellationToken);
     public Task SetInvite(Guid battleId, Guid creatorUserId, Guid invitedUserId, CancellationToken cancellationToken = default) => database.ExecuteSP("sp_case_battles_invite_set", Parameters(("p_battle_id", battleId), ("p_creator_user_id", creatorUserId), ("p_invited_user_id", invitedUserId)), cancellationToken);
-    public Task<CaseBattleInvitationObj?> GetPendingInvitation(Guid userId, CancellationToken cancellationToken = default) => database.GetDataSP("sp_case_battles_invitation_get", reader => new CaseBattleInvitationObj { BattleId=reader.GetGuid("BattleId"), CreatorDisplayName=reader.GetString("CreatorDisplayName"), CaseKeys=JsonSerializer.Deserialize<List<string>>(reader.GetString("CaseKeys")) ?? [], ExpiresUtc=DateTime.SpecifyKind(reader.GetDateTime("ExpiresUtc"), DateTimeKind.Utc) }, Parameters(("p_user_id", userId)), cancellationToken);
+    public Task<List<CaseBattleInvitationObj>> GetPendingInvitations(Guid userId, CancellationToken cancellationToken = default) => database.GetBulkDataSP("sp_case_battles_invitations_get", reader => new CaseBattleInvitationObj { BattleId=reader.GetGuid("BattleId"), CreatorDisplayName=reader.GetString("CreatorDisplayName"), CaseKeys=JsonSerializer.Deserialize<List<string>>(reader.GetString("CaseKeys")) ?? [], ExpiresUtc=DateTime.SpecifyKind(reader.GetDateTime("ExpiresUtc"), DateTimeKind.Utc) }, Parameters(("p_user_id", userId)), cancellationToken);
+    public Task<List<CaseBattlePendingCreatedObj>> GetPendingCreated(Guid userId, CancellationToken cancellationToken = default) => database.GetBulkDataSP("sp_case_battles_pending_created_get", reader => new CaseBattlePendingCreatedObj { BattleId=reader.GetGuid("BattleId"), OpponentDisplayName=reader.GetString("OpponentDisplayName"), CaseCount=reader.GetInt32("CaseCount"), ExpiresUtc=DateTime.SpecifyKind(reader.GetDateTime("ExpiresUtc"), DateTimeKind.Utc) }, Parameters(("p_user_id", userId)), cancellationToken);
     public Task AcceptInvite(Guid battleId, Guid userId, CancellationToken cancellationToken = default) => database.ExecuteSP("sp_case_battles_invitation_accept", Parameters(("p_battle_id", battleId), ("p_user_id", userId)), cancellationToken);
     public Task DeclineInvite(Guid battleId, Guid userId, CancellationToken cancellationToken = default) => database.ExecuteSP("sp_case_battles_invitation_decline", Parameters(("p_battle_id", battleId), ("p_user_id", userId)), cancellationToken);
     public async Task<CaseBattleBotStatusObj> GetBotStatus(CancellationToken cancellationToken = default) => await database.GetDataSP("sp_case_battles_bot_status_get", reader => new CaseBattleBotStatusObj { CaseBattlesEnabled=reader.GetBoolean("CaseBattlesEnabled"), Enabled=reader.GetBoolean("Enabled"), BattlesAttempted=reader.GetInt32("BattlesAttempted"), BattlesWon=reader.GetInt32("BattlesWon"), SkinsDiscarded=reader.GetInt32("SkinsDiscarded"), ValueDiscarded=reader.GetDecimal("ValueDiscarded") }, [], cancellationToken) ?? new CaseBattleBotStatusObj();
+    public async Task<CaseBattleTimingSettingsObj> GetTimingSettings(CancellationToken cancellationToken = default) => await database.GetDataSP("sp_case_battles_timing_settings_get", ReadTimingSettings, [], cancellationToken) ?? new CaseBattleTimingSettingsObj();
+    public Task SetTimingSettings(CaseBattleTimingSettingsObj settings, CancellationToken cancellationToken = default) => database.ExecuteSP("sp_case_battles_timing_settings_set", Parameters(("p_max_cases_per_battle", settings.MaxCasesPerBattle), ("p_ready_pause_ms", settings.ReadyPauseMs), ("p_ready_countdown_ms", settings.ReadyCountdownMs), ("p_pre_spin_pause_ms", settings.PreSpinPauseMs), ("p_spin_duration_ms", settings.SpinDurationMs), ("p_landed_result_pause_ms", settings.LandedResultPauseMs), ("p_round_reveal_pause_ms", settings.RoundRevealPauseMs), ("p_results_pause_ms", settings.ResultsPauseMs), ("p_winner_intro_pause_ms", settings.WinnerIntroPauseMs), ("p_winner_tally_duration_ms", settings.WinnerTallyDurationMs), ("p_winner_verdict_pause_ms", settings.WinnerVerdictPauseMs), ("p_winner_transfer_duration_ms", settings.WinnerTransferDurationMs)), cancellationToken);
     public Task SetFeatureEnabled(bool enabled, CancellationToken cancellationToken = default) => database.ExecuteSP("sp_case_battles_feature_enabled_set", Parameters(("p_enabled", enabled)), cancellationToken);
     public Task SetBotEnabled(bool enabled, CancellationToken cancellationToken = default) => database.ExecuteSP("sp_case_battles_bot_enabled_set", Parameters(("p_enabled", enabled)), cancellationToken);
     public Task JoinBot(Guid battleId, CancellationToken cancellationToken = default) => database.ExecuteSP("sp_case_battles_bot_join", Parameters(("p_battle_id", battleId)), cancellationToken);
@@ -124,6 +133,10 @@ public sealed class CaseBattleData(IMariaDbDataAccess database) : ICaseBattleDat
         WinningUserId = !reader.HasColumn("WinningUserId") || reader.IsDBNull(reader.GetOrdinal("WinningUserId")) ? null : reader.GetGuid("WinningUserId"),
         WinningTeam = !reader.HasColumn("WinningTeam") || reader.IsDBNull(reader.GetOrdinal("WinningTeam")) ? null : reader.GetInt32("WinningTeam"),
         CaseKeys = reader.IsDBNull(reader.GetOrdinal("CaseKeys")) ? [] : JsonSerializer.Deserialize<List<string>>(reader.GetString("CaseKeys")) ?? []
+    };
+    private static CaseBattleTimingSettingsObj ReadTimingSettings(MySqlDataReader reader) => new()
+    {
+        MaxCasesPerBattle = reader.GetInt32("MaxCasesPerBattle"), ReadyPauseMs = reader.GetInt32("ReadyPauseMs"), ReadyCountdownMs = reader.GetInt32("ReadyCountdownMs"), PreSpinPauseMs = reader.HasColumn("PreSpinPauseMs") ? reader.GetInt32("PreSpinPauseMs") : 2500, SpinDurationMs = reader.GetInt32("SpinDurationMs"), LandedResultPauseMs = reader.HasColumn("LandedResultPauseMs") ? reader.GetInt32("LandedResultPauseMs") : 750, RoundRevealPauseMs = reader.GetInt32("RoundRevealPauseMs"), ResultsPauseMs = reader.GetInt32("ResultsPauseMs"), WinnerIntroPauseMs = reader.GetInt32("WinnerIntroPauseMs"), WinnerTallyDurationMs = reader.GetInt32("WinnerTallyDurationMs"), WinnerVerdictPauseMs = reader.GetInt32("WinnerVerdictPauseMs"), WinnerTransferDurationMs = reader.GetInt32("WinnerTransferDurationMs")
     };
     private static IEnumerable<MySqlParameter> Parameters(params (string Name, object? Value)[] items) => items.Select(item => new MySqlParameter(item.Name, item.Value ?? DBNull.Value));
 }

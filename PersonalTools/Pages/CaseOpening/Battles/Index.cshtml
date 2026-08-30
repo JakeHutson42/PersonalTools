@@ -1,29 +1,39 @@
 @page "{battleId:guid?}"
 @model PersonalTools.Pages.CaseOpening.Battles.IndexModel
+@using PersonalTools.Security
 @{
     ViewData["Title"] = "Case battle";
 }
-@section Head { <link rel="stylesheet" href="~/css/pages/page-case-battles.css" asp-append-version="true" /> }
-<main class="case-battles-page" data-case-battles-page data-case-battle-id="@Model.BattleId">
+@section Head { <link rel="stylesheet" href="~/css/pages/page-case-opening.css" asp-append-version="true" /><link rel="stylesheet" href="~/css/pages/page-case-battles.css" asp-append-version="true" /> }
+<main class="container px-3 px-lg-4 case-opening-page case-battle-game-page case-battles-page" data-case-battles-page data-case-battle-id="@Model.BattleId">
     @Html.AntiForgeryToken()
-    <header class="case-battle-room-header">
-        <div><p class="eyebrow mb-1">CS2 Case Simulator</p><h1 class="h3 mb-1">Case battle</h1><p class="small-muted mb-0" id="caseBattleStatus">Restoring your battle…</p></div>
-        <a class="btn btn-outline-secondary" asp-page="/CaseOpening/Index"><i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i>Simulator</a>
+    <header class="case-battle-compact-bar">
+        <a class="btn btn-outline-secondary case-stage-tool case-battle-back-button" asp-page="/CaseOpening/Index" data-case-battle-transition-link aria-label="Back to Case Tycoon"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i><span>Case Tycoon</span></a>
+        <div class="case-battle-scoreboard" id="caseBattleScoreboard" aria-live="polite"></div>
+        @if (User.IsUserAllowedHere(AppRole.Admin))
+        {
+            <button class="btn btn-outline-warning case-stage-tool case-battle-admin-replay" id="caseBattleAdminReplay" type="button" title="Replay the stored battle presentation without changing its result"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i><span>Redo animation</span></button>
+        }
+        <div class="dropdown"><button class="btn btn-outline-secondary case-stage-tool case-battle-back-button" id="caseBattleSoundMenuButton" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"><i class="fa-solid fa-volume-high" id="caseBattleSoundButtonIcon" aria-hidden="true"></i><span id="caseBattleSoundButtonText">Sound</span></button><div class="dropdown-menu dropdown-menu-end case-sound-menu p-0" aria-labelledby="caseBattleSoundMenuButton"><div class="case-sound-deck"><div class="case-sound-deck-head"><div><p class="eyebrow mb-1">Battle audio</p><p class="fw-semibold mb-0">Where Are You · liquid D&amp;B</p><small id="caseBattleSoundStatus">Loading arena track</small></div><button class="case-sound-power" id="caseBattleSoundEnabled" type="button" aria-pressed="true"><i class="fa-solid fa-volume-high" aria-hidden="true"></i><span>On</span></button></div><div class="case-sound-volume-block"><div class="case-sound-volume-head"><label for="caseBattleSoundVolumeMeter">Music volume</label><output id="caseBattleSoundVolumeValue">35%</output></div><div class="case-sound-meter" id="caseBattleSoundVolumeMeter" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="35"><span></span></div></div><p class="case-battle-audio-note mb-0"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> Starts automatically and fades after the battle. If autoplay is blocked, your first interaction starts it.</p></div></div></div>
+        <span class="visually-hidden" id="caseBattleStatus">Restoring your battle…</span>
     </header>
     <section class="case-battle-room card" aria-labelledby="caseBattleTitle"><div class="card-body">
-        <div class="case-battle-scoreboard" id="caseBattleScoreboard" aria-live="polite"></div>
-        <div class="case-battle-case-track" id="caseBattleCaseTrack"></div>
+        <div class="case-battle-track-reel" aria-label="Current case track"><div class="case-battle-track-viewport"><i class="case-battle-track-marker" aria-hidden="true"></i><div class="case-battle-case-track" id="caseBattleCaseTrack"></div></div></div>
         <section class="case-battle-arena" id="caseBattleArena" aria-live="polite" aria-label="Case battle opening animation"></section>
         <div class="case-battle-actions" id="caseBattleActions" aria-live="polite"></div>
-        <div class="case-battle-notice"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>Results, prices and ownership are locked server-side when the battle starts.</span></div>
     </div></section>
-    <section class="case-battle-room card mt-3" aria-labelledby="caseBattleResultsTitle">
-        <div class="card-body"><div class="case-battle-section-heading"><div><p class="eyebrow mb-1">Persisted result feed</p><h2 class="h5 mb-0" id="caseBattleResultsTitle">Results so far</h2></div><span id="caseBattlePot" class="case-battle-pot">Locked value pending</span></div>
+    <section class="case-battle-room card mt-3" id="caseBattleResultsSection" aria-labelledby="caseBattleResultsTitle">
+        <div class="card-body"><div class="case-battle-section-heading"><div><p class="eyebrow mb-1">Pulls</p><h2 class="h5 mb-0" id="caseBattleResultsTitle">Battle results</h2></div><span id="caseBattlePot" class="case-battle-pot">Pot pending</span></div>
         <div class="case-battle-results" id="caseBattleResults" aria-live="polite"></div></div>
     </section>
-    <section class="case-battle-showcase d-none" id="caseBattleShowcase" aria-live="polite" aria-label="Battle winner reveal"></section>
 </main>
+<div class="dropdown case-battle-reaction-fab"><button class="btn case-battle-reaction-button" id="caseBattleReactionButton" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Send battle reaction"><i class="fa-regular fa-face-smile" aria-hidden="true"></i></button><div class="dropdown-menu case-battle-reaction-menu p-2" aria-labelledby="caseBattleReactionButton"><div role="group" aria-label="Battle reactions"><button type="button" data-battle-reaction="🔥" aria-label="Fire">🔥</button><button type="button" data-battle-reaction="😮" aria-label="Surprised">😮</button><button type="button" data-battle-reaction="😂" aria-label="Laugh">😂</button><button type="button" data-battle-reaction="💀" aria-label="Skull">💀</button><button type="button" data-battle-reaction="🍀" aria-label="Good luck">🍀</button><button type="button" data-battle-reaction="👏" aria-label="Clap">👏</button></div></div></div>
+<div class="case-battle-reaction-stage" id="caseBattleReactionStage" aria-live="polite" aria-label="Battle reactions"></div>
+<div class="case-battle-winner-backdrop d-none" id="caseBattleWinnerBackdrop" aria-hidden="true"></div>
+<section class="case-battle-showcase case-battle-winner-overlay d-none" id="caseBattleShowcase" role="dialog" aria-modal="true" aria-live="polite" aria-label="Battle winner reveal" tabindex="-1"></section>
+<partial name="_CaseBattleTransition" />
 @section Scripts {
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="~/js/pages/page-case-battle-transition.js" asp-append-version="true"></script>
+    <script src="~/js/pages/page-case-battle-audio.js" asp-append-version="true"></script>
     <script src="~/js/pages/page-case-battles.js" asp-append-version="true"></script>
 }

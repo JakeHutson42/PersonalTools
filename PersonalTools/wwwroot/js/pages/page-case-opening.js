@@ -5467,6 +5467,8 @@
         gameSettingsCache = settings || {};
         $('#caseTweakEconomyMode').val(String(settings.economyMode || 'stars'));
         $('#caseTweakSaleRate').val((Number(settings.skinSaleRateBasisPoints || 9250) / 100).toFixed(2));
+        $('#caseTweakReturnMultiplier').val((Number(settings.globalReturnMultiplierBasisPoints || 10300) / 100).toFixed(2));
+        $('#caseTweakCsFloatExchangeRate').val((Number(settings.csFloatUsdToGbpBasisPoints || 7800) / 100).toFixed(2));
         $('#caseTweakFreeAllowance').prop('checked', settings.freeCaseAllowanceEnabled === true);
         $('#caseTweakFreeAllowanceQuantity').val(Number(settings.freeCaseAllowanceQuantity || 25));
         $('#caseTweakFreeAllowanceHours').val(Number(settings.freeCaseAllowanceHours || 24));
@@ -5560,6 +5562,58 @@
         });
     }
 
+    function marketCaseQuality(item) {
+        if (item.hasCompletePricing !== true) return 'missing';
+        return item.hasPublishablePricing === true ? 'ready' : 'warning';
+    }
+
+    function renderMarketCaseTable() {
+        const allCases = Array.isArray(priceSnapshotSummary?.cases) ? priceSnapshotSummary.cases : [];
+        const search = String($('#caseMarketSearch').val() || '').trim().toLowerCase();
+        const tier = Number($('#caseMarketTierFilter').val() || 0);
+        const quality = String($('#caseMarketQualityFilter').val() || '');
+        const cases = allCases.filter(item => (!search || String(item.caseName || '').toLowerCase().includes(search))
+            && (!tier || Number(item.recommendedTier || item.tier || 1) === tier)
+            && (!quality || marketCaseQuality(item) === quality));
+        const $body = $('#caseMarketCaseTableBody').empty();
+        cases.forEach(function (item) {
+            const state = marketCaseQuality(item);
+            const status = state === 'ready' ? 'Ready' : state === 'missing' ? 'Missing' : 'Review';
+            const badge = state === 'ready' ? 'text-bg-success' : state === 'missing' ? 'text-bg-danger' : 'text-bg-warning';
+            const draftTier = Number(item.recommendedTier || item.tier || 1);
+            const publishedTier = Number(item.publishedTier || 1);
+            const coverage = `${Number(item.pricedVariants || 0)} / ${Number(item.totalVariants || 0)}`;
+            $body.append($('<tr>', { class: `case-market-row is-${state}` }).append(
+                $('<td>').append($('<strong>', { text: item.caseName })),
+                $('<td>').append($('<strong>', { text: `T${draftTier}` }), $('<small>', { class: 'd-block small-muted', text: publishedTier === draftTier ? 'published' : `published T${publishedTier}` })),
+                $('<td>', { text: item.openingCost == null ? '—' : formatMarketMoney(item.openingCost) }),
+                $('<td>', { text: item.expectedValue == null ? 'Incomplete' : formatMarketMoney(item.expectedValue) }),
+                $('<td>', { class: Number(item.inferredValuePercentage || 0) > 0 ? 'case-market-caution' : '', text: `${Number(item.inferredValuePercentage || 0).toFixed(2)}%` }),
+                $('<td>', { text: item.expectedSaleValuePence == null ? '—' : formatMarketMoney(Number(item.expectedSaleValuePence || 0) / 100) }),
+                $('<td>', { text: item.targetReturnPercentage == null ? '—' : `${Number(item.targetReturnPercentage).toFixed(2)}%` }),
+                $('<td>', { class: 'case-market-positive', text: `${Number(item.recommendedPurchaseStars || 0).toLocaleString()} ★ / ${formatMarketMoney(Number(item.recommendedPurchaseGbpPence || 0) / 100)}` }),
+                $('<td>', { text: formatMarketMoney(Number(item.publishedPurchaseGbpPence || 0) / 100) }),
+                $('<td>').append($('<span>', { class: `badge ${badge}`, text: status, title: item.priceQualityWarning || status }), $('<small>', { class: 'd-block small-muted mt-1', text: coverage }))
+            ));
+        });
+        if (!cases.length) $body.append($('<tr>').append($('<td>', { colspan: 10, class: 'text-center small-muted py-4', text: 'No containers match these review filters.' })));
+    }
+
+    function renderTierEconomySettings(items) {
+        const multiplier = Number(gameSettingsCache?.globalReturnMultiplierBasisPoints || 10300) / 10000;
+        const $body = $('#caseMarketTierSettings').empty();
+        (items || []).forEach(function (item) {
+            const profit = Number(item.targetProfitBasisPoints || 0) / 100;
+            const effectiveReturn = (100 + profit) * multiplier;
+            $body.append($('<tr>', { 'data-tier': item.tier }).append(
+                $('<td>').append($('<strong>', { text: `Tier ${item.tier}` })),
+                $('<td>').append($('<input>', { class: 'form-control form-control-sm js-tier-profit', type: 'number', min: 0, max: 200, step: .01, value: profit.toFixed(2), 'aria-label': `Tier ${item.tier} base profit percentage` })),
+                $('<td>').append($('<input>', { class: 'form-control form-control-sm js-tier-rounding', type: 'number', min: .01, max: 100, step: .01, value: (Number(item.priceRoundingPence || 1) / 100).toFixed(2), 'aria-label': `Tier ${item.tier} price rounding in pounds` })),
+                $('<td>', { class: 'case-market-effective-return', text: `${effectiveReturn.toFixed(2)}%` })
+            ));
+        });
+    }
+
     function renderPriceSnapshots(summary) {
         priceSnapshotSummary = summary || { snapshots: [], cases: [] };
         const snapshots = Array.isArray(priceSnapshotSummary.snapshots) ? priceSnapshotSummary.snapshots : [];
@@ -5583,13 +5637,22 @@
         $('#casePublishPriceBalance').prop('disabled', priceSnapshotSummary.canPublish !== true);
         const fallbackCount = Number(priceSnapshotSummary.fallbackPriceCount || 0);
         const missingCount = Number(priceSnapshotSummary.missingPriceCount || 0);
+        const missingContainerCount = Number(priceSnapshotSummary.missingContainerPriceCount || 0);
+        const qualityWarningCount = Number(priceSnapshotSummary.priceQualityWarningCount || 0);
         const warningParts = [];
         if (missingCount > 0) warningParts.push(`${missingCount.toLocaleString()} item variant${missingCount === 1 ? '' : 's'} have no snapshot price`);
+        if (missingContainerCount > 0) warningParts.push(`${missingContainerCount.toLocaleString()} container${missingContainerCount === 1 ? '' : 's'} have no Skinport price`);
+        if (qualityWarningCount > 0) warningParts.push(`${qualityWarningCount.toLocaleString()} container${qualityWarningCount === 1 ? '' : 's'} exceed inferred-price quality limits`);
         if (fallbackCount > 0) warningParts.push(`${fallbackCount.toLocaleString()} price${fallbackCount === 1 ? '' : 's'} use a suggested or safe name fallback`);
         (Array.isArray(priceSnapshotSummary.tierWarnings) ? priceSnapshotSummary.tierWarnings : []).forEach(warning => warningParts.push(warning));
         $('#caseMarketPriceWarning')
             .toggleClass('d-none', warningParts.length === 0)
             .text(warningParts.length ? `${warningParts.join('; ')}. Resolve these before publishing live prices.` : '');
+        $('#caseMarketSkinportCount').text(Number(priceSnapshotSummary.skinportPriceCount || 0).toLocaleString());
+        $('#caseMarketCsFloatCount').text(Number(priceSnapshotSummary.csFloatPriceCount || 0).toLocaleString());
+        $('#caseMarketInferredCount').text(Number(priceSnapshotSummary.inferredPriceCount || 0).toLocaleString());
+        $('#caseMarketPublishState').text(priceSnapshotSummary.canPublish === true ? 'Ready' : 'Blocked').toggleClass('case-market-positive', priceSnapshotSummary.canPublish === true).toggleClass('case-market-negative', priceSnapshotSummary.canPublish !== true);
+        $('#caseMarketPublishReason').text(priceSnapshotSummary.canPublish === true ? 'All quality gates passed' : warningParts[0] || 'Create a complete snapshot');
 
         const $list = $('#caseMarketSnapshotList').empty();
         if (!snapshots.length) {
@@ -5617,20 +5680,10 @@
         const totalVariants = cases.reduce((total, item) => total + Number(item.totalVariants || 0), 0);
         const pricedVariants = cases.reduce((total, item) => total + Number(item.pricedVariants || 0), 0);
         $('#caseMarketCoverage').text(active ? `${pricedVariants.toLocaleString()} / ${totalVariants.toLocaleString()} item variants priced` : 'No snapshot loaded');
-        const $body = $('#caseMarketCaseTableBody').empty();
-        cases.forEach(function (item) {
-            $body.append($('<tr>').append(
-                $('<td>').append($('<strong>', { text: item.caseName })),
-                $('<td>', { text: `Tier ${Number(item.tier || 1)}` }),
-                $('<td>', { text: item.openingCost == null ? '—' : formatMarketMoney(item.openingCost) }),
-                $('<td>', { text: item.expectedValue == null ? 'Incomplete pricing' : formatMarketMoney(item.expectedValue) }),
-                $('<td>', { text: item.expectedSaleValuePence == null ? '—' : formatMarketMoney(Number(item.expectedSaleValuePence || 0) / 100) }),
-                $('<td>', { text: item.targetReturnPercentage == null ? '—' : `${Number(item.targetReturnPercentage).toFixed(0)}%` }),
-                $('<td>', { class: 'case-market-positive', text: `${Number(item.recommendedPurchaseStars || 0).toLocaleString()} ★ / ${formatMarketMoney(Number(item.recommendedPurchaseGbpPence || 0) / 100)}` }),
-                $('<td>', { text: formatMarketMoney(Number(item.publishedPurchaseGbpPence || 0) / 100) }),
-                $('<td>', { text: `${Number(item.pricedVariants || 0)} / ${Number(item.totalVariants || 0)}` })
-            ));
-        });
+        const tiers = [...new Set(cases.map(item => Number(item.recommendedTier || item.tier || 1)))].sort((a, b) => a - b);
+        const selectedTier = $('#caseMarketTierFilter').val();
+        $('#caseMarketTierFilter').empty().append($('<option>', { value: '', text: 'All tiers' }), tiers.map(value => $('<option>', { value, text: `Tier ${value}` }))).val(selectedTier);
+        renderMarketCaseTable();
     }
 
     function loadPriceSnapshots() {
@@ -5696,12 +5749,40 @@
         request('/api/case-opening/settings/inventory-upgrades', 'GET', { showLoader: false })
             .done(renderTweakInventoryUpgradesTable)
             .fail(response => window.personalToolsToast?.error(response.responseJSON?.message || 'Inventory upgrade settings could not be loaded.'));
+        request('/api/case-opening/settings/tiers', 'GET', { showLoader: false })
+            .done(renderTierEconomySettings)
+            .fail(response => window.personalToolsToast?.error(response.responseJSON?.message || 'Tier economy settings could not be loaded.'));
         loadPriceSnapshots();
         loadSpecialVariants().fail(response => window.personalToolsToast?.error(response.responseJSON?.message || 'Rare-variant settings could not be loaded.'));
     });
 
     $('#caseTweakTargetUser').on('change', function () {
         loadCaseTweakProfile();
+    });
+
+    $('#caseMarketSearch').on('input', renderMarketCaseTable);
+    $('#caseMarketTierFilter, #caseMarketQualityFilter').on('change', renderMarketCaseTable);
+
+    $('#caseSaveTierEconomy').on('click', function () {
+        const $button = $(this).prop('disabled', true);
+        const updates = $('#caseMarketTierSettings tr').map(function () {
+            const $row = $(this);
+            const tier = Number($row.data('tier'));
+            const payload = {
+                tier,
+                targetProfitBasisPoints: Math.max(0, Math.min(20000, Math.round((Number($row.find('.js-tier-profit').val()) || 0) * 100))),
+                priceRoundingPence: Math.max(1, Math.min(10000, Math.round((Number($row.find('.js-tier-rounding').val()) || .01) * 100)))
+            };
+            return request(`/api/case-opening/settings/tiers/${tier}`, 'PUT', { data: JSON.stringify(payload), contentType: 'application/json; charset=utf-8', showLoader: false });
+        }).get();
+        Promise.all(updates)
+            .then(results => {
+                renderTierEconomySettings(results[results.length - 1] || []);
+                return loadPriceSnapshots();
+            })
+            .then(() => window.personalToolsToast?.success('Tier profit curve saved and recommendations refreshed.'))
+            .catch(response => showError(response, 'The tier profit curve could not be saved.'))
+            .finally(() => $button.prop('disabled', false));
     });
 
     $('#caseSpecialVariantRuleForm').on('submit', function (event) {
@@ -5930,6 +6011,8 @@
         const payload = {
             economyMode: $('#caseTweakEconomyMode').val() === 'gbp' ? 'gbp' : 'stars',
             skinSaleRateBasisPoints: Math.max(0, Math.min(10000, Math.round((Number($('#caseTweakSaleRate').val()) || 0) * 100))),
+            globalReturnMultiplierBasisPoints: Math.max(5000, Math.min(20000, Math.round((Number($('#caseTweakReturnMultiplier').val()) || 100) * 100))),
+            csFloatUsdToGbpBasisPoints: Math.max(1000, Math.min(20000, Math.round((Number($('#caseTweakCsFloatExchangeRate').val()) || 78) * 100))),
             freeCaseAllowanceEnabled: $('#caseTweakFreeAllowance').is(':checked'),
             freeCaseAllowanceQuantity: Math.max(1, Math.trunc(Number($('#caseTweakFreeAllowanceQuantity').val()) || 1)),
             freeCaseAllowanceHours: Math.max(1, Math.trunc(Number($('#caseTweakFreeAllowanceHours').val()) || 1)),
@@ -6121,9 +6204,28 @@
         $('#caseTweakBattleBotStats strong').each(function (index) { $(this).text(values[index]); });
     }
 
+    const caseBattleTimingFields = {
+        readyPauseMs: '#caseTweakBattleReadyPauseMs',
+        readyCountdownMs: '#caseTweakBattleReadyCountdownMs',
+        preSpinPauseMs: '#caseTweakBattlePreSpinPauseMs',
+        spinDurationMs: '#caseTweakBattleSpinDurationMs',
+        landedResultPauseMs: '#caseTweakBattleLandedResultPauseMs',
+        roundRevealPauseMs: '#caseTweakBattleRoundRevealPauseMs',
+        resultsPauseMs: '#caseTweakBattleResultsPauseMs',
+        winnerIntroPauseMs: '#caseTweakBattleWinnerIntroPauseMs',
+        winnerTallyDurationMs: '#caseTweakBattleWinnerTallyDurationMs',
+        winnerVerdictPauseMs: '#caseTweakBattleWinnerVerdictPauseMs',
+        winnerTransferDurationMs: '#caseTweakBattleWinnerTransferDurationMs'
+    };
+
+    function renderCaseBattleTimings(settings) {
+        Object.entries(caseBattleTimingFields).forEach(([field, selector]) => $(selector).val(settings[field]));
+    }
+
     function loadCaseBattleAdmin() {
         const $rows = $('#caseTweakBattleRows').html('<tr><td colspan="4" class="text-center small-muted py-4">Loading battle health…</td></tr>');
         $.getJSON('/api/admin/case-battles/bot-status').done(renderCaseBattleAdminStatus).fail(() => window.personalToolsToast?.error('Case Battle controls could not be loaded.'));
+        $.getJSON('/api/admin/case-battles/timings').done(renderCaseBattleTimings).fail(() => window.personalToolsToast?.error('Battle animation timings could not be loaded.'));
         $.getJSON('/api/admin/case-battles').done(items => {
             if (!items.length) { $rows.html('<tr><td colspan="4" class="text-center small-muted py-4">No unresolved battles need attention.</td></tr>'); return; }
             const escape = value => $('<div>').text(value || '').html();
@@ -6134,6 +6236,17 @@
 
     $('#caseTweakBattlesTab').on('shown.bs.tab', loadCaseBattleAdmin);
     $('#caseTweakBattleRefresh').on('click', loadCaseBattleAdmin);
+    $('#caseTweakBattleTimingsSave').on('click', function () {
+        const $button = $(this).prop('disabled', true);
+        $.getJSON('/api/admin/case-battles/timings').done(current => {
+            const payload = { ...current };
+            Object.entries(caseBattleTimingFields).forEach(([field, selector]) => { payload[field] = Number($(selector).val()); });
+            request('/api/admin/case-battles/timings', 'PUT', { data: JSON.stringify(payload), contentType: 'application/json' })
+                .done(settings => { renderCaseBattleTimings(settings); window.personalToolsToast?.success('Battle animation timing saved. Reload an open battle to apply it.'); })
+                .fail(response => window.personalToolsToast?.error(response.responseJSON?.message || 'Battle animation timing could not be saved.'))
+                .always(() => $button.prop('disabled', false));
+        }).fail(() => { $button.prop('disabled', false); window.personalToolsToast?.error('Current battle timing could not be loaded.'); });
+    });
     $('#caseTweakBattlesEnabled').on('change', function () {
         const control = $(this).prop('disabled', true);
         request('/api/admin/case-battles/feature-status', 'PUT', { data: JSON.stringify(control.prop('checked')), contentType: 'application/json' })

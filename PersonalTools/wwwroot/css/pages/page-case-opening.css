@@ -1825,6 +1825,71 @@ body:has(.case-opening-page) .form-switch .form-check-label {
     font-size: .67rem;
 }
 
+.case-market-summary-card {
+    display: grid;
+    align-content: center;
+    min-height: 6.25rem;
+    height: 100%;
+    padding: .8rem .9rem;
+    border: 1px solid var(--pt-line);
+    border-radius: .55rem;
+    background: color-mix(in srgb,var(--pt-surface) 94%,var(--case-purple));
+}
+
+    .case-market-summary-card span {
+        color: var(--pt-ink-soft);
+        font-size: .66rem;
+        font-weight: 800;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    .case-market-summary-card strong {
+        margin-block: .1rem;
+        font-size: 1.2rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .case-market-summary-card small {
+        color: var(--pt-ink-soft);
+        font-size: .68rem;
+        line-height: 1.25;
+    }
+
+.case-market-tier-editor {
+    padding: .85rem;
+    border: 1px solid var(--pt-line);
+    border-radius: .55rem;
+    background: color-mix(in srgb,var(--pt-surface) 96%,var(--case-gold));
+}
+
+    .case-market-tier-editor .form-control {
+        min-width: 6.75rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+.case-market-effective-return {
+    color: var(--case-gold);
+    font-weight: 800;
+}
+
+.case-market-caution {
+    color: var(--case-gold);
+    font-weight: 750;
+}
+
+.case-market-row.is-missing > td:first-child {
+    box-shadow: inset .18rem 0 var(--case-red);
+}
+
+.case-market-row.is-warning > td:first-child {
+    box-shadow: inset .18rem 0 var(--case-gold);
+}
+
+.case-market-row.is-ready > td:first-child {
+    box-shadow: inset .18rem 0 #65c96b;
+}
+
 .case-market-table td {
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -8494,7 +8559,7 @@ body:has(.case-player-profile.show) {
 .case-live-winners-dock {
     position: absolute;
     z-index: 2;
-    top: calc(100% + .5rem);
+    top: calc(100% + .2rem);
     left: 0;
 }
 
@@ -8559,7 +8624,7 @@ body:has(.case-player-profile.show) {
 .case-daily-drop-recall {
     position: absolute;
     z-index: 2;
-    top: calc(100% + .5rem);
+    top: calc(100% + .2rem);
     right: 0;
     display: inline-flex;
     align-items: center;
@@ -8592,6 +8657,11 @@ body:has(.case-player-profile.show) {
 .case-hud-progression:has(.case-hud-daily-drop.is-showing) ~ .case-daily-drop-recall {
     display: none;
 }
+
+/* Group the two post-HUD controls so the compact mobile layout can keep them aligned as a
+   single row. `display: contents` leaves the established desktop positioning untouched. */
+.case-hud-quick-controls { display: contents; }
+.case-game-hud:has(.case-hud-daily-drop.is-showing) .case-daily-drop-recall { display: none; }
 
 .case-daily-drop-recall:focus-visible {
     outline: 0;
@@ -8758,16 +8828,48 @@ body:has(.case-player-profile.show) {
         margin-top: 0;
     }
 
-    .case-live-winners-dock .live-winners-trigger,
+    .case-hud-quick-controls {
+        position: absolute;
+        z-index: 4;
+        top: calc(100% + .2rem);
+        right: 0;
+        left: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 2.5rem;
+        pointer-events: none;
+    }
+
+    .case-hud-quick-controls .case-live-winners-dock { position: relative; pointer-events: auto; }
+    .case-hud-quick-controls .case-daily-drop-recall { position: static; pointer-events: auto; }
+
+    .case-live-winners-dock .live-winners-trigger {
+        width: auto;
+        min-width: 3.5rem;
+        height: 2.5rem;
+        min-height: 2.5rem;
+        gap: .35rem;
+        padding: .35rem .5rem;
+    }
+
+    .case-live-winners-dock .live-winners-live-dot {
+        flex: 0 0 .55rem;
+    }
+
+    .case-live-winners-dock .live-winners-count {
+        min-width: 1.3ch;
+        text-align: left;
+    }
+
     .case-daily-drop-recall {
-        width: 2.25rem;
-        height: 2.25rem;
-        min-height: 2.25rem;
+        width: 2.5rem;
+        height: 2.5rem;
+        min-height: 2.5rem;
     }
 
     .case-live-winners-dock .live-winners-trigger {
         justify-content: center;
-        padding: .25rem;
     }
 
     .case-live-winners-dock .live-winners-label {

@@ -392,7 +392,7 @@ public sealed class CaseOpeningController : ControllerBase
     [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
     public Task<ActionResult<CaseOpeningPriceSnapshotSummaryObj>> CreatePriceSnapshot(CancellationToken cancellationToken)
     {
-        return Execute(() => _caseOpening.CreatePriceSnapshot(cancellationToken), "create price snapshot", "Skinport");
+        return Execute(() => _caseOpening.CreatePriceSnapshot(UserId, cancellationToken), "create price snapshot", "Skinport and CSFloat");
     }
 
     [HttpPost("settings/price-snapshots/{snapshotId:guid}/activate")]
@@ -473,6 +473,19 @@ public sealed class CaseOpeningController : ControllerBase
             return StatusCode(502, new ApiResponse(false, "Case settings could not be saved. Please try again shortly."));
         }
     }
+
+    [HttpGet("settings/tiers")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<List<CaseOpeningTierEconomySettingsObj>>> GetTierEconomySettings(CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.GetTierEconomySettings(cancellationToken), "load tier economy settings", "tiers");
+
+    [HttpPut("settings/tiers/{tier:int}")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<List<CaseOpeningTierEconomySettingsObj>>> UpdateTierEconomySettings(
+        int tier,
+        [FromBody] CaseOpeningTierEconomySettingsObj request,
+        CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.SetTierEconomySettings(tier, request, cancellationToken), "save tier economy settings", tier.ToString());
 
     [HttpGet("settings/xp-by-rarity")]
     [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
@@ -629,6 +642,10 @@ public sealed class CaseOpeningController : ControllerBase
         try
         {
             return Ok(await action());
+        }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            return StatusCode(499);
         }
         catch (InvalidOperationException exception)
         {

@@ -16,7 +16,7 @@ public static class AppSettingDefinitions
         new(AppSettingKey.DashboardMotion, "Workspace", "Interface motion", "Keep the small purposeful transitions that make actions feel responsive. Turn this off if you prefer a quieter workspace.", AppSettingInputType.Switch),
         new(AppSettingKey.DashboardWeatherUnit, "Dashboard", "Weather unit", "Use the unit that feels natural when checking the dashboard at a glance.", AppSettingInputType.Select, [("celsius", "Celsius (°C)"), ("fahrenheit", "Fahrenheit (°F)")]),
         new(AppSettingKey.SteamWebApiKey, "Integrations", "Steam Web API key", "Enables server-side public ban checks in CS2 Player Stats. The key is protected at rest and is never returned to your browser.", AppSettingInputType.Secret, IsServerSecret: true),
-        new(AppSettingKey.CSFloatApiKey, "Integrations", "CSFloat API key", "Enables administrator-only rare-pattern listing imports for reviewed case-opening snapshots. The key is protected at rest and is never returned to your browser.", AppSettingInputType.Secret, IsServerSecret: true)
+        new(AppSettingKey.CSFloatApiKey, "Integrations", "CSFloat API key", "Enables administrator-only backup pricing and rare-pattern listing evidence for case-opening snapshots. The key is protected at rest and is never returned to your browser.", AppSettingInputType.Secret, IsServerSecret: true)
     ];
     public static AppSettingDefinition Get(AppSettingKey key) => All.Single(definition => definition.Key == key);
 }

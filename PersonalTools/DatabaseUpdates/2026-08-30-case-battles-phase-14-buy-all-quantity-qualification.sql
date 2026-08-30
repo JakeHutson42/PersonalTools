@@ -27,7 +27,7 @@ BEGIN
     IF ROW_COUNT()=0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='You do not have enough balance to buy every required case.'; END IF;
     INSERT INTO CaseOpeningOwnedCases(UserId,CaseKey,Quantity,UpdatedUtc)
     SELECT p_user_id,CaseKey,PurchaseQuantity,UTC_TIMESTAMP(6) FROM JSON_TABLE(p_purchases,'$[*]' COLUMNS(CaseKey VARCHAR(80) PATH '$.caseKey', PurchaseQuantity INT PATH '$.quantity')) items
-    ON DUPLICATE KEY UPDATE Quantity=Quantity+VALUES(Quantity),UpdatedUtc=VALUES(UpdatedUtc);
+    ON DUPLICATE KEY UPDATE Quantity=CaseOpeningOwnedCases.Quantity+VALUES(Quantity),UpdatedUtc=VALUES(UpdatedUtc);
     COMMIT;
     SELECT v_total_quantity PurchasedQuantity,v_stars_cost StarsSpent,v_gbp_cost GbpPenceSpent,Stars StarsBalance,GbpPence GbpPenceBalance FROM CaseOpeningProgress WHERE UserId=p_user_id;
 END//

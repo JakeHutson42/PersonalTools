@@ -80,6 +80,8 @@ public interface ICaseOpeningData
     Task<CaseOpeningGameSettingsObj> GetGameSettings(CancellationToken cancellationToken = default);
     Task SetGameSettings(CaseOpeningGameSettingsObj settings, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningCaseSettingsObj>> GetCaseSettings(CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningTierEconomySettingsObj>> GetTierEconomySettings(CancellationToken cancellationToken = default);
+    Task SetTierEconomySettings(int tier, int targetProfitBasisPoints, int priceRoundingPence, CancellationToken cancellationToken = default);
     Task SetCaseSettings(string caseKey, int tier, int unlockCostStars, long unlockCostGbpPence, int purchaseCostStars, long purchaseCostGbpPence, int xpRequirement, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningXpByRarityObj>> GetXpByRarity(CancellationToken cancellationToken = default);
     Task SetXpByRarity(string rarityKey, int xpAwarded, CancellationToken cancellationToken = default);
@@ -164,7 +166,11 @@ public sealed class CaseOpeningData : ICaseOpeningData
             medianPrice = item.MedianPrice,
             suggestedPrice = item.SuggestedPrice,
             quantity = item.Quantity,
-            sourceUpdatedUtc = item.SourceUpdatedUtc?.ToString("yyyy-MM-dd HH:mm:ss.ffffff")
+            sourceUpdatedUtc = item.SourceUpdatedUtc?.ToString("yyyy-MM-dd HH:mm:ss.ffffff"),
+            isFallback = item.IsFallback,
+            priceSource = item.PriceSource,
+            priceMethod = item.PriceMethod,
+            sourceMarketHashName = item.SourceMarketHashName
         }));
         return _database.ExecuteSP(
             "sp_case_opening_price_snapshot_create",
@@ -638,20 +644,20 @@ public sealed class CaseOpeningData : ICaseOpeningData
             Parameters(
                 ("p_user_id", userId),
                 ("p_opening_id", opening.OpeningId),
-                ("p_case_key", opening.CaseKey),
-                ("p_source_item_id", opening.SourceItemId),
-                ("p_item_name", opening.Name),
-                ("p_market_hash_name", opening.MarketHashName),
-                ("p_image_url", opening.ImageUrl),
-                ("p_description", opening.Description),
-                ("p_weapon_name", opening.WeaponName),
-                ("p_pattern_name", opening.PatternName),
-                ("p_paint_index", opening.PaintIndex),
-                ("p_phase", opening.Phase),
-                ("p_rarity_key", opening.RarityKey),
-                ("p_rarity_name", opening.RarityName),
-                ("p_rarity_color", opening.RarityColor),
-                ("p_wear", opening.Wear),
+                ("p_case_key", opening.CaseKey ?? string.Empty),
+                ("p_source_item_id", opening.SourceItemId ?? string.Empty),
+                ("p_item_name", opening.Name ?? string.Empty),
+                ("p_market_hash_name", opening.MarketHashName ?? string.Empty),
+                ("p_image_url", opening.ImageUrl ?? string.Empty),
+                ("p_description", opening.Description ?? string.Empty),
+                ("p_weapon_name", opening.WeaponName ?? string.Empty),
+                ("p_pattern_name", opening.PatternName ?? string.Empty),
+                ("p_paint_index", opening.PaintIndex ?? string.Empty),
+                ("p_phase", opening.Phase ?? string.Empty),
+                ("p_rarity_key", opening.RarityKey ?? string.Empty),
+                ("p_rarity_name", opening.RarityName ?? string.Empty),
+                ("p_rarity_color", opening.RarityColor ?? string.Empty),
+                ("p_wear", opening.Wear ?? string.Empty),
                 ("p_is_stat_trak", opening.IsStatTrak),
                 ("p_is_rare_special", opening.IsRareSpecial),
                 ("p_supports_stat_trak", opening.SupportsStatTrak),
@@ -693,9 +699,9 @@ public sealed class CaseOpeningData : ICaseOpeningData
             cancellationToken: cancellationToken) ?? new CaseOpeningGameSettingsObj();
     }
 
-    public Task SetGameSettings(CaseOpeningGameSettingsObj settings, CancellationToken cancellationToken = default)
+    public async Task SetGameSettings(CaseOpeningGameSettingsObj settings, CancellationToken cancellationToken = default)
     {
-        return _database.ExecuteSP(
+        await _database.ExecuteSP(
             "sp_case_opening_game_settings_set",
             Parameters(
                 ("p_xp_per_case_open", settings.XpPerCaseOpen),
@@ -745,11 +751,40 @@ public sealed class CaseOpeningData : ICaseOpeningData
                 ("p_trade_up_holding_upgrade_base_cost_gbp_pence", settings.TradeUpHoldingUpgradeBaseCostGbpPence),
                 ("p_trade_up_holding_upgrade_cost_increment_gbp_pence", settings.TradeUpHoldingUpgradeCostIncrementGbpPence)),
             cancellationToken);
+        await _database.ExecuteSP(
+            "sp_case_opening_global_return_multiplier_set",
+            Parameters(("p_basis_points", settings.GlobalReturnMultiplierBasisPoints)),
+            cancellationToken);
+        await _database.ExecuteSP(
+            "sp_case_opening_csfloat_exchange_rate_set",
+            Parameters(("p_basis_points", settings.CsFloatUsdToGbpBasisPoints)),
+            cancellationToken);
     }
 
     public Task<List<CaseOpeningCaseSettingsObj>> GetCaseSettings(CancellationToken cancellationToken = default)
     {
         return _database.GetBulkDataSP("sp_case_opening_case_settings_get_all", ReadCaseSettings, cancellationToken: cancellationToken);
+    }
+
+    public Task<List<CaseOpeningTierEconomySettingsObj>> GetTierEconomySettings(CancellationToken cancellationToken = default)
+    {
+        return _database.GetBulkDataSP(
+            "sp_case_opening_tier_economy_settings_get",
+            reader => new CaseOpeningTierEconomySettingsObj
+            {
+                Tier = reader.GetInt32("Tier"),
+                TargetProfitBasisPoints = reader.GetInt32("TargetProfitBasisPoints"),
+                PriceRoundingPence = reader.GetInt32("PriceRoundingPence")
+            },
+            cancellationToken: cancellationToken);
+    }
+
+    public Task SetTierEconomySettings(int tier, int targetProfitBasisPoints, int priceRoundingPence, CancellationToken cancellationToken = default)
+    {
+        return _database.ExecuteSP(
+            "sp_case_opening_tier_economy_settings_set",
+            Parameters(("p_tier", tier), ("p_target_profit_basis_points", targetProfitBasisPoints), ("p_price_rounding_pence", priceRoundingPence)),
+            cancellationToken);
     }
 
     public Task SetCaseSettings(string caseKey, int tier, int unlockCostStars, long unlockCostGbpPence, int purchaseCostStars, long purchaseCostGbpPence, int xpRequirement, CancellationToken cancellationToken = default)
@@ -1093,6 +1128,8 @@ public sealed class CaseOpeningData : ICaseOpeningData
         {
             EconomyMode = reader.GetString("EconomyMode"),
             SkinSaleRateBasisPoints = reader.GetInt32("SkinSaleRateBasisPoints"),
+            GlobalReturnMultiplierBasisPoints = reader.GetInt32("GlobalReturnMultiplierBasisPoints"),
+            CsFloatUsdToGbpBasisPoints = reader.GetInt32("CsFloatUsdToGbpBasisPoints"),
             FreeCaseAllowanceEnabled = reader.GetBoolean("FreeCaseAllowanceEnabled"),
             FreeCaseAllowanceQuantity = reader.GetInt32("FreeCaseAllowanceQuantity"),
             FreeCaseAllowanceHours = reader.GetInt32("FreeCaseAllowanceHours"),
@@ -1271,6 +1308,9 @@ public sealed class CaseOpeningData : ICaseOpeningData
             SuggestedPrice = NullableDecimal(reader, "SuggestedPrice"),
             Quantity = reader.GetInt32("Quantity"),
             IsFallback = reader.GetBoolean("IsFallback"),
+            PriceSource = reader.GetString("PriceSource"),
+            PriceMethod = reader.GetString("PriceMethod"),
+            SourceMarketHashName = reader.GetString("SourceMarketHashName"),
             SourceUpdatedUtc = reader.IsDBNull(reader.GetOrdinal("SourceUpdatedUtc"))
                 ? null
                 : DateTime.SpecifyKind(reader.GetDateTime("SourceUpdatedUtc"), DateTimeKind.Utc)

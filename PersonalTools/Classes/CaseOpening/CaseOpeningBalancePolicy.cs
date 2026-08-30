@@ -9,25 +9,27 @@ namespace PersonalTools.Classes.CaseOpening;
 public static class CaseOpeningBalancePolicy
 {
     private const decimal PencePerGbp = 100m;
-    private const decimal TierTwoTargetReturnPercentage = 102m;
-    private const decimal TargetReturnStepPerTier = 2m;
-
-    public static CaseOpeningBalanceRecommendation RecommendCasePrices(decimal expectedMarketValueGbp, int tier, int skinSaleRateBasisPoints)
+    public static CaseOpeningBalanceRecommendation RecommendCasePrices(
+        decimal expectedMarketValueGbp,
+        int tier,
+        int skinSaleRateBasisPoints,
+        int targetProfitBasisPoints,
+        int globalReturnMultiplierBasisPoints,
+        int priceRoundingPence,
+        bool isStarterCase)
     {
         int resolvedTier = Math.Clamp(tier, 1, 10);
         decimal expectedSaleValuePence = decimal.Round(expectedMarketValueGbp * PencePerGbp * Math.Clamp(skinSaleRateBasisPoints, 0, 10_000) / 10_000m, 2, MidpointRounding.AwayFromZero);
 
-        if (resolvedTier == 1)
+        if (isStarterCase)
             return new CaseOpeningBalanceRecommendation(expectedSaleValuePence, 0m, 0, 0, 0, 0);
 
-        // Each tier improves the expected return by two percentage points. Tier 2 starts at
-        // 102%; Tier 10 reaches 118%. This rewards progression while retaining a predictable,
-        // tunable sink through the configured skin-sale rate.
-        decimal targetReturnPercentage = TierTwoTargetReturnPercentage + (resolvedTier - 2) * TargetReturnStepPerTier;
+        decimal baseReturnBasisPoints = 10_000m + Math.Clamp(targetProfitBasisPoints, 0, 20_000);
+        decimal targetReturnPercentage = baseReturnBasisPoints * Math.Clamp(globalReturnMultiplierBasisPoints, 5_000, 20_000) / 1_000_000m;
         decimal purchasePence = expectedSaleValuePence / (targetReturnPercentage / 100m);
-        long recommendedPurchasePence = RoundPence(purchasePence, resolvedTier);
+        long recommendedPurchasePence = RoundPence(purchasePence, priceRoundingPence);
         int recommendedPurchaseStars = PenceToStars(recommendedPurchasePence);
-        long recommendedUnlockPence = RoundPence(recommendedPurchasePence * (8m + resolvedTier), resolvedTier);
+        long recommendedUnlockPence = RoundPence(recommendedPurchasePence * (8m + resolvedTier), priceRoundingPence);
         int recommendedUnlockStars = PenceToStars(recommendedUnlockPence);
 
         return new CaseOpeningBalanceRecommendation(expectedSaleValuePence, targetReturnPercentage, recommendedPurchasePence, recommendedUnlockPence, recommendedPurchaseStars, recommendedUnlockStars);
@@ -51,9 +53,9 @@ public static class CaseOpeningBalancePolicy
         return new CaseOpeningSaleAward(awardedStars, awardedPence);
     }
 
-    private static long RoundPence(decimal pence, int tier)
+    private static long RoundPence(decimal pence, int configuredIncrement)
     {
-        int increment = tier switch { <= 1 => 1, <= 4 => 5, <= 6 => 10, <= 8 => 25, 9 => 50, _ => 100 };
+        int increment = Math.Clamp(configuredIncrement, 1, 10_000);
         return Math.Max(increment, (long)(Math.Round(pence / increment, MidpointRounding.AwayFromZero) * increment));
     }
 }

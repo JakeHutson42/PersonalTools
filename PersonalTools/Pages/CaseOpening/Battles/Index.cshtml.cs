@@ -17,14 +17,20 @@ public sealed class IndexModel(ICaseBattleFuncs battles) : PageModel
         // who is already in an unfinished battle; creation remains on the case-opening screen.
         if (battleId is not null)
         {
-            try { await battles.GetDetail(userId, battleId.Value, cancellationToken); BattleId = battleId; }
+            try
+            {
+                CaseBattleDetailObj battle = await battles.GetDetail(userId, battleId.Value, cancellationToken);
+                if (battle.Status == "waiting") return RedirectToPage("/CaseOpening/Battles/Lobby", new { battleId });
+                BattleId = battleId;
+            }
             catch (KeyNotFoundException) { return RedirectToPage("/CaseOpening/Index"); }
             return Page();
         }
 
         CaseBattleSummaryObj? active = await battles.GetActive(userId, cancellationToken);
         if (active is null) return RedirectToPage("/CaseOpening/Index");
-        BattleId = active.BattleId;
-        return Page();
+        return active.Status == "waiting"
+            ? RedirectToPage("/CaseOpening/Battles/Lobby", new { battleId = active.BattleId })
+            : RedirectToPage("/CaseOpening/Battles/Index", new { battleId = active.BattleId });
     }
 }

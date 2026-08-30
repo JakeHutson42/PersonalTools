@@ -29,8 +29,24 @@ public sealed class CaseBattleFeatureOptions
 
 public sealed class CaseBattleCreateRequestObj { public string Mode { get; set; } = string.Empty; public Guid? InvitedUserId { get; set; } public bool UseBot { get; set; } public List<string> CaseKeys { get; set; } = []; }
 public sealed class CaseBattleBotStatusObj { public bool CaseBattlesEnabled { get; set; } public bool Enabled { get; set; } public int BattlesAttempted { get; set; } public int BattlesWon { get; set; } public int SkinsDiscarded { get; set; } public decimal ValueDiscarded { get; set; } }
+public sealed class CaseBattleTimingSettingsObj
+{
+    public int MaxCasesPerBattle { get; set; } = 20;
+    public int ReadyPauseMs { get; set; } = 900;
+    public int ReadyCountdownMs { get; set; } = 3000;
+    public int PreSpinPauseMs { get; set; } = 2500;
+    public int SpinDurationMs { get; set; } = 5000;
+    public int LandedResultPauseMs { get; set; } = 750;
+    public int RoundRevealPauseMs { get; set; } = 1650;
+    public int ResultsPauseMs { get; set; } = 1100;
+    public int WinnerIntroPauseMs { get; set; } = 2500;
+    public int WinnerTallyDurationMs { get; set; } = 4200;
+    public int WinnerVerdictPauseMs { get; set; } = 1800;
+    public int WinnerTransferDurationMs { get; set; } = 3500;
+}
 public sealed class CaseBattleInvitableUserObj { public Guid UserId { get; set; } public string DisplayName { get; set; } = string.Empty; }
 public sealed class CaseBattleInvitationObj { public Guid BattleId { get; set; } public string CreatorDisplayName { get; set; } = string.Empty; public List<string> CaseKeys { get; set; } = []; public DateTime ExpiresUtc { get; set; } }
+public sealed class CaseBattlePendingCreatedObj { public Guid BattleId { get; set; } public string OpponentDisplayName { get; set; } = string.Empty; public int CaseCount { get; set; } public DateTime ExpiresUtc { get; set; } }
 public sealed class CaseBattleBuyAllRequestObj { public List<string> CaseKeys { get; set; } = []; }
 public sealed class CaseBattleBuyAllResultObj { public int PurchasedQuantity { get; set; } public long StarsSpent { get; set; } public long GbpPenceSpent { get; set; } public int StarsBalance { get; set; } public long GbpPenceBalance { get; set; } }
 
@@ -77,6 +93,7 @@ public sealed class CaseBattlePullObj
     public string OriginalOwnerDisplayName { get; set; } = string.Empty;
     public int RoundNumber { get; set; }
     public string ItemName { get; set; } = string.Empty;
+    public string Wear { get; set; } = string.Empty;
     public string ImageUrl { get; set; } = string.Empty;
     public string RarityColor { get; set; } = string.Empty;
     public decimal LockedValue { get; set; }

@@ -244,10 +244,12 @@
         const trigger = document.getElementById('liveWinnersTrigger');
         const panel = document.getElementById('liveWinnersPanel');
         const count = document.getElementById('liveWinnersCount');
-        const countLabel = document.getElementById('liveWinnersLabel');
         const list = document.getElementById('liveWinnersList');
         const scrollCue = document.getElementById('liveWinnersScrollCue');
+        const title = document.getElementById('liveWinnersTitle');
+        const tabs = [...document.querySelectorAll('[data-live-winners-tab]')];
         let latest = null;
+        let activeLiveWinnersTab = 'pulls';
         let liveWinnerPoll = null;
         const currency = value => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 }).format(Number(value || 0));
         const rankIcon = rank => rank === 1 ? 'fa-trophy' : rank === 2 ? 'fa-medal' : rank === 3 ? 'fa-award' : '';
@@ -281,7 +283,6 @@
             latest = summary;
             const liveUserCount = Number(summary.liveUserCount || 0);
             count.textContent = liveUserCount.toLocaleString();
-            countLabel.textContent = liveUserCount === 1 ? 'player' : 'players';
             const winners = Array.isArray(summary.winners) ? summary.winners : [];
             if (!winners.length) {
                 list.replaceChildren(Object.assign(document.createElement('li'), { className: 'live-winners-empty', textContent: 'No priced wins in the last 24 hours yet.' }));
@@ -312,8 +313,39 @@
                 }
             });
         }
+        function renderBattleWinners(summary, animate = true) {
+            latest = summary;
+            const winners = Array.isArray(summary.battleWinners) ? summary.battleWinners : [];
+            if (!winners.length) {
+                list.replaceChildren(Object.assign(document.createElement('li'), { className: 'live-winners-empty', textContent: 'No completed case battles today yet.' }));
+                updateWinnerScrollCue();
+                return;
+            }
+            const oldRows = new Map([...list.querySelectorAll('.live-winner')].map(row => [row.dataset.winnerKey, row]));
+            const oldRects = new Map([...oldRows].map(([key, row]) => [key, row.getBoundingClientRect()]));
+            const nextKeys = new Set(winners.map(winner => String(winner.battleId)));
+            list.querySelector('.live-winners-empty')?.remove();
+            winners.forEach((winner, index) => {
+                const key = String(winner.battleId), rank = index + 1;
+                let row = oldRows.get(key);
+                if (!row) { row = document.createElement('li'); row.innerHTML = '<span class="live-winner-rank"><i aria-hidden="true"></i></span><span class="live-winner-copy"><strong></strong><span></span><small></small></span>'; }
+                row.className = `live-winner live-battle-winner rank-${rank}`; row.dataset.winnerKey = key;
+                const rankElement = row.querySelector('.live-winner-rank'); rankElement.hidden = rank > 3; rankElement.setAttribute('aria-label', rank <= 3 ? `Rank ${rank}` : ''); rankElement.querySelector('i').className = rank <= 3 ? `fa-solid ${rankIcon(rank)}` : '';
+                row.querySelector('strong').textContent = winner.displayName || 'Player';
+                row.querySelector('.live-winner-copy span').textContent = `${Number(winner.caseCount || 0)} case${Number(winner.caseCount || 0) === 1 ? '' : 's'} · Case battle`;
+                row.querySelector('small').textContent = currency(winner.awardedValue);
+                list.append(row);
+            });
+            oldRows.forEach((row, key) => { if (!nextKeys.has(key)) row.remove(); }); updateWinnerScrollCue();
+            if (!animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            winners.forEach(winner => { const key = String(winner.battleId), row = list.querySelector(`[data-winner-key="${CSS.escape(key)}"]`), oldRect = oldRects.get(key); if (!row) return; if (!oldRect) window.anime?.animate(row, { opacity:[0,1], translateX:[30,0], duration:420, ease:'out(4)' }); else { const offset = oldRect.top - row.getBoundingClientRect().top; if (offset) window.anime?.animate(row, { translateY:[offset,0], duration:460, ease:'out(4)' }); } });
+        }
+        function renderActiveWinners(summary, animate = true) {
+            title.textContent = activeLiveWinnersTab === 'battles' ? 'Battle winners' : 'Recent winners';
+            if (activeLiveWinnersTab === 'battles') renderBattleWinners(summary, animate); else renderWinners(summary, animate);
+        }
         list.addEventListener('scroll', updateWinnerScrollCue, { passive: true });
-        function loadWinners(animate) { return fetch('/api/live-winners', { credentials: 'same-origin', cache: 'no-store' }).then(response => response.ok ? response.json() : Promise.reject()).then(summary => renderWinners(summary, animate)).catch(() => { if (!latest) count.textContent = '—'; }); }
+        function loadWinners(animate) { return fetch('/api/live-winners', { credentials: 'same-origin', cache: 'no-store' }).then(response => response.ok ? response.json() : Promise.reject()).then(summary => renderActiveWinners(summary, animate)).catch(() => { if (!latest) count.textContent = '—'; }); }
         function setLiveWinnerPolling(enabled) {
             window.clearInterval(liveWinnerPoll);
             liveWinnerPoll = enabled
@@ -328,6 +360,7 @@
             setLiveWinnerPolling(opening);
             if (opening) loadWinners(true);
         });
+        tabs.forEach(tab => tab.addEventListener('click', () => { activeLiveWinnersTab = tab.dataset.liveWinnersTab; tabs.forEach(item => { const active = item === tab; item.classList.toggle('active', active); item.setAttribute('aria-selected', String(active)); }); if (latest) renderActiveWinners(latest, false); }));
         document.addEventListener('click', event => { if (!liveWinnersDock.contains(event.target) && !panel.hidden) trigger.click(); });
         document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') return; if (!panel.hidden) loadWinners(true); });
         loadWinners(false);
@@ -919,52 +952,71 @@
     document.body.append(invitationHost);
     let inviteTimer = null;
     function requestToken() { return document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''; }
-    function clearInvitation() { window.clearInterval(inviteTimer); inviteTimer = null; delete invitationHost.dataset.battleId; invitationHost.replaceChildren(); }
+    function clearInvitation() { window.clearInterval(inviteTimer); inviteTimer = null; delete invitationHost.dataset.signature; invitationHost.replaceChildren(); }
     function loadBattleInvitation() {
         return fetch('/api/case-battles/invitations/pending', { credentials: 'same-origin', cache: 'no-store' })
             .then(response => response.ok ? response.json() : null)
-            .then(invitation => { if (invitation?.battleId) renderBattleInvitation(invitation); else clearInvitation(); })
+            .then(invitations => { const items = Array.isArray(invitations) ? invitations : (invitations?.battleId ? [invitations] : []); if (items.length) renderBattleInvitations(items); else clearInvitation(); })
             .catch(() => {});
     }
-    function renderBattleInvitation(invitation) {
-        if (invitationHost.dataset.battleId === invitation.battleId) return;
+    function renderBattleInvitations(invitations) {
+        const signature = invitations.map(invitation => `${invitation.battleId}:${invitation.expiresUtc}`).join('|');
+        if (invitationHost.dataset.signature === signature) return;
         clearInvitation();
-        invitationHost.dataset.battleId = invitation.battleId;
-        const card = document.createElement('section');
-        card.className = 'case-battle-invitation';
-        card.setAttribute('role', 'alertdialog');
-        card.setAttribute('aria-label', 'Case battle invitation');
-        const label = document.createElement('p'); label.className = 'eyebrow mb-1'; label.textContent = 'Incoming case battle';
-        const title = document.createElement('strong'); title.textContent = `${invitation.creatorDisplayName} challenged you`;
-        const copy = document.createElement('span'); copy.textContent = `${(invitation.caseKeys || []).length} round${(invitation.caseKeys || []).length === 1 ? '' : 's'} · both players stake the same cases`;
-        const clock = document.createElement('span'); clock.className = 'case-battle-invitation-clock';
-        const actions = document.createElement('div'); actions.className = 'case-battle-invitation-actions';
-        const decline = document.createElement('button'); decline.className = 'btn btn-sm btn-outline-light'; decline.type = 'button'; decline.textContent = 'Decline';
-        const accept = document.createElement('button'); accept.className = 'btn btn-sm btn-warning'; accept.type = 'button'; accept.innerHTML = '<i class="fa-solid fa-bolt me-1" aria-hidden="true"></i>Accept';
-        actions.append(decline, accept); card.append(label, title, copy, clock, actions); invitationHost.append(card);
-        const action = (name) => {
-            accept.disabled = true; decline.disabled = true;
-            const request = fetch(`/api/case-battles/${encodeURIComponent(invitation.battleId)}/invite/${name}`, { method: 'POST', credentials: 'same-origin', headers: { RequestVerificationToken: requestToken() } });
-            return window.personalToolsLoader.wrap(request, { title: name === 'accept' ? 'Joining case battle' : 'Declining invitation', message: 'Confirming the battle state…' })
-                .then(async response => response.ok ? response.json() : Promise.reject((await response.json()).message))
-                .then(result => { clearInvitation(); if (name === 'accept') window.location.assign(`/CaseOpening/Battles/${encodeURIComponent(result.battleId)}`); else appToast.info('Case battle invitation declined.'); })
-                .catch(message => { appToast.error(message || 'This invitation is no longer available.'); loadBattleInvitation(); });
-        };
-        accept.addEventListener('click', () => action('accept'));
-        decline.addEventListener('click', () => action('decline'));
+        invitationHost.dataset.signature = signature;
+        invitations.forEach(invitation => {
+            const card = document.createElement('section'); card.className = 'case-battle-invitation'; card.dataset.battleId = invitation.battleId; card.dataset.expiresUtc = invitation.expiresUtc;
+            card.setAttribute('role', 'alertdialog'); card.setAttribute('aria-label', 'Case battle invitation');
+            const label = document.createElement('p'); label.className = 'eyebrow mb-1'; label.textContent = 'Incoming case battle';
+            const title = document.createElement('strong'); title.textContent = `${invitation.creatorDisplayName} challenged you`;
+            const copy = document.createElement('span'); copy.textContent = `${(invitation.caseKeys || []).length} round${(invitation.caseKeys || []).length === 1 ? '' : 's'} · both players stake the same cases`;
+            const clock = document.createElement('span'); clock.className = 'case-battle-invitation-clock';
+            const actions = document.createElement('div'); actions.className = 'case-battle-invitation-actions';
+            const decline = document.createElement('button'); decline.className = 'btn btn-sm btn-outline-light'; decline.type = 'button'; decline.textContent = 'Decline';
+            const accept = document.createElement('button'); accept.className = 'btn btn-sm btn-warning'; accept.type = 'button'; accept.innerHTML = '<i class="fa-solid fa-cart-shopping me-1" aria-hidden="true"></i>Buy cases &amp; join';
+            const action = name => { accept.disabled = true; decline.disabled = true; const endpoint = name === 'accept' ? 'buy-and-accept' : name; const request = fetch(`/api/case-battles/${encodeURIComponent(invitation.battleId)}/invite/${endpoint}`, { method: 'POST', credentials: 'same-origin', headers: { RequestVerificationToken: requestToken() } }); return window.personalToolsLoader.wrap(request, { title: name === 'accept' ? 'Buying cases & joining' : 'Declining invitation', message: name === 'accept' ? 'Checking your inventory and buying only the missing cases…' : 'Confirming the battle state…' }).then(async response => response.ok ? response.json() : Promise.reject((await response.json()).message)).then(result => { if (name === 'accept') window.location.assign(`/CaseOpening/Battles/${encodeURIComponent(result.battleId)}`); else { card.remove(); appToast.info('Case battle invitation declined.'); } }).catch(message => { appToast.error(message || 'This invitation is no longer available.'); loadBattleInvitation(); }); };
+            accept.addEventListener('click', () => action('accept')); decline.addEventListener('click', () => action('decline'));
+            actions.append(decline, accept); card.append(label, title, copy, clock, actions); invitationHost.append(card);
+            window.requestAnimationFrame(() => card.classList.add('is-visible'));
+        });
         const tick = () => {
-            const seconds = Math.max(0, Math.ceil((new Date(invitation.expiresUtc).getTime() - Date.now()) / 1000));
-            clock.textContent = seconds ? `Expires in ${seconds}s` : 'Expired';
-            card.style.setProperty('--invite-progress', `${Math.min(1, seconds / 15)}`);
-            if (!seconds) { window.clearInterval(inviteTimer); action('decline'); }
+            invitationHost.querySelectorAll('.case-battle-invitation').forEach(card => { const seconds = Math.max(0, Math.ceil((new Date(card.dataset.expiresUtc).getTime() - Date.now()) / 1000)); card.querySelector('.case-battle-invitation-clock').textContent = seconds ? `Expires in ${seconds}s` : 'Expired'; card.style.setProperty('--invite-progress', `${Math.min(1, seconds / 15)}`); if (!seconds) card.remove(); });
+            if (!invitationHost.children.length) clearInvitation();
         };
         tick(); inviteTimer = window.setInterval(tick, 250);
-        window.requestAnimationFrame(() => card.classList.add('is-visible'));
     }
+
+    loadBattleInvitation();
+
+    window.setInterval(function () {
+        if (document.visibilityState === 'visible')
+            loadBattleInvitation();
+    }, 3000);
+
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible')
+            loadBattleInvitation();
+    });
+
     if (window.signalR) {
-        const connection = new window.signalR.HubConnectionBuilder().withUrl('/hubs/case-battles').withAutomaticReconnect([0, 1000, 3000, 8000]).build();
+        const connection = new window.signalR.HubConnectionBuilder()
+            .withUrl('/hubs/case-battles')
+            .withAutomaticReconnect([0, 1000, 3000, 8000])
+            .build();
+
         connection.on('CaseBattleInvitation', loadBattleInvitation);
-        connection.onreconnected(() => connection.invoke('JoinNotifications').then(loadBattleInvitation).catch(() => {}));
-        connection.start().then(() => connection.invoke('JoinNotifications')).then(loadBattleInvitation).catch(() => {});
+
+        connection.onreconnected(function () {
+            connection.invoke('JoinNotifications')
+                .then(loadBattleInvitation)
+                .catch(function () { });
+        });
+
+        connection.start()
+            .then(function () {
+                return connection.invoke('JoinNotifications');
+            })
+            .then(loadBattleInvitation)
+            .catch(function () { });
     }
 })();

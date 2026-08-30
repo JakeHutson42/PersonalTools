@@ -72,4 +72,17 @@ public sealed class CaseOpeningEconomyPolicyTests
         Assert.Contains("Tier 1 has 1 case; at least two are required.", warnings);
         Assert.Contains("Tier 3 has 0 cases; at least two are required.", warnings);
     }
+
+    [Theory]
+    [InlineData("exact-median", false)]
+    [InlineData("near-name-median", false)]
+    [InlineData("case-rarity-median", false)]
+    [InlineData("representative-rare-market-family-wear-median", false)]
+    [InlineData("catalogue-rarity-median", true)]
+    [InlineData("safety-floor", true)]
+    [InlineData("legacy-inferred", true)]
+    public void IsBlockingInferredPriceMethod_DistinguishesReviewedBlanketsFromBroadEstimates(string method, bool expected)
+    {
+        Assert.Equal(expected, CaseOpeningEconomyPolicy.IsBlockingInferredPriceMethod(method));
+    }
 }

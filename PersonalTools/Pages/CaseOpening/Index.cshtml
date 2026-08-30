@@ -72,19 +72,22 @@
             <i class="fa-solid fa-star" aria-hidden="true"></i>
             <div><p>Level up!</p><strong id="caseLevelUpText">Level 1</strong></div>
         </div>
-        <button class="case-daily-drop-recall d-none" id="caseDailyDropRecall" type="button" aria-label="Reopen Daily Drop rewards" title="Daily Drop ready">
-            <i class="fa-solid fa-parachute-box" aria-hidden="true"></i>
-        </button>
-        <aside class="live-winners-dock case-live-winners-dock" id="liveWinnersDock" aria-label="Live Case Simulator winners">
-            <button class="live-winners-trigger" id="liveWinnersTrigger" type="button" aria-expanded="false" aria-controls="liveWinnersPanel">
-                <span class="live-winners-live-dot" aria-hidden="true"></span><span class="live-winners-count" id="liveWinnersCount">—</span><span class="live-winners-label" id="liveWinnersLabel">players</span>
+        <div class="case-hud-quick-controls" aria-label="Case Tycoon quick controls">
+            <aside class="live-winners-dock case-live-winners-dock" id="liveWinnersDock" aria-label="Live Case Simulator winners">
+                <button class="live-winners-trigger" id="liveWinnersTrigger" type="button" aria-expanded="false" aria-controls="liveWinnersPanel">
+                    <span class="live-winners-live-dot" aria-hidden="true"></span><span class="live-winners-count" id="liveWinnersCount">—</span>
+                </button>
+                <section class="live-winners-panel" id="liveWinnersPanel" hidden>
+                    <div class="live-winners-header"><div><p>24-hour hall of fame</p><h2 id="liveWinnersTitle">Recent winners</h2></div></div>
+                    <div class="live-winners-tabs" role="tablist" aria-label="Hall of fame category"><button class="active" type="button" role="tab" data-live-winners-tab="pulls" aria-selected="true">Daily pulls</button><button type="button" role="tab" data-live-winners-tab="battles" aria-selected="false">Battle winners</button></div>
+                    <ol class="live-winners-list" id="liveWinnersList"><li class="live-winners-empty">Loading the latest wins…</li></ol>
+                    <span class="live-winners-scroll-cue" id="liveWinnersScrollCue" aria-hidden="true" hidden><i class="fa-solid fa-chevron-down"></i></span>
+                </section>
+            </aside>
+            <button class="case-daily-drop-recall d-none" id="caseDailyDropRecall" type="button" aria-label="Reopen Daily Drop rewards" title="Daily Drop ready">
+                <i class="fa-solid fa-parachute-box" aria-hidden="true"></i><span>Daily Drop</span>
             </button>
-            <section class="live-winners-panel" id="liveWinnersPanel" hidden>
-                <div class="live-winners-header"><div><p>24-hour hall of fame</p><h2>Recent winners</h2></div></div>
-                <ol class="live-winners-list" id="liveWinnersList"><li class="live-winners-empty">Loading the latest wins…</li></ol>
-                <span class="live-winners-scroll-cue" id="liveWinnersScrollCue" aria-hidden="true" hidden><i class="fa-solid fa-chevron-down"></i></span>
-            </section>
-        </aside>
+        </div>
     </section>
 
     <section class="case-game-panel case-shop case-tab-start section-spacing d-none" id="caseShop" data-case-destination-panel="shop" aria-labelledby="caseShopTitle">
@@ -314,7 +317,7 @@
                     </button>
                     @if (CaseBattleOptions.Value.Enabled)
                     {
-                        <a class="btn btn-outline-primary btn-sm case-stage-tool" asp-page="/CaseOpening/Battles/Create">
+                        <a class="btn btn-outline-primary btn-sm case-stage-tool" asp-page="/CaseOpening/Battles/Create" data-case-battle-transition-link>
                             <i class="fa-solid fa-box-open me-1" aria-hidden="true"></i>Case battle
                         </a>
                     }
@@ -1374,6 +1377,16 @@
                                             <label class="form-label small fw-semibold" for="caseTweakSaleRate">Skin sale return (%)</label>
                                             <input class="form-control" id="caseTweakSaleRate" type="number" min="0" max="100" step="0.01" />
                                         </div>
+                                        <div class="col-6 col-md-4">
+                                            <label class="form-label small fw-semibold" for="caseTweakReturnMultiplier">Global target return multiplier (%)</label>
+                                            <input class="form-control" id="caseTweakReturnMultiplier" type="number" min="50" max="200" step="0.01" aria-describedby="caseTweakReturnMultiplierHelp" />
+                                            <div class="form-text" id="caseTweakReturnMultiplierHelp">Scales generated case-return recommendations; manual case prices remain editable.</div>
+                                        </div>
+                                        <div class="col-6 col-md-4">
+                                            <label class="form-label small fw-semibold" for="caseTweakCsFloatExchangeRate">CSFloat USD to GBP (%)</label>
+                                            <input class="form-control" id="caseTweakCsFloatExchangeRate" type="number" min="10" max="200" step="0.01" aria-describedby="caseTweakCsFloatExchangeRateHelp" />
+                                            <div class="form-text" id="caseTweakCsFloatExchangeRateHelp">Applied only when CSFloat supplies a missing Skinport price.</div>
+                                        </div>
                                         <div class="col-6 col-md-4 d-flex align-items-end">
                                             <label class="case-shop-switch-row w-100 mb-0" data-switch-target="caseTweakFreeAllowance"><span><strong>Free-case allowance</strong><small>Optional replenishing allowance</small></span><span class="form-check form-switch m-0"><input class="form-check-input pt-switch" id="caseTweakFreeAllowance" type="checkbox" role="switch" /></span></label>
                                         </div>
@@ -1537,7 +1550,20 @@
                                     </div>
                                     <div class="case-market-active mt-3" id="caseMarketActiveSnapshot" aria-live="polite"><span>No active snapshot</span></div>
                                     <div class="alert alert-warning mt-3 mb-0 d-none" id="caseMarketPriceWarning" role="alert"></div>
+                                    <div class="row g-2 mt-2" id="caseMarketSummary" aria-label="Snapshot pricing summary">
+                                        <div class="col-6 col-xl-3"><div class="case-market-summary-card"><span>Skinport</span><strong id="caseMarketSkinportCount">0</strong><small>primary prices</small></div></div>
+                                        <div class="col-6 col-xl-3"><div class="case-market-summary-card"><span>CSFloat</span><strong id="caseMarketCsFloatCount">0</strong><small>exact backups</small></div></div>
+                                        <div class="col-6 col-xl-3"><div class="case-market-summary-card"><span>Inferred</span><strong id="caseMarketInferredCount">0</strong><small>review required</small></div></div>
+                                        <div class="col-6 col-xl-3"><div class="case-market-summary-card"><span>Publish state</span><strong id="caseMarketPublishState">Blocked</strong><small id="caseMarketPublishReason">Load a snapshot</small></div></div>
+                                    </div>
                                     <div class="case-market-snapshot-list mt-3" id="caseMarketSnapshotList"></div>
+                                    <section class="case-market-tier-editor mt-4" aria-labelledby="caseMarketTierCurveTitle">
+                                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                                            <div><h3 class="h6 mb-1" id="caseMarketTierCurveTitle">Tier profit curve</h3><p class="small-muted mb-0">Base profit is multiplied by the global target-return setting before recommendations are rounded.</p></div>
+                                            <button class="btn btn-outline-warning btn-sm" id="caseSaveTierEconomy" type="button"><i class="fa-solid fa-floppy-disk me-1" aria-hidden="true"></i>Save tier curve</button>
+                                        </div>
+                                        <div class="table-responsive"><table class="table table-sm align-middle case-market-table mb-0"><thead><tr><th>Tier</th><th>Base profit (%)</th><th>Round prices to (£)</th><th>Effective return</th></tr></thead><tbody id="caseMarketTierSettings"></tbody></table></div>
+                                    </section>
                                     <section class="case-special-variant-lab mt-4" aria-labelledby="caseSpecialVariantHeading">
                                         <div class="case-tweak-setting-heading mb-3"><i class="fa-solid fa-gem" aria-hidden="true"></i><div><strong id="caseSpecialVariantHeading">Rare variants</strong><span>Curate float, seed and phase rules; prices are published only through an immutable GBP snapshot.</span></div></div>
                                         <div class="case-market-active is-empty mb-3" id="caseSpecialVariantActiveSnapshot" aria-live="polite"><span>No active rare-variant snapshot</span></div>
@@ -1563,9 +1589,14 @@
                                         <div><h3 class="h6 mb-1">Case balance curve</h3><p class="small-muted mb-0">Published market prices drive both currencies: £100 equals 100 Stars. Keys are intentionally excluded.</p></div>
                                         <span class="small-muted" id="caseMarketCoverage">No snapshot loaded</span>
                                     </div>
+                                    <div class="row g-2 mb-2 case-market-filters">
+                                        <div class="col-12 col-md"><label class="visually-hidden" for="caseMarketSearch">Search cases</label><div class="input-group input-group-sm"><span class="input-group-text"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></span><input class="form-control" id="caseMarketSearch" type="search" placeholder="Search cases and capsules"></div></div>
+                                        <div class="col-6 col-md-2"><label class="visually-hidden" for="caseMarketTierFilter">Filter tier</label><select class="form-select form-select-sm" id="caseMarketTierFilter"><option value="">All tiers</option></select></div>
+                                        <div class="col-6 col-md-3"><label class="visually-hidden" for="caseMarketQualityFilter">Filter price quality</label><select class="form-select form-select-sm" id="caseMarketQualityFilter"><option value="">All quality states</option><option value="ready">Publish ready</option><option value="warning">Needs review</option><option value="missing">Missing prices</option></select></div>
+                                    </div>
                                     <div class="table-responsive">
                                         <table class="table table-sm align-middle case-tweak-cases-table case-market-table">
-                                            <thead><tr><th>Case</th><th>Tier</th><th>Market cost</th><th>Expected value</th><th>Sale value</th><th>Target return</th><th>Recommended buy</th><th>Published buy</th><th>Coverage</th></tr></thead>
+                                            <thead><tr><th>Case</th><th>Tier</th><th>Market cost</th><th>Expected value</th><th>Inferred EV</th><th>Sale value</th><th>Target return</th><th>Recommended buy</th><th>Published buy</th><th>Quality</th></tr></thead>
                                             <tbody id="caseMarketCaseTableBody"></tbody>
                                         </table>
                                     </div>
@@ -1582,6 +1613,22 @@
                                 <section class="case-admin-section case-battle-admin-section" aria-labelledby="caseTweakBattleBotStatsTitle">
                                     <div class="case-admin-section-title"><i class="fa-solid fa-robot" aria-hidden="true"></i><div><strong id="caseTweakBattleBotStatsTitle">Battle Bot record</strong><span>Bot wins are tracked for oversight; its items and value are discarded.</span></div></div>
                                     <div class="row g-2" id="caseTweakBattleBotStats"><div class="col-6 col-lg-3"><div class="case-admin-stat"><span>Attempted</span><strong>—</strong></div></div><div class="col-6 col-lg-3"><div class="case-admin-stat"><span>Won</span><strong>—</strong></div></div><div class="col-6 col-lg-3"><div class="case-admin-stat"><span>Skins discarded</span><strong>—</strong></div></div><div class="col-6 col-lg-3"><div class="case-admin-stat"><span>Value discarded</span><strong>—</strong></div></div></div>
+                                </section>
+                                <section class="case-admin-section case-battle-admin-section" aria-labelledby="caseTweakBattleTimingTitle">
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3"><div class="case-admin-section-title mb-0"><i class="fa-solid fa-stopwatch" aria-hidden="true"></i><div><strong id="caseTweakBattleTimingTitle">Battle animation timing</strong><span>Values are milliseconds and apply to newly loaded battle pages.</span></div></div><button class="btn btn-warning btn-sm" id="caseTweakBattleTimingsSave" type="button"><i class="fa-solid fa-floppy-disk me-1" aria-hidden="true"></i>Save timing</button></div>
+                                    <form id="caseTweakBattleTimingsForm" class="row g-2">
+                                        <div class="col-6 col-lg-3"><label class="form-label small" for="caseTweakBattleReadyPauseMs">Ready pause</label><input class="form-control form-control-sm" id="caseTweakBattleReadyPauseMs" type="number" min="0" max="10000" step="100"></div>
+                                        <div class="col-6 col-lg-3"><label class="form-label small" for="caseTweakBattleReadyCountdownMs">Countdown</label><input class="form-control form-control-sm" id="caseTweakBattleReadyCountdownMs" type="number" min="0" max="15000" step="100"></div>
+                                        <div class="col-6 col-lg-3"><label class="form-label small" for="caseTweakBattlePreSpinPauseMs">Pre-spin attention delay</label><input class="form-control form-control-sm" id="caseTweakBattlePreSpinPauseMs" type="number" min="0" max="10000" step="100"></div>
+                                        <div class="col-6 col-lg-3"><label class="form-label small" for="caseTweakBattleSpinDurationMs">Spin duration</label><input class="form-control form-control-sm" id="caseTweakBattleSpinDurationMs" type="number" min="500" max="20000" step="100"></div>
+                                        <div class="col-6 col-lg-3"><label class="form-label small" for="caseTweakBattleLandedResultPauseMs">Landed result hold</label><input class="form-control form-control-sm" id="caseTweakBattleLandedResultPauseMs" type="number" min="0" max="5000" step="100"></div>
+                                        <div class="col-6 col-lg-3"><label class="form-label small" for="caseTweakBattleRoundRevealPauseMs">Next spin delay</label><input class="form-control form-control-sm" id="caseTweakBattleRoundRevealPauseMs" type="number" min="0" max="10000" step="100"></div>
+                                        <div class="col-6 col-lg-3"><label class="form-label small" for="caseTweakBattleResultsPauseMs">Results pause</label><input class="form-control form-control-sm" id="caseTweakBattleResultsPauseMs" type="number" min="0" max="10000" step="100"></div>
+                                        <div class="col-6 col-lg-3"><label class="form-label small" for="caseTweakBattleWinnerIntroPauseMs">Winner intro</label><input class="form-control form-control-sm" id="caseTweakBattleWinnerIntroPauseMs" type="number" min="0" max="10000" step="100"></div>
+                                        <div class="col-6 col-lg-3"><label class="form-label small" for="caseTweakBattleWinnerTallyDurationMs">Winner tally</label><input class="form-control form-control-sm" id="caseTweakBattleWinnerTallyDurationMs" type="number" min="250" max="20000" step="100"></div>
+                                        <div class="col-6 col-lg-3"><label class="form-label small" for="caseTweakBattleWinnerVerdictPauseMs">Verdict pause</label><input class="form-control form-control-sm" id="caseTweakBattleWinnerVerdictPauseMs" type="number" min="0" max="10000" step="100"></div>
+                                        <div class="col-6 col-lg-3"><label class="form-label small" for="caseTweakBattleWinnerTransferDurationMs">Pot transfer</label><input class="form-control form-control-sm" id="caseTweakBattleWinnerTransferDurationMs" type="number" min="250" max="20000" step="100"></div>
+                                    </form>
                                 </section>
                                 <section class="case-admin-section case-battle-admin-section mb-0" aria-labelledby="caseTweakBattleRecoveryTitle">
                                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3"><div class="case-admin-section-title mb-0"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><div><strong id="caseTweakBattleRecoveryTitle">Recovery queue</strong><span>Only expired waiting rooms and interrupted openings appear here. Results are never re-rolled.</span></div></div><button class="btn btn-outline-warning btn-sm" id="caseTweakBattleRefresh" type="button"><i class="fa-solid fa-rotate me-1" aria-hidden="true"></i>Refresh</button></div>
@@ -1622,5 +1669,6 @@
 </div>
 
 @section Scripts {
+    <script src="~/js/pages/page-case-battle-transition.js" asp-append-version="true"></script>
     <script src="~/js/pages/page-case-opening.js" asp-append-version="true"></script>
 }

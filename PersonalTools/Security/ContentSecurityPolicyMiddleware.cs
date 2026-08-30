@@ -48,7 +48,7 @@ public sealed class ContentSecurityPolicyMiddleware
         "font-src 'self' data: https://cdnjs.cloudflare.com; " +
         "img-src 'self' data: blob: https:; " +
         "media-src 'self' data: blob: https:; " +
-        "connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com https://cdn.jsdelivr.net; " +
+        "connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
         "worker-src 'self' blob:; " +
         "manifest-src 'self'; " +
         "upgrade-insecure-requests";
