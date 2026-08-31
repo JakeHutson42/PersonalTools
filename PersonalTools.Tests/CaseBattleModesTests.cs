@@ -15,10 +15,11 @@ public sealed class CaseBattleModesTests
     }
 
     [Fact]
-    public void InitialRollout_EnablesOnlyTheSettledDuelMode()
+    public void ImplementedSoloModes_HaveACompleteSettlementPath()
     {
         Assert.True(CaseBattleModes.IsEnabled(CaseBattleModes.Duel));
-        Assert.False(CaseBattleModes.IsEnabled(CaseBattleModes.FreeForAll3));
+        Assert.True(CaseBattleModes.IsEnabled(CaseBattleModes.FreeForAll3));
+        Assert.False(CaseBattleModes.IsEnabled(CaseBattleModes.FreeForAll4));
         Assert.False(CaseBattleModes.IsEnabled(CaseBattleModes.Teams2v2));
     }
 }

@@ -80,6 +80,9 @@ public sealed class AppSettingsFuncs : IAppSettingsFuncs
         if (key == AppSettingKey.DashboardWeatherUnit && clean is not ("celsius" or "fahrenheit"))
             throw new InvalidOperationException("Choose a valid weather unit.");
 
+        if (key == AppSettingKey.CaseProfileEmoji && clean is not ("😎" or "🦊" or "🐲" or "👾" or "💎" or "🎯" or "🥷" or "👽" or "🧙" or "🦁" or "avatar:operative" or "avatar:vanguard" or "avatar:synth"))
+            throw new InvalidOperationException("Choose a valid Case Tycoon profile avatar.");
+
         await _data.Set(userId, key, clean, cancellationToken);
     }
 
@@ -122,6 +125,7 @@ public sealed class AppSettingsFuncs : IAppSettingsFuncs
         AppSettingKey.MatrixAmbientBackground => "false",
         AppSettingKey.DashboardDefaultView => "cards", 
         AppSettingKey.DashboardMotion => "true", 
-        AppSettingKey.DashboardWeatherUnit => "celsius", _ => string.Empty 
+        AppSettingKey.DashboardWeatherUnit => "celsius",
+        AppSettingKey.CaseProfileEmoji => "😎", _ => string.Empty
     };
 }

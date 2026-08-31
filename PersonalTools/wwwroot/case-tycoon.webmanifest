@@ -9,7 +9,7 @@
     "client_mode": "focus-existing"
   },
   "display": "standalone",
-  "orientation": "any",
+  "orientation": "portrait-primary",
   "background_color": "#111726",
   "theme_color": "#111726",
   "categories": ["games", "entertainment"],

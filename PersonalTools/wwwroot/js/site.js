@@ -7,7 +7,10 @@
             success: { title: 'Completed', icon: 'fa-circle-check' },
             error: { title: 'Something went wrong', icon: 'fa-circle-xmark' },
             warning: { title: 'Please check', icon: 'fa-triangle-exclamation' },
-            info: { title: 'Personal Tools', icon: 'fa-circle-info' }
+            info: { title: 'Information', icon: 'fa-circle-info' },
+            system: { title: 'System', icon: 'fa-gear' },
+            achievement: { title: 'Achievement unlocked', icon: 'fa-trophy' },
+            collection: { title: 'Collection updated', icon: 'fa-gem' }
         };
         const pending = [];
         let active = null;
@@ -138,6 +141,9 @@
             error: input => show(input, 'error'),
             warning: input => show(input, 'warning'),
             info: input => show(input, 'info'),
+            system: input => show(input, 'system'),
+            achievement: input => show(input, 'achievement'),
+            collection: input => show(input, 'collection'),
             showQueued
         };
     })();
@@ -145,12 +151,17 @@
     window.personalToolsToast = appToast;
 
     const appLoader = (() => {
-        const overlay = document.getElementById('appLoader');
+        const personalToolsOverlay = document.getElementById('appLoader');
+        const gameOverlay = document.body.classList.contains('case-tycoon-page')
+            ? document.querySelector('#caseBattleTransition, #caseDestinationTransition')
+            : null;
+        const overlay = gameOverlay || personalToolsOverlay;
+        const usesGameLoader = Boolean(gameOverlay);
         const title = overlay?.querySelector('[data-loader-title]');
         const message = overlay?.querySelector('[data-loader-message]');
         const lockTargets = '.app-mobile-header, .app-sidebar, .app-content-shell';
-        const showDelayMs = 140;
-        const minimumVisibleMs = 420;
+        const showDelayMs = usesGameLoader ? 0 : 140;
+        const minimumVisibleMs = usesGameLoader ? 650 : 420;
         let activeRequests = 0;
         let shownAt = 0;
         let showTimer = null;
@@ -179,18 +190,24 @@
             showTimer = null;
             if (!overlay || activeRequests < 1) return;
             shownAt = Date.now();
-            overlay.classList.add('is-visible');
+            if (usesGameLoader) {
+                overlay.classList.add('is-active');
+                window.requestAnimationFrame(() => overlay.classList.add('is-closing'));
+            } else {
+                overlay.classList.add('is-visible');
+            }
             overlay.setAttribute('aria-hidden', 'false');
             lockPage(true);
-            window.personalToolsMatrixRain?.start();
+            if (!usesGameLoader) window.personalToolsMatrixRain?.start();
         }
 
         function conceal() {
             hideTimer = null;
             if (!overlay || activeRequests > 0) return;
-            overlay.classList.remove('is-visible');
+            overlay.classList.remove(usesGameLoader ? 'is-active' : 'is-visible');
+            if (usesGameLoader) overlay.classList.remove('is-closing');
             overlay.setAttribute('aria-hidden', 'true');
-            window.personalToolsMatrixRain?.stop();
+            if (!usesGameLoader) window.personalToolsMatrixRain?.stop();
             lockPage(false);
             shownAt = 0;
         }
@@ -203,7 +220,8 @@
                 clearTimeout(hideTimer);
                 hideTimer = null;
             }
-            if (!overlay.classList.contains('is-visible') && !showTimer) {
+            const visibleClass = usesGameLoader ? 'is-active' : 'is-visible';
+            if (!overlay.classList.contains(visibleClass) && !showTimer) {
                 showTimer = setTimeout(reveal, showDelayMs);
             }
         }

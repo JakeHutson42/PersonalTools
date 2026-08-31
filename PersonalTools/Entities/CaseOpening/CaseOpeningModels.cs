@@ -920,6 +920,25 @@ public class CaseOpeningBotServerDbModel
     public bool IsEnabled { get; set; } = true;
 }
 
+public sealed class CaseBattleReactionShopItemObj
+{
+    public string Key { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Kind { get; set; } = "emoji";
+    public string Value { get; set; } = string.Empty;
+    public int CostStars { get; set; }
+    public long CostGbpPence { get; set; }
+    public long Cost { get; set; }
+    public bool IsOwned { get; set; }
+}
+
+public sealed class CaseBattleReactionShopObj
+{
+    public string EconomyMode { get; set; } = CaseOpeningEconomyModes.Stars;
+    public long ActiveBalanceMinor { get; set; }
+    public List<CaseBattleReactionShopItemObj> Items { get; set; } = [];
+}
+
 public sealed class CaseOpeningBotDbModel
 {
     public Guid BotId { get; set; }

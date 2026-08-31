@@ -16,10 +16,9 @@ public static class CaseBattleModes
         _ => 0
     };
 
-    // The schema deliberately understands every planned mode so historical data stays stable.
-    // Phase 1 exposes only the fully-settled duel path; enabling a mode before its allocator is
-    // implemented would let a player escrow cases in a battle that cannot complete safely.
-    public static bool IsEnabled(string mode) => string.Equals(mode, Duel, StringComparison.Ordinal);
+    // Only modes with a complete server execution and settlement path belong here. Runtime
+    // feature flags still decide whether an implemented mode is available to players.
+    public static bool IsEnabled(string mode) => mode is Duel or FreeForAll3 or FreeForAll4;
 }
 
 public sealed class CaseBattleFeatureOptions
@@ -27,8 +26,9 @@ public sealed class CaseBattleFeatureOptions
     public bool Enabled { get; init; }
 }
 
-public sealed class CaseBattleCreateRequestObj { public string Mode { get; set; } = string.Empty; public Guid? InvitedUserId { get; set; } public bool UseBot { get; set; } public List<string> CaseKeys { get; set; } = []; }
-public sealed class CaseBattleBotStatusObj { public bool CaseBattlesEnabled { get; set; } public bool Enabled { get; set; } public int BattlesAttempted { get; set; } public int BattlesWon { get; set; } public int SkinsDiscarded { get; set; } public decimal ValueDiscarded { get; set; } }
+public sealed class CaseBattleCreateRequestObj { public string Mode { get; set; } = string.Empty; public Guid? InvitedUserId { get; set; } public List<Guid> InvitedUserIds { get; set; } = []; public bool UseBot { get; set; } public List<string> CaseKeys { get; set; } = []; }
+public sealed class CaseBattleInviteRequestObj { public List<Guid> InvitedUserIds { get; set; } = []; }
+public sealed class CaseBattleBotStatusObj { public bool CaseBattlesEnabled { get; set; } public bool FreeForAll3Enabled { get; set; } public bool FreeForAll4Enabled { get; set; } public bool Enabled { get; set; } public int BattlesAttempted { get; set; } public int BattlesWon { get; set; } public int SkinsDiscarded { get; set; } public decimal ValueDiscarded { get; set; } }
 public sealed class CaseBattleTimingSettingsObj
 {
     public int MaxCasesPerBattle { get; set; } = 20;
@@ -71,6 +71,7 @@ public sealed class CaseBattleParticipantObj
 {
     public Guid UserId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
+    public string ProfileAvatar { get; set; } = string.Empty;
     public int Seat { get; set; }
     public int Team { get; set; }
     public bool IsReady { get; set; }
@@ -81,9 +82,18 @@ public sealed class CaseBattleParticipantObj
 public sealed class CaseBattleDetailObj : CaseBattleSummaryObj
 {
     public List<CaseBattleParticipantObj> Participants { get; set; } = [];
+    public List<CaseBattleSeatInvitationObj> Invitations { get; set; } = [];
     public decimal LockedPotValue { get; set; }
     public bool IsCreator { get; set; }
     public List<CaseBattlePullObj> Pulls { get; set; } = [];
+}
+
+public sealed class CaseBattleSeatInvitationObj
+{
+    public Guid InvitedUserId { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime ExpiresUtc { get; set; }
 }
 
 public sealed class CaseBattlePullObj

@@ -45,6 +45,9 @@ public interface ICaseOpeningFuncs
     Task<CaseOpeningInventoryLockObj> SetCaseOpeningInventoryLock(Guid userId, Guid openingId, bool isLocked, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryUpgradeObj> GetCaseOpeningInventoryUpgrades(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryUpgradeObj> UnlockCaseOpeningInventoryUpgrade(Guid userId, string upgradeKey, CancellationToken cancellationToken = default);
+    Task<CaseBattleReactionShopObj> GetCaseBattleReactionShop(Guid userId, CancellationToken cancellationToken = default);
+    Task<CaseBattleReactionShopObj> PurchaseCaseBattleReaction(Guid userId, string reactionKey, CancellationToken cancellationToken = default);
+    Task<CaseBattleReactionShopItemObj> GetOwnedCaseBattleReaction(Guid userId, string reactionKey, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryUpgradeObj> SetCaseOpeningAutoSellPreference(Guid userId, string rarityKey, bool enabled, bool? preserveStatTrak, CancellationToken cancellationToken = default);
     Task<CaseOpeningAutoBuySummaryObj> GetCaseOpeningAutoBuyRules(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningAutoBuySummaryObj> SetCaseOpeningAutoBuyRule(Guid userId, string caseKey, CaseOpeningAutoBuyRuleRequestObj request, CancellationToken cancellationToken = default);
@@ -104,6 +107,40 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     private const int MaximumTradeUpRecipeSlots = 20;
     private const int MaximumTradeUpRecipeHoldingCapacity = 20;
     private const string StarterCaseKey = "kilowatt";
+    private static readonly CaseBattleReactionShopItemObj[] BattleReactionCatalogue =
+    [
+        new() { Key="fire", Name="Fire", Value="🔥" }, new() { Key="surprised", Name="Surprised", Value="😮" }, new() { Key="laugh", Name="Laugh", Value="😂" }, new() { Key="skull", Name="Skull", Value="💀" },
+        new() { Key="luck", Name="Good luck", Value="🍀" }, new() { Key="clap", Name="Clap", Value="👏" }, new() { Key="clown", Name="Clown", Value="🤡" }, new() { Key="heart", Name="Heart", Value="❤️" },
+        new() { Key="salute", Name="Salute", Value="🫡", CostStars=450, CostGbpPence=45 }, new() { Key="diamond", Name="Diamond hands", Value="💎", CostStars=650, CostGbpPence=65 },
+        new() { Key="operative", Name="Operative sticker", Kind="image", Value="/images/case-tycoon/avatars/operative.svg", CostStars=900, CostGbpPence=90 },
+        new() { Key="synth", Name="Synth sticker", Kind="image", Value="/images/case-tycoon/avatars/synth.svg", CostStars=1100, CostGbpPence=110 }
+    ];
+
+    public async Task<CaseBattleReactionShopObj> GetCaseBattleReactionShop(Guid userId, CancellationToken cancellationToken = default)
+    {
+        HashSet<string> owned = (await _data.GetCaseBattleReactionUnlocks(userId, cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        CaseOpeningProgressDbModel progress = await _data.GetCaseOpeningProgress(userId, cancellationToken);
+        CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
+        bool gbp = IsGbp(settings);
+        return new CaseBattleReactionShopObj { EconomyMode=settings.EconomyMode, ActiveBalanceMinor=gbp ? progress.GbpPence : progress.Stars,
+            Items=BattleReactionCatalogue.Select(item => new CaseBattleReactionShopItemObj { Key=item.Key,Name=item.Name,Kind=item.Kind,Value=item.Value,CostStars=item.CostStars,CostGbpPence=item.CostGbpPence,Cost=gbp ? item.CostGbpPence : item.CostStars,IsOwned=item.CostStars==0 || owned.Contains(item.Key) }).ToList() };
+    }
+
+    public async Task<CaseBattleReactionShopObj> PurchaseCaseBattleReaction(Guid userId, string reactionKey, CancellationToken cancellationToken = default)
+    {
+        CaseBattleReactionShopItemObj item = BattleReactionCatalogue.FirstOrDefault(candidate => candidate.Key.Equals(reactionKey, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException("That battle reaction is not available.");
+        if (item.CostStars == 0) throw new InvalidOperationException("That battle reaction is already available.");
+        CaseBattleReactionShopObj current = await GetCaseBattleReactionShop(userId, cancellationToken);
+        if (current.Items.Any(candidate => candidate.Key == item.Key && candidate.IsOwned)) throw new InvalidOperationException("That battle reaction is already unlocked.");
+        await _data.PurchaseCaseBattleReaction(userId, item.Key, item.CostStars, item.CostGbpPence, cancellationToken);
+        await RecordPlayerActivity(userId, unlocksEarned:1, starsSpent:IsGbp(await _data.GetGameSettings(cancellationToken)) ? 0 : item.CostStars, upgradesPurchased:1, cancellationToken:cancellationToken);
+        return await GetCaseBattleReactionShop(userId, cancellationToken);
+    }
+
+    public async Task<CaseBattleReactionShopItemObj> GetOwnedCaseBattleReaction(Guid userId, string reactionKey, CancellationToken cancellationToken = default)
+    {
+        return (await GetCaseBattleReactionShop(userId, cancellationToken)).Items.FirstOrDefault(item => item.Key.Equals(reactionKey, StringComparison.OrdinalIgnoreCase) && item.IsOwned) ?? throw new InvalidOperationException("That battle reaction has not been unlocked.");
+    }
 
     private static readonly IReadOnlyDictionary<string, string[]> DevDropRarityKeys = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
     {

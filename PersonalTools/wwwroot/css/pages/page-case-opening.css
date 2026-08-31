@@ -110,6 +110,40 @@
     transition: border-color .16s ease,background .16s ease,box-shadow .16s ease;
 }
 
+.case-profile-avatar {
+    display: inline-grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    flex: 0 0 3rem;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb,var(--case-xp) 45%,var(--pt-line));
+    border-radius: var(--pt-small-radius);
+    background: color-mix(in srgb,var(--case-xp) 13%,var(--pt-surface));
+    box-shadow: inset 0 1px 0 color-mix(in srgb,#fff 10%,transparent);
+    font-size: 1.55rem;
+    line-height: 1;
+}
+
+.case-profile-avatar.has-profile-image { padding:0; }
+.case-profile-avatar.has-profile-image img { width:100%; height:100%; object-fit:cover; }
+
+.case-xp-progress-row {
+    display: grid;
+    grid-template-columns: 1.6rem minmax(4rem,1fr) 1.6rem;
+    align-items: center;
+    gap: .45rem;
+}
+
+.case-xp-level-marker {
+    color: var(--pt-ink-soft);
+    font-size: .67rem;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
     .case-hud-player:hover {
         border-color: color-mix(in srgb,var(--case-gold) 62%,var(--pt-line));
         background: linear-gradient(105deg,color-mix(in srgb,var(--case-gold) 15%,transparent),transparent 72%);
@@ -174,10 +208,45 @@
     min-width: 0;
 }
 
+.case-hud-battles {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .42rem;
+    height: 2.35rem;
+    min-height: 2.35rem;
+    padding: .35rem .7rem;
+    color: #211604;
+    border: 1px solid #f0c24c;
+    border-radius: var(--pt-small-radius);
+    background: linear-gradient(145deg,#f2c952,var(--case-gold));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.28),0 .22rem .55rem color-mix(in srgb,var(--case-gold) 18%,transparent);
+    font-size: .72rem;
+    font-weight: 850;
+    letter-spacing: .035em;
+    text-decoration: none;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition: color .16s ease,border-color .16s ease,background-color .16s ease,box-shadow .16s ease;
+}
+
+.case-hud-battles:hover {
+    color: #140e03;
+    border-color: #ffdc70;
+    background: linear-gradient(145deg,#f8d66e,#e8b743);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.32),0 .3rem .72rem color-mix(in srgb,var(--case-gold) 25%,transparent);
+}
+
+.case-hud-battles:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 .2rem color-mix(in srgb,var(--case-gold) 24%,transparent),0 .22rem .55rem color-mix(in srgb,var(--case-gold) 18%,transparent);
+}
+
 .case-hud-simulation, .case-hud-metric, .case-hud-stars, .case-hud-gbp {
     display: inline-flex;
     align-items: center;
     gap: .42rem;
+    height: 2.35rem;
     min-height: 2.35rem;
     padding: .35rem .62rem;
     color: var(--pt-ink-soft);
@@ -260,6 +329,8 @@
 
 .case-game-hud .case-tweak-button {
     flex-basis: 2.35rem;
+    width: 2.35rem;
+    height: 2.35rem;
     box-shadow: none;
 }
 
@@ -2136,13 +2207,67 @@ body:has(.case-opening-page) .form-switch .form-check-label {
     }
 
 .case-open-controls {
-    position: relative;
+    position: static;
     z-index: 5;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: .7rem;
+}
+
+.case-open-action-frame {
+    position: static;
+    display: inline-grid;
+    place-items: center;
+}
+
+.case-open-utility {
+    position: absolute;
+    z-index: 8;
+    bottom: 1.5rem;
+}
+
+.case-open-utility-sound {
+    z-index: 20;
+    left: 1.5rem;
+}
+
+.case-open-utility-odds {
+    right: 1.5rem;
+}
+
+.case-open-utility-button {
+    display: inline-grid;
+    place-items: center;
+    width: 2.65rem;
+    height: 2.65rem;
+    padding: 0;
+    color: var(--pt-ink-soft);
+    border: 1px solid color-mix(in srgb,var(--case-gold) 42%,var(--pt-line));
+    border-radius: 50%;
+    background: color-mix(in srgb,var(--pt-surface) 94%,var(--case-gold));
+    box-shadow: inset 0 1px 0 color-mix(in srgb,#fff 10%,transparent),0 .25rem .65rem rgba(0,0,0,.22);
+    font-size: .95rem;
+    transition: color .16s ease,border-color .16s ease,background-color .16s ease,box-shadow .16s ease;
+}
+
+.case-open-utility-button:hover,
+.case-open-utility-button[aria-expanded="true"] {
+    color: var(--case-gold);
+    border-color: color-mix(in srgb,var(--case-gold) 72%,var(--pt-line));
+    background: color-mix(in srgb,var(--case-gold) 13%,var(--pt-surface));
+    box-shadow: inset 0 1px 0 color-mix(in srgb,#fff 12%,transparent),0 .3rem .8rem color-mix(in srgb,var(--case-gold) 18%,transparent);
+}
+
+.case-open-utility-button:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 .22rem color-mix(in srgb,var(--case-gold) 25%,transparent),0 .25rem .65rem rgba(0,0,0,.22);
+}
+
+.case-open-utility-sound .case-sound-menu {
+    z-index: 21;
+    margin-bottom: .55rem !important;
 }
 
 .case-open-button {
@@ -2486,8 +2611,18 @@ body:has(.case-opening-page) .form-switch .form-check-label {
     --bs-modal-color: var(--pt-ink);
     color: var(--pt-ink);
     border-color: color-mix(in srgb,var(--case-xp) 34%,var(--pt-line));
-    background: linear-gradient(145deg,color-mix(in srgb,var(--case-xp) 7%,var(--pt-surface)),var(--pt-surface) 48%);
+    background-color: var(--pt-surface) !important;
+    background-image: linear-gradient(145deg,color-mix(in srgb,var(--case-xp) 7%,var(--pt-surface)),var(--pt-surface) 48%) !important;
+    box-shadow: 0 1.4rem 3.5rem rgba(0,0,0,.42),inset 0 1px 0 color-mix(in srgb,#fff 8%,transparent) !important;
+    opacity: 1;
+    max-height: calc(100dvh - 2rem);
 }
+
+.case-player-settings-dialog { width:calc(100% - 1.5rem); max-width:22.5rem; margin-inline:auto; }
+.case-player-settings-modal .modal-body { display:grid; gap:1rem; padding:1rem; overflow-y:auto; overscroll-behavior:contain; }
+.case-player-settings-section { padding:.85rem; border:1px solid var(--pt-line); border-radius:.35rem; background:var(--pt-canvas); }
+.case-player-settings-section + .case-player-settings-section { margin-top:0; }
+.case-player-settings-label { margin:0 0 .5rem; color:var(--pt-ink-soft); font-size:.62rem; font-weight:800; letter-spacing:.09em; text-transform:uppercase; }
 
     .case-player-settings-modal .modal-header {
         border-color: var(--pt-line);
@@ -3332,20 +3467,34 @@ body:has(.case-opening-page) .form-switch .form-check-label {
     }
 
 .case-sound-meter {
-    height: .5rem;
-    overflow: hidden;
-    margin: .7rem 0 .2rem;
-    border-radius: 999px;
-    background: color-mix(in srgb,var(--pt-line) 72%,transparent);
+    position: relative;
+    height: 2rem;
+    margin: .2rem 0 0;
+    border-radius: var(--pt-small-radius);
+    background: transparent;
     cursor: pointer;
     touch-action: none;
     box-shadow: inset 0 1px 2px rgba(0,0,0,.24);
 }
 
+    .case-sound-meter::before {
+        content: "";
+        position: absolute;
+        inset: calc(50% - .25rem) 0 auto;
+        height: .5rem;
+        border-radius: 999px;
+        background: color-mix(in srgb,var(--pt-line) 72%,transparent);
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.24);
+    }
+
     .case-sound-meter span {
         display: block;
+        position: absolute;
+        z-index: 1;
+        top: calc(50% - .25rem);
+        left: 0;
         width: 45%;
-        height: 100%;
+        height: .5rem;
         border-radius: inherit;
         background: linear-gradient(90deg,var(--case-purple),var(--case-gold));
         box-shadow: 0 0 .55rem color-mix(in srgb,var(--case-gold) 50%,transparent);
@@ -3353,7 +3502,7 @@ body:has(.case-opening-page) .form-switch .form-check-label {
     }
 
     .case-sound-meter:hover {
-        background: color-mix(in srgb,var(--pt-line) 92%,transparent);
+        background: color-mix(in srgb,var(--case-gold) 5%,transparent);
     }
 
     .case-sound-meter:focus-visible {
@@ -3428,14 +3577,87 @@ body:has(.case-opening-page) .form-switch .form-check-label {
         white-space: nowrap;
     }
 
-.case-stage-stock {
+.case-stage-actions {
     display: flex;
+    align-items: stretch;
     justify-content: flex-end;
+    gap: .55rem;
 }
 
-    .case-stage-stock .case-owned-count {
-        margin-top: 0;
-    }
+.case-stage-stock {
+    display: flex;
+}
+
+.case-stage-stock .case-owned-count {
+    height: 100%;
+    margin-top: 0;
+}
+
+.case-choose-button {
+    display: inline-grid;
+    grid-template-columns: auto minmax(0,1fr) auto;
+    align-items: center;
+    gap: .55rem;
+    min-width: 10.75rem;
+    min-height: 3.15rem;
+    padding: .45rem .65rem;
+    color: var(--pt-ink);
+    border: 1px solid color-mix(in srgb,var(--case-blue) 38%,var(--pt-line));
+    border-radius: var(--pt-small-radius);
+    background: linear-gradient(120deg,color-mix(in srgb,var(--case-blue) 9%,var(--pt-surface)),var(--pt-surface));
+    text-align: left;
+    transition: color .16s ease,border-color .16s ease,background-color .16s ease,box-shadow .16s ease;
+}
+
+.case-choose-button:hover {
+    border-color: color-mix(in srgb,var(--case-blue) 66%,var(--pt-line));
+    background: color-mix(in srgb,var(--case-blue) 13%,var(--pt-surface));
+    box-shadow: 0 .25rem .7rem color-mix(in srgb,var(--case-blue) 12%,transparent);
+}
+
+.case-choose-button:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 .2rem color-mix(in srgb,var(--case-blue) 20%,transparent);
+}
+
+.case-choose-button:disabled {
+    opacity: .52;
+    cursor: not-allowed;
+}
+
+.case-choose-button-icon {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    color: color-mix(in srgb,var(--case-blue) 82%,var(--pt-ink));
+    border: 1px solid color-mix(in srgb,var(--case-blue) 32%,var(--pt-line));
+    border-radius: var(--pt-small-radius);
+    background: color-mix(in srgb,var(--case-blue) 11%,var(--pt-surface));
+}
+
+.case-choose-button-copy {
+    display: grid;
+    line-height: 1.1;
+}
+
+.case-choose-button-copy small {
+    color: var(--pt-ink-soft);
+    font-size: .61rem;
+    font-weight: 750;
+    letter-spacing: .055em;
+    text-transform: uppercase;
+}
+
+.case-choose-button-copy strong {
+    margin-top: .18rem;
+    font-size: .76rem;
+}
+
+.case-choose-button-chevron {
+    color: var(--pt-ink-soft);
+    font-size: .65rem;
+}
 
 .case-stage-tools {
     grid-column: 1/-1;
@@ -3455,6 +3677,45 @@ body:has(.case-opening-page) .form-switch .form-check-label {
     line-height: 1;
     font-size: .72rem;
 }
+
+.case-profile-emoji-choices {
+    display: grid;
+    grid-template-columns: repeat(5,minmax(0,1fr));
+    gap: .4rem;
+    margin-bottom: .8rem;
+}
+
+.case-player-settings-modal .case-player-settings-account { margin-top:0 !important; border-radius:.35rem; background:var(--pt-canvas); }
+
+.case-profile-image-choices { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem; margin-bottom:.15rem; }
+
+.case-profile-emoji-choice {
+    display: grid;
+    place-items: center;
+    min-width: 0;
+    aspect-ratio: 1;
+    padding: .25rem;
+    color: inherit;
+    border: 1px solid var(--pt-line);
+    border-radius: var(--pt-small-radius);
+    background: color-mix(in srgb,var(--pt-surface) 92%,var(--pt-canvas));
+    font-size: 1.25rem;
+    transition: border-color .16s ease,background-color .16s ease,box-shadow .16s ease;
+}
+
+.case-profile-emoji-choice:hover,
+.case-profile-emoji-choice.is-selected {
+    border-color: color-mix(in srgb,var(--case-xp) 62%,var(--pt-line));
+    background: color-mix(in srgb,var(--case-xp) 13%,var(--pt-surface));
+}
+
+.case-profile-emoji-choice:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 .2rem color-mix(in srgb,var(--case-xp) 20%,transparent);
+}
+
+.case-profile-emoji-choice.is-image { aspect-ratio:1.2; padding:.15rem; overflow:hidden; }
+.case-profile-emoji-choice.is-image img { width:100%; height:100%; object-fit:cover; border-radius:calc(var(--pt-small-radius) - 2px); }
 
 /* Case Battles starts as the same compact gold tool as Choose case, then discloses its purpose
    through a contained icon-to-label transition without moving the surrounding controls. */
@@ -6164,21 +6425,14 @@ button.case-bot-unit:not(:disabled):hover {
         gap: .65rem;
     }
 
-    .case-stage-tools {
-        justify-content: flex-start;
-        overflow: visible;
-        flex-wrap: wrap;
-        margin-inline: -.25rem;
-        padding: .65rem .25rem .15rem;
-        scrollbar-width: none;
+    .case-stage-actions {
+        grid-column: 1/-1;
+        justify-content: space-between;
     }
 
-        .case-stage-tools::-webkit-scrollbar {
-            display: none;
-        }
-
-    .case-stage-tool {
-        flex: 0 0 auto;
+    .case-choose-button {
+        flex: 1 1 auto;
+        min-width: 0;
     }
 
     .case-no-stock {
@@ -6203,6 +6457,8 @@ button.case-bot-unit:not(:disabled):hover {
 @media (max-width:575.98px) {
     .case-stage .card-body {
         padding-inline: .75rem !important;
+        padding-bottom: 4rem !important;
+        position: relative;
     }
 
     .case-stage-identity h2 {
@@ -6223,12 +6479,33 @@ button.case-bot-unit:not(:disabled):hover {
     }
 
     .case-open-controls {
+        position: static;
         flex-direction: column;
         gap: .8rem;
     }
 
     .case-open-button {
         min-width: min(100%,230px);
+    }
+
+    .case-open-action-frame {
+        position: static;
+        width: min(100%,230px);
+    }
+
+    .case-open-utility-button {
+        width: 2.45rem;
+        height: 2.45rem;
+    }
+
+    .case-open-utility-sound {
+        bottom: .75rem;
+        left: .75rem;
+    }
+
+    .case-open-utility-odds {
+        right: .75rem;
+        bottom: .75rem;
     }
 
     .case-open-quantity {
@@ -8148,6 +8425,18 @@ body:has(.case-player-profile.show) {
         gap: .5rem;
     }
 
+    .case-profile-avatar {
+        width: 2.45rem;
+        height: 2.45rem;
+        flex-basis: 2.45rem;
+        font-size: 1.25rem;
+    }
+
+    .case-xp-progress-row {
+        grid-template-columns: 1.25rem minmax(3rem,1fr) 1.25rem;
+        gap: .3rem;
+    }
+
     .case-hud-xp .case-xp-bar-head strong {
         font-size: .64rem;
     }
@@ -8159,9 +8448,20 @@ body:has(.case-player-profile.show) {
 
     .case-hud-status {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: minmax(0,1fr) repeat(4,auto);
         align-items: center;
         gap: .3rem;
+    }
+
+    .case-hud-battles {
+        width: 2rem;
+        height: 2rem;
+        min-height: 2rem;
+        padding: 0;
+    }
+
+    .case-hud-battles span {
+        display: none;
     }
 
     .case-hud-simulation {
@@ -8170,6 +8470,7 @@ body:has(.case-player-profile.show) {
 
     .case-hud-metric {
         min-width: 0;
+        height: 2rem;
         min-height: 2rem;
         padding: .25rem .4rem;
         font-size: .65rem;
@@ -8186,7 +8487,9 @@ body:has(.case-player-profile.show) {
     }
 
     .case-hud-stars, .case-hud-gbp {
+        height: 2rem;
         min-height: 2rem;
+        padding-block: 0;
     }
 
     .case-game-hud .case-stars-icon {
@@ -8228,9 +8531,10 @@ body:has(.case-player-profile.show) {
     }
 
 .case-hud-daily-drop {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: auto minmax(8rem,1fr) auto;
+    align-items: center;
+    gap: .75rem;
     min-width: 0;
     padding: .42rem .55rem;
     color: var(--pt-ink);
@@ -8242,6 +8546,24 @@ body:has(.case-player-profile.show) {
     pointer-events: none;
     transform: translateY(-112%);
     transition: opacity .22s ease,transform .34s cubic-bezier(.2,.8,.2,1),border-color .16s ease,box-shadow .16s ease;
+}
+
+.case-daily-drop-avatar {
+    border-color: color-mix(in srgb,#61d48b 45%,var(--pt-line));
+    background: color-mix(in srgb,#61d48b 13%,var(--pt-surface));
+}
+
+.case-hud-daily-drop .case-xp-track {
+    border-color: color-mix(in srgb,#61d48b 48%,var(--pt-line));
+    background: color-mix(in srgb,var(--pt-surface) 72%,#61d48b);
+}
+
+.case-hud-daily-drop .case-hud-profile-cta {
+    border-color: color-mix(in srgb,#61d48b 32%,var(--pt-line));
+}
+
+.case-hud-daily-drop .case-hud-profile-cta i {
+    color: #61d48b;
 }
 
 .case-hud-progression:has(.case-hud-daily-drop.is-showing) .case-hud-profile-trigger {
@@ -8263,15 +8585,69 @@ body:has(.case-player-profile.show) {
     transform: translateY(112%);
 }
 
+/* Keep the floating player HUD on one deliberate game palette: gold communicates interactive
+   and valuable state, warm white carries primary values, and muted warm grey carries metadata. */
+.case-game-hud {
+    border-color: color-mix(in srgb,var(--case-gold) 48%,var(--pt-line));
+}
+
+.case-game-hud :is(.case-hud-player,.case-hud-daily-drop,.case-hud-simulation,.case-hud-metric,.case-hud-stars,.case-hud-gbp,.case-hud-battles,.case-tweak-button) {
+    border-color: color-mix(in srgb,var(--case-gold) 46%,var(--pt-line));
+}
+
+.case-game-hud :is(.case-profile-avatar,.case-daily-drop-avatar,.case-xp-track,.case-daily-drop-track) {
+    border-color: color-mix(in srgb,var(--case-gold) 58%,var(--pt-line));
+}
+
+.case-game-hud :is(.case-hud-profile-cta,.case-hud-daily-drop .case-hud-profile-cta) {
+    color: color-mix(in srgb,var(--case-gold) 24%,var(--pt-ink-soft));
+    border-color: color-mix(in srgb,var(--case-gold) 42%,var(--pt-line));
+}
+
+.case-game-hud :is(.case-hud-profile-cta i,.case-hud-daily-drop .case-hud-profile-cta i,.case-hud-metric i,.case-tweak-button i) {
+    color: var(--case-gold);
+}
+
+.case-game-hud .case-xp-bar-head strong,
+.case-game-hud :is(.case-hud-stars,.case-hud-gbp) strong {
+    color: color-mix(in srgb,#fff 88%,var(--case-gold));
+}
+
+.case-game-hud :is(.case-xp-text,.case-xp-level-marker,.case-hud-metric) {
+    color: color-mix(in srgb,var(--case-gold) 18%,var(--pt-ink-soft));
+}
+
+.case-game-hud .case-hud-stars,
+.case-game-hud .case-hud-gbp {
+    --case-stars: var(--case-gold);
+    --case-gbp: var(--case-gold);
+    background: color-mix(in srgb,var(--pt-surface) 91%,var(--case-gold));
+}
+
+.case-game-hud :is(.case-stars-icon,.case-gbp-icon) {
+    color: var(--case-gold);
+    border-color: color-mix(in srgb,var(--case-gold) 88%,#fff);
+    background: color-mix(in srgb,var(--case-gold) 13%,var(--pt-surface));
+    box-shadow: 0 0 .75rem color-mix(in srgb,var(--case-gold) 20%,transparent),inset 0 0 .38rem color-mix(in srgb,var(--case-gold) 12%,transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .case-hud-daily-drop,
+    .case-hud-progression .case-hud-profile-trigger,
+    .case-xp-fill {
+        transition-duration: .01ms !important;
+    }
+}
+
 .case-hud-daily-drop.is-ready.is-showing {
     cursor: pointer;
-    border-color: #72d799;
-    box-shadow: 0 0 0 .12rem color-mix(in srgb,#72d799 14%,transparent),inset 0 0 1.2rem color-mix(in srgb,#72d799 9%,transparent);
+    border-color: color-mix(in srgb,var(--case-gold) 68%,var(--pt-line));
+    box-shadow: 0 0 0 .12rem color-mix(in srgb,var(--case-gold) 14%,transparent),inset 0 0 1.2rem color-mix(in srgb,var(--case-gold) 9%,transparent);
 }
 
 .case-hud-daily-drop:focus-visible {
     outline: 0;
-    box-shadow: 0 0 0 .22rem color-mix(in srgb,#72d799 35%,transparent);
+    box-shadow: 0 0 0 .22rem color-mix(in srgb,var(--case-gold) 30%,transparent);
 }
 
 .case-daily-drop-track .case-xp-fill {
@@ -8841,7 +9217,12 @@ body:has(.case-player-profile.show) {
         pointer-events: none;
     }
 
-    .case-hud-quick-controls .case-live-winners-dock { position: relative; pointer-events: auto; }
+    .case-hud-quick-controls .case-live-winners-dock {
+        position: relative;
+        top: auto;
+        left: auto;
+        pointer-events: auto;
+    }
     .case-hud-quick-controls .case-daily-drop-recall { position: static; pointer-events: auto; }
 
     .case-live-winners-dock .live-winners-trigger {
@@ -9648,3 +10029,4 @@ body:has(.case-player-profile.show) {
         min-height: 2.75rem;
     }
 }
+.case-reaction-upgrade{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:.75rem}.case-reaction-upgrade-preview{display:grid;place-items:center;width:2.75rem;height:2.75rem;border:1px solid color-mix(in srgb,var(--case-gold,#e4ae39) 35%,var(--pt-line));border-radius:var(--pt-small-radius);background:color-mix(in srgb,var(--case-gold,#e4ae39) 8%,var(--pt-surface));font-size:1.5rem}.case-reaction-upgrade-preview img{width:2.1rem;height:2.1rem;object-fit:contain}@media(max-width:575.98px){.case-reaction-upgrade{grid-template-columns:auto 1fr}.case-reaction-upgrade .btn{grid-column:1/-1;width:100%}}

@@ -9,7 +9,7 @@
     "client_mode": "focus-existing"
   },
   "display": "standalone",
-  "orientation": "any",
+  "orientation": "portrait-primary",
   "background_color": "#151c31",
   "theme_color": "#151c31",
   "categories": ["productivity", "utilities"],

@@ -352,6 +352,14 @@ public sealed class CaseOpeningController : ControllerBase
         return Execute(() => _caseOpening.GetCaseSettings(cancellationToken), "load case settings", "all");
     }
 
+    [HttpGet("battle-reactions")]
+    public Task<ActionResult<CaseBattleReactionShopObj>> GetBattleReactions(CancellationToken cancellationToken) =>
+        Execute(() => _caseOpening.GetCaseBattleReactionShop(UserId, cancellationToken), "load battle reactions", "all");
+
+    [HttpPost("battle-reactions/{reactionKey}/unlock")]
+    public Task<ActionResult<CaseBattleReactionShopObj>> UnlockBattleReaction(string reactionKey, CancellationToken cancellationToken) =>
+        Execute(() => _caseOpening.PurchaseCaseBattleReaction(UserId, reactionKey, cancellationToken), "unlock battle reaction", reactionKey);
+
     [HttpPost("cases/{caseKey}/discard")]
     public Task<ActionResult<CaseOpeningCaseDiscardResultObj>> DiscardCases(string caseKey, [FromBody] CaseOpeningCaseDiscardRequestObj? request, CancellationToken cancellationToken)
     {

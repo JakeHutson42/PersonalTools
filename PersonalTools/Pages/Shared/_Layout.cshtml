@@ -10,8 +10,10 @@
     bool isCaseTycoonPage = currentPath.StartsWith("/CaseOpening", StringComparison.OrdinalIgnoreCase);
     string ActivePage(string path, bool exact = false) =>
         (exact ? currentPath.Equals(path, StringComparison.OrdinalIgnoreCase) : currentPath.StartsWith(path, StringComparison.OrdinalIgnoreCase)) ? "active" : string.Empty;
-    string successToastMessage = TempData.Peek("SuccessMessage")?.ToString() ?? string.Empty;
-    string errorToastMessage = TempData.Peek("ErrorMessage")?.ToString() ?? string.Empty;
+    // Flash notifications are single-use. Reading through the indexer consumes the TempData
+    // entry after this response; Peek would replay the same toast on every later navigation.
+    string successToastMessage = TempData["SuccessMessage"]?.ToString() ?? string.Empty;
+    string errorToastMessage = TempData["ErrorMessage"]?.ToString() ?? string.Empty;
     string loaderUserLabel = User.Identity?.IsAuthenticated == true && !string.IsNullOrWhiteSpace(User.Identity.Name)
         ? User.Identity.Name
         : "GUEST";
@@ -31,7 +33,9 @@
 <html lang="en" data-app-theme="@appearanceTheme" data-theme="@appearanceMode" data-matrix-ambient="@matrixAmbientState">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="@(isCaseTycoonPage
+        ? "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        : "width=device-width, initial-scale=1.0")" />
     <meta name="theme-color" content="@(isCaseTycoonPage ? "#111726" : appearanceMode == "dark" ? "#151c31" : "#f6f7fb")" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -71,7 +75,7 @@
         <div class="d-none" aria-hidden="true">@Html.AntiForgeryToken()</div>
     }
     <div id="appToastMessages" data-success-message="@successToastMessage" data-error-message="@errorToastMessage" hidden></div>
-    <div class="toast-container position-fixed bottom-0 end-0 p-3 app-toast-container" id="appToastContainer" aria-label="Notifications"></div>
+    <div class="toast-container app-toast-container" id="appToastContainer" aria-label="Notifications"></div>
 
     <aside class="pwa-prompt" id="pwaPrompt" role="status" aria-live="polite" aria-atomic="true" hidden>
         <img class="pwa-prompt-icon" src="@(isCaseTycoonPage ? Url.Content("~/icons/case-tycoon-icon-192.png") : Url.Content("~/icons/pwa-icon-192.png"))" alt="" />

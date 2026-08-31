@@ -46,9 +46,19 @@
     const skipAnimationStorageKey = 'personalTools.caseOpeningSkipAnimation';
     let caseProgress = null;
     let dailyDropMayHaveCompleted = false;
+    let previousDailyDropPercentage = null;
+    let selectedProfileEmoji = '😎';
+    const caseProfileImages = { 'avatar:operative':'/images/case-tycoon/avatars/operative.svg', 'avatar:vanguard':'/images/case-tycoon/avatars/vanguard.svg', 'avatar:synth':'/images/case-tycoon/avatars/synth.svg' };
+    function renderCaseProfileAvatar($target, value) {
+        const imageUrl = caseProfileImages[value];
+        $target.empty().toggleClass('has-profile-image', Boolean(imageUrl));
+        if (imageUrl) $target.append($('<img>', { src:imageUrl, alt:'', loading:'eager' }));
+        else $target.text(value || '😎');
+    }
     let caseTweakProgress = null;
     let caseTweakCatalogue = [];
     let selectedOpenQuantity = 1;
+    let preferredOpenQuantity = 5;
     let sessionStartedAt = Date.now();
     let statisticsRequestedAfterOpening = null;
     const announcedDryStreaks = new Set();
@@ -76,6 +86,7 @@
     let autoBuyRulesLoaded = false;
     let autoBuyPollTimer = null;
     let autoBuyEvaluationRequest = null;
+    let postOpeningAutomationTimer = null;
     let tradeUpRecipeSummary = null;
     let tradeUpRecipesLoaded = false;
     let tradeUpRecipePollTimer = null;
@@ -280,8 +291,7 @@
         });
 
         newlyUnlocked.forEach(function (achievement) {
-            window.personalToolsToast?.success({
-                title: 'Achievement unlocked',
+            window.personalToolsToast?.achievement({
                 message: `${achievement.name} · +${formatCurrency(Number(achievement.rewardAmountMinor ?? achievement.rewardStars ?? 0), true)}.`
             });
         });
@@ -370,7 +380,7 @@
         // A result is presenting the skin's market value.  The reduced amount is
         // only relevant when the player later sells it, and is labelled as such
         // in inventory, so it must not be shown here as the item's price.
-        return formatCurrency(Number(result.winner.estimatedPrice), true);
+        return formatMarketMoney(Number(result.winner.estimatedPrice), false);
     }
 
     // Level 5 grants Skip Animation instead of a further multiplier - the reel tops out at 3x
@@ -502,10 +512,6 @@
             .prop('disabled', speedLevel >= maximumSpeedLevel || balance < speedCost || speedLevelLocked)
             .text(speedLevel >= maximumSpeedLevel ? 'Fully upgraded' : speedLevelLocked ? `Reach level ${speedXpReq}` : `Upgrade for ${formatCurrency(speedCost, true)}`);
         $('#caseOpenQuantity').removeClass('d-none');
-
-        if (selectedOpenQuantity > 1 + multiLevel) {
-            selectedOpenQuantity = 1;
-        }
 
         renderOpenQuantity();
         renderInventorySelection();
@@ -696,7 +702,8 @@
         const xpForNextLevel = Math.max(1, xpCumulativeForLevel(level + 1) - xpCumulativeForLevel(level));
         const percentage = Math.max(0, Math.min(100, Math.round((xpIntoLevel / xpForNextLevel) * 100)));
 
-        $('#caseXpLevelBadge').text(`Lv ${level}`);
+        $('#caseXpLevelBadge').text(level);
+        $('#caseXpNextLevel').text(level + 1);
         $('#caseXpText').text(`${xpIntoLevel} / ${xpForNextLevel} XP`);
         $('#caseXpFill').css('width', `${percentage}%`);
         $('#caseXpTrack').attr('aria-valuenow', String(percentage));
@@ -707,7 +714,7 @@
         const daily = caseProgress?.dailyDrop || {};
         const required = Math.max(1, Number(daily.requiredXp || 100));
         const percentage = Math.min(100, Math.max(0, Math.round((Number(daily.xp || 0) / required) * 100)));
-        const label = percentage >= 100 ? '100% · Ready' : percentage >= 50 ? '50%' : '1%';
+        const label = percentage >= 100 ? '100% · Ready' : `${percentage}%`;
         $('#caseDailyDropFill').css('width', `${percentage}%`);
         $('#caseDailyDropText').text(label);
         $('#caseDailyDropTrack').attr('aria-valuenow', String(percentage));
@@ -717,6 +724,11 @@
             .attr('aria-label', ready ? 'Open Daily Drop rewards' : `Daily Drop progress: ${label}`);
         $('#caseDailyDropRecall').toggleClass('d-none', !ready);
         $('.case-game-hud').toggleClass('has-daily-drop-ready', ready);
+        if (previousDailyDropPercentage !== null && percentage > previousDailyDropPercentage) {
+            const crossedMilestone = [25, 50, 75, 99].some(milestone => previousDailyDropPercentage < milestone && percentage >= milestone);
+            if (crossedMilestone) showDailyDropCarousel();
+        }
+        previousDailyDropPercentage = percentage;
         if (ready && dailyDropMayHaveCompleted) {
             dailyDropMayHaveCompleted = false;
             window.setTimeout(openDailyDropModal, 250);
@@ -771,11 +783,12 @@
 
     function showDailyDropCarousel() {
         const $daily = $('#caseDailyDrop');
-        if (!$daily.length || $daily.hasClass('is-ready') || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        if (!$daily.length) return;
         $daily.removeClass('is-leaving').addClass('is-showing');
         window.clearTimeout(showDailyDropCarousel.timer);
         showDailyDropCarousel.timer = window.setTimeout(function () {
             $daily.removeClass('is-showing').addClass('is-leaving');
+            window.setTimeout(() => $daily.removeClass('is-leaving'), 380);
         }, 2300);
     }
 
@@ -974,6 +987,8 @@
     function renderOpenQuantity() {
         const availableQuantity = 1 + Number(caseProgress?.multiOpenLevel || 0);
         const ownedQuantity = Number(caseData?.ownedQuantity || 0);
+        const selectableQuantity = Math.max(1, Math.min(availableQuantity, Math.max(1, ownedQuantity)));
+        selectedOpenQuantity = Math.min(preferredOpenQuantity, selectableQuantity);
         $('[data-open-quantity]').each(function () {
             const quantity = Number($(this).data('open-quantity'));
             const active = quantity === selectedOpenQuantity;
@@ -1338,6 +1353,7 @@
         }).get());
         botProgress = progress || null;
         const servers = botProgress?.servers || [];
+        $('#caseBots').prop('hidden', servers.length === 0);
         const bots = servers.flatMap(server => server.bots || []);
         const activeBots = servers.filter(server => server.isEnabled !== false).flatMap(server => server.bots || []);
         const stars = Number(botProgress?.activeBalanceMinor ?? activeBalance());
@@ -1736,7 +1752,7 @@
             const autoSoldCopy = result.isAutoSold === true
                 ? ` It was auto-sold for ${formatCurrency(Number(result.autoSoldAmountMinor ?? result.autoSoldStars ?? 0))}.`
                 : '';
-            window.personalToolsToast?.success(`New collection item: ${result.winner.name}.${autoSoldCopy}`);
+            window.personalToolsToast?.collection(`New collection item: ${result.winner.name}.${autoSoldCopy}`);
         });
     }
 
@@ -1828,6 +1844,8 @@
         bootstrap.Popover.getOrCreateInstance(button, {
             html: true,
             sanitize: true,
+            placement: 'top',
+            offset: [-90, 10],
             content: oddsMarkup(data.odds),
             customClass: 'case-odds-popover'
         });
@@ -1990,7 +2008,6 @@
 
     function renderStatistics(statistics) {
         currentStatistics = statistics;
-        $('#caseLuckSubtitle').text(`Statistics for ${statistics.caseName}.`);
         $('#caseLuckTotalLabel').text(statistics.caseName);
         $('#caseLuckTargetLabel').text(`${statistics.targetRarityName} pulls`);
         $('#caseLuckOdds').text(`${Number(statistics.targetOddsPercentage).toFixed(2)}% each opening`);
@@ -2838,6 +2855,7 @@
 
     function loadInventoryUpgrades(options) {
         inventoryUpgradesLoaded = true;
+        loadBattleReactionUpgrades(options);
         return request('/api/case-opening/inventory/upgrades', 'GET', options).done(function (result) {
             inventoryUpgrades = result;
             renderInventoryUpgradeStore();
@@ -2845,6 +2863,21 @@
         }).fail(function (response) {
             inventoryUpgradesLoaded = false;
             showError(response, 'Inventory upgrades could not be loaded.');
+        });
+    }
+
+    function loadBattleReactionUpgrades(options) {
+        return request('/api/case-opening/battle-reactions', 'GET', options).done(renderBattleReactionUpgrades)
+            .fail(response => showError(response, 'Battle reactions could not be loaded.'));
+    }
+
+    function renderBattleReactionUpgrades(shop) {
+        const $grid = $('#caseBattleReactionUpgradeGrid').empty();
+        const escapeMarkup = value => $('<div>').text(String(value ?? '')).html();
+        (shop?.items || []).filter(item => Number(item.cost || 0) > 0).forEach(item => {
+            const preview = item.kind === 'image' ? `<img src="${escapeMarkup(item.value)}" alt="">` : `<span>${escapeMarkup(item.value)}</span>`;
+            const owned = Boolean(item.isOwned);
+            $grid.append(`<div class="col-12 col-md-6 col-xl-3"><article class="case-shop-row case-reaction-upgrade"><span class="case-reaction-upgrade-preview">${preview}</span><div><h3 class="h6 mb-1">${escapeMarkup(item.name)}</h3><p class="small-muted mb-0">${item.kind === 'image' ? 'Picture reaction' : 'Emoji reaction'}</p></div><button class="btn btn-outline-warning btn-sm js-unlock-battle-reaction" type="button" data-reaction-key="${escapeMarkup(item.key)}" ${owned ? 'disabled' : ''}>${owned ? 'Owned' : `Unlock · ${formatCurrency(Number(item.cost || 0), true)}`}</button></article></div>`);
         });
     }
 
@@ -3497,7 +3530,7 @@
                 manageTradeUpRecipePolling();
                 loadInventoryCapacity({ showLoader: false });
                 if (historyLoaded) loadHistory({ showLoader: false });
-                window.personalToolsToast?.success('Skin collected into your inventory.');
+                window.personalToolsToast?.collection('Skin collected into your inventory.');
             })
             .fail(function (response) {
                 $button.prop('disabled', false);
@@ -3766,10 +3799,24 @@
     function cancelPostOpeningRefresh() {
         window.clearTimeout(postOpeningRefreshTimer);
         postOpeningRefreshTimer = null;
+        window.clearTimeout(postOpeningAutomationTimer);
+        postOpeningAutomationTimer = null;
         postOpeningRefreshRequests.forEach(request => {
             if (request && typeof request.abort === 'function') request.abort();
         });
         postOpeningRefreshRequests = [];
+    }
+
+    function queuePostOpeningAutomation() {
+        window.clearTimeout(postOpeningAutomationTimer);
+        // These evaluations can perform several database writes. Running them for every rapid
+        // quick-open competes with the next open request (most noticeably on a mobile connection).
+        // Wait until the player pauses; the existing polling still guarantees eventual evaluation.
+        postOpeningAutomationTimer = window.setTimeout(function () {
+            postOpeningAutomationTimer = null;
+            evaluateAutoBuy();
+            evaluateTradeUpRecipes();
+        }, 2500);
     }
 
     function completeOpening(results) {
@@ -3780,10 +3827,9 @@
         renderOpenButton('ready');
         window.requestAnimationFrame(() => $open.prop('disabled', Number(caseData?.ownedQuantity || 0) < selectedOpenQuantity));
         queuePostOpeningRefresh();
+        queuePostOpeningAutomation();
         statisticsRequestedAfterOpening = results[0]?.caseKey || caseKey;
         $('#chooseCaseButton, #caseSelectorGrid input').prop('disabled', false);
-        evaluateAutoBuy();
-        evaluateTradeUpRecipes();
 
         window.clearTimeout(stockStateTimer);
         const completedCaseKey = caseKey;
@@ -3877,7 +3923,10 @@
 
         const cards = $multiResults.children().get();
         const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let multiOpeningCompleted = false;
         const completeMultiOpening = function () {
+            if (multiOpeningCompleted) return;
+            multiOpeningCompleted = true;
             awardXp(results, (_result, index) => $multiResults.children().eq(index));
             completeOpening(results);
         };
@@ -3888,6 +3937,9 @@
             return;
         }
 
+        // Result cards are already rendered and the server transaction is complete. The entrance
+        // animation is decoration, so it must never keep quick/multi-open's action button locked.
+        completeMultiOpening();
         const multiplier = openSpeedMultiplier();
         window.requestAnimationFrame(function () {
             window.requestAnimationFrame(function () {
@@ -3897,7 +3949,7 @@
                     delay: (_, index) => (index * 35) / multiplier,
                     duration: 240 / multiplier,
                     ease: 'out(4)',
-                    onComplete: function () { completeMultiOpening(); panMobileResults(); }
+                    onComplete: panMobileResults
                 });
             });
         });
@@ -3939,9 +3991,11 @@
             }
 
             renderFinishedOpening(result);
+            // Quick open means instant interaction as well as an instant result. Do not make the
+            // next opening wait for a cosmetic fade whose callback can be delayed on mobile Safari.
+            completeOpening([result]);
             const revealTargets = [$skipCard.get(0), $result.get(0)];
             if (!window.anime?.animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                completeOpening([result]);
                 return;
             }
 
@@ -3952,7 +4006,6 @@
                 ease: 'out(4)',
                 onComplete: function () {
                     $(revealTargets).css({ opacity: '', transform: '' });
-                    completeOpening([result]);
                 }
             });
         }, 120);
@@ -4287,6 +4340,7 @@
     function loadProfileBattleHistory() {
         const $history = $('#caseProfileBattleHistory');
         const formatBattleValue = value => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 }).format(Number(value || 0));
+        const formatBattleMode = mode => ({ duel: '1v1', 'ffa-3': '1v1v1' }[String(mode || '').toLowerCase()] || mode || 'Case battle');
         $history.html('<div class="case-profile-collections-empty"><i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span>Loading battle history…</span></div>');
         request('/api/case-battles/history', 'GET', { showLoader: false }).done(function (battles) {
             const items = Array.isArray(battles) ? battles : [];
@@ -4296,7 +4350,7 @@
                 const value = formatBattleValue(battle.awardedValue || 0);
                 $history.append($('<a>', { class: `case-profile-collection-card${battle.won ? ' is-complete' : ''}`, href: '/CaseOpening/Battles/' + encodeURIComponent(battle.battleId) }).append(
                     $('<div>', { class: 'case-profile-collection-body' }).append(
-                        $('<div>', { class: 'case-profile-collection-heading' }).append($('<strong>', { text: battle.mode || 'Case battle' }), $('<span>', { text: battle.won ? 'Won' : 'Lost' })),
+                        $('<div>', { class: 'case-profile-collection-heading' }).append($('<strong>', { text: formatBattleMode(battle.mode) }), $('<span>', { text: battle.won ? 'Won' : 'Lost' })),
                         $('<p>', { class: 'small-muted mb-0', text: `Pull total ${formatBattleValue(battle.personalTotal || 0)} · Awarded ${value}` })
                     )
                 ));
@@ -4441,6 +4495,7 @@
         if (opening) return;
         const quantity = Number($(this).data('open-quantity')) || 1;
         if (quantity > 1 + Number(caseProgress?.multiOpenLevel || 0)) return;
+        preferredOpenQuantity = quantity;
         selectedOpenQuantity = quantity;
         renderOpenQuantity();
     });
@@ -6180,6 +6235,19 @@
             const selected = $(this).data('case-mode') === appearance.mode;
             $(this).toggleClass('is-selected', selected).attr('aria-pressed', String(selected));
         });
+        $('.case-profile-emoji-choice').each(function () {
+            const selected = String($(this).data('case-profile-emoji')) === selectedProfileEmoji;
+            $(this).toggleClass('is-selected', selected).attr('aria-checked', String(selected));
+        });
+    }
+
+    function loadCaseProfileEmoji() {
+        request('/api/settings', 'GET', { showLoader: false, showToast: false }).done(function (settings) {
+            const profileEmoji = (settings || []).find(item => item.definition?.key === 8 || item.definition?.key === 'CaseProfileEmoji' || item.definition?.name === 'Profile emoji');
+            selectedProfileEmoji = String(profileEmoji?.value || '😎');
+            renderCaseProfileAvatar($('#caseProfileAvatar'), selectedProfileEmoji);
+            syncPlayerSettingsAppearance();
+        });
     }
 
     function savePlayerAppearance(key, value) {
@@ -6196,9 +6264,23 @@
     $('#casePlayerSettingsModal').on('show.bs.modal', syncPlayerSettingsAppearance);
     $('.case-theme-choice').on('click', function () { savePlayerAppearance('AppearanceTheme', String($(this).data('case-theme'))); });
     $('.case-mode-choice').on('click', function () { savePlayerAppearance('AppearanceMode', String($(this).data('case-mode'))); });
+    $('.case-profile-emoji-choice').on('click', function () {
+        const emoji = String($(this).data('case-profile-emoji'));
+        selectedProfileEmoji = emoji;
+        renderCaseProfileAvatar($('#caseProfileAvatar'), emoji);
+        syncPlayerSettingsAppearance();
+        request('/api/settings', 'PUT', {
+            data: JSON.stringify({ key: 'CaseProfileEmoji', value: emoji }),
+            contentType: 'application/json; charset=utf-8',
+            showLoader: false,
+            showToast: false
+        }).fail(() => window.personalToolsToast?.error('Your profile emoji could not be saved.'));
+    });
+    loadCaseProfileEmoji();
 
     function renderCaseBattleAdminStatus(status) {
         $('#caseTweakBattlesEnabled').prop('checked', Boolean(status.caseBattlesEnabled)).prop('disabled', false);
+        $('#caseTweakBattleFfa3Enabled').prop('checked', Boolean(status.freeForAll3Enabled)).prop('disabled', false);
         $('#caseTweakBattleBotEnabled').prop('checked', Boolean(status.enabled)).prop('disabled', false);
         const values = [status.battlesAttempted, status.battlesWon, status.skinsDiscarded, new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(status.valueDiscarded || 0))];
         $('#caseTweakBattleBotStats strong').each(function (index) { $(this).text(values[index]); });
@@ -6258,6 +6340,19 @@
         request('/api/admin/case-battles/bot-status', 'PUT', { data: JSON.stringify(control.prop('checked')), contentType: 'application/json' })
             .done(renderCaseBattleAdminStatus)
             .fail(() => { window.personalToolsToast?.error('Battle Bot visibility could not be saved.'); loadCaseBattleAdmin(); });
+    });
+
+    $('#caseBattleReactionUpgradeGrid').on('click', '.js-unlock-battle-reaction', function () {
+        const $button = $(this).prop('disabled', true);
+        request(`/api/case-opening/battle-reactions/${encodeURIComponent(String($button.data('reaction-key') || ''))}/unlock`, 'POST', { showLoader:false })
+            .done(function (result) { renderBattleReactionUpgrades(result); renderUpdatedBalance(result); window.personalToolsToast?.success('Battle reaction unlocked.'); })
+            .fail(response => { showError(response, 'The battle reaction could not be unlocked.'); $button.prop('disabled', false); });
+    });
+    $('#caseTweakBattleFfa3Enabled').on('change', function () {
+        const control = $(this).prop('disabled', true);
+        request('/api/admin/case-battles/ffa-3-status', 'PUT', { data: JSON.stringify(control.prop('checked')), contentType: 'application/json' })
+            .done(renderCaseBattleAdminStatus)
+            .fail(() => { window.personalToolsToast?.error('1v1v1 visibility could not be saved.'); loadCaseBattleAdmin(); });
     });
 
     $('#caseHistoryPageSize').val(String(historyPageSize));

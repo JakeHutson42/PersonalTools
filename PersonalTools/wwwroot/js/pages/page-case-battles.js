@@ -1,34 +1,46 @@
 /* global personalToolsToast */
 (() => {
     'use strict';
-    const status = document.querySelector('#caseBattleStatus'), elapsed = document.querySelector('#caseBattleElapsed'), scoreboard = document.querySelector('#caseBattleScoreboard'), track = document.querySelector('#caseBattleCaseTrack'), arena = document.querySelector('#caseBattleArena'), actions = document.querySelector('#caseBattleActions'), results = document.querySelector('#caseBattleResults'), resultsSection = document.querySelector('#caseBattleResultsSection'), pot = document.querySelector('#caseBattlePot'), showcase = document.querySelector('#caseBattleShowcase'), winnerBackdrop = document.querySelector('#caseBattleWinnerBackdrop');
+    const status = document.querySelector('#caseBattleStatus'), elapsed = document.querySelector('#caseBattleElapsed'), scoreboard = document.querySelector('#caseBattleScoreboard'), track = document.querySelector('#caseBattleCaseTrack'), arena = document.querySelector('#caseBattleArena'), actions = document.querySelector('#caseBattleActions'), results = document.querySelector('#caseBattleResults'), resultsSection = document.querySelector('#caseBattleResultsSection'), showcase = document.querySelector('#caseBattleShowcase'), winnerBackdrop = document.querySelector('#caseBattleWinnerBackdrop');
     const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
     let battleId = document.querySelector('[data-case-battle-id]')?.dataset.caseBattleId || null, latestDetail = null, replaying = false, refreshTimer = 0, showcaseShown = false, showcaseDismissEnabled = false, battleCreatedAt = null, currentReady = false, readySequenceShown = false, autoStartScheduled = false, realtimeConnection = null;
     let timings = { readyPauseMs:900, readyCountdownMs:3000, preSpinPauseMs:2500, spinDurationMs:5000, resultsPauseMs:1100, winnerIntroPauseMs:2500, winnerTallyDurationMs:4200, winnerVerdictPauseMs:1800, winnerTransferDurationMs:3500 };
     const caseImages = new Map();
+    const caseNames = new Map();
+    const caseReelPools = new Map();
     const shownRounds = new Set();
     const reactionStage = document.querySelector('#caseBattleReactionStage');
+    const effectStage = document.querySelector('#caseBattleEffectStage');
+    const reactionMenu = document.querySelector('#caseBattleReactionMenu');
     const money = value => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 }).format(Number(value || 0));
     const escape = value => String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
     const request = (url, method, body) => fetch(url, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', RequestVerificationToken: token }, body: body === undefined ? undefined : JSON.stringify(body) }).then(async response => response.ok ? response.json() : Promise.reject((await response.json()).message));
     const wait = ms => new Promise(resolve => window.setTimeout(resolve, ms));
     const pullsFor = (detail, userId) => (detail.pulls || []).filter(pull => pull.originalOwnerUserId === userId && shownRounds.has(pull.roundNumber));
     const duration = milliseconds => { const total = Math.max(0, Math.floor(milliseconds / 1000)); const hours = Math.floor(total / 3600), minutes = Math.floor((total % 3600) / 60), seconds = total % 60; return (hours ? String(hours).padStart(2, '0') + ':' : '') + String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0'); };
-    function showReaction(emoji) { if (!reactionStage || !emoji) return; const reaction = document.createElement('span'); reaction.className = 'case-battle-floating-reaction'; reaction.textContent = emoji; reaction.style.setProperty('--reaction-x', (1.1 + Math.random() * 4.5).toFixed(1) + 'rem'); reaction.style.setProperty('--reaction-drift', (10 + Math.random() * 32).toFixed(1) + 'vw'); reaction.style.setProperty('--reaction-sway', ((Math.random() * 14) - 7).toFixed(1) + 'vw'); reaction.style.setProperty('--reaction-peak', (42 + Math.random() * 18).toFixed(1) + 'vh'); reaction.style.setProperty('--reaction-turn', ((Math.random() * 52) - 26).toFixed(0) + 'deg'); reaction.style.setProperty('--reaction-duration', (2.15 + Math.random() * .7).toFixed(2) + 's'); reactionStage.append(reaction); window.setTimeout(() => reaction.remove(), 3100); }
+    const profileImages = { 'avatar:operative':'/images/case-tycoon/avatars/operative.svg', 'avatar:vanguard':'/images/case-tycoon/avatars/vanguard.svg', 'avatar:synth':'/images/case-tycoon/avatars/synth.svg' };
+    const profileAvatar = (player, initial) => profileImages[player.profileAvatar]
+        ? '<img src="' + profileImages[player.profileAvatar] + '" alt="" loading="eager">'
+        : '<span aria-hidden="true">' + escape(player.profileAvatar || initial) + '</span>';
+    function showReaction(payload) { if (!reactionStage || !payload?.value) return; const reaction = document.createElement('span'); reaction.className = 'case-battle-floating-reaction' + (payload.kind === 'image' ? ' is-image' : ''); if (payload.kind === 'image') { const image=document.createElement('img'); image.src=payload.value; image.alt=''; reaction.append(image); } else reaction.textContent = payload.value; reaction.style.setProperty('--reaction-x', (1.1 + Math.random() * 4.5).toFixed(1) + 'rem'); reaction.style.setProperty('--reaction-drift', (10 + Math.random() * 32).toFixed(1) + 'vw'); reaction.style.setProperty('--reaction-sway', ((Math.random() * 14) - 7).toFixed(1) + 'vw'); reaction.style.setProperty('--reaction-peak', (42 + Math.random() * 18).toFixed(1) + 'vh'); reaction.style.setProperty('--reaction-turn', ((Math.random() * 52) - 26).toFixed(0) + 'deg'); reaction.style.setProperty('--reaction-duration', (2.15 + Math.random() * .7).toFixed(2) + 's'); reactionStage.append(reaction); window.setTimeout(() => reaction.remove(), 3100); }
+    function showEffect(key) { if (!effectStage) return; effectStage.className='case-battle-effect-stage is-' + key; effectStage.replaceChildren(); const count=key==='ak-rain' ? 24 : 14; for(let i=0;i<count;i++){ const part=document.createElement('i'); part.className=key==='ak-rain' ? 'fa-solid fa-gun' : key==='gold-burst' ? 'fa-solid fa-star' : 'fa-solid fa-bolt'; part.style.setProperty('--effect-x',(Math.random()*100).toFixed(1)+'vw'); part.style.setProperty('--effect-delay',(Math.random()*1.1).toFixed(2)+'s'); part.style.setProperty('--effect-turn',((Math.random()*180)-90).toFixed(0)+'deg'); part.style.setProperty('--effect-colour',`hsl(${Math.floor(Math.random()*360)} 85% 62%)`); effectStage.append(part); } window.setTimeout(()=>{ effectStage.className='case-battle-effect-stage'; effectStage.replaceChildren(); },4000); }
+    function loadReactions() { request('/api/case-opening/battle-reactions','GET').then(shop => { if(!reactionMenu)return; reactionMenu.innerHTML=(shop.items||[]).filter(item=>item.isOwned).map(item=>`<button type="button" data-battle-reaction="${escape(item.key)}" aria-label="${escape(item.name)}">${item.kind==='image' ? `<img src="${escape(item.value)}" alt="">` : escape(item.value)}</button>`).join(''); }).catch(()=>{}); }
     window.setInterval(() => { if (elapsed && battleCreatedAt) elapsed.textContent = duration(Date.now() - battleCreatedAt); }, 1000);
 
     function renderScoreboard(detail, useReplayTotals) {
+        scoreboard.dataset.players = String(detail.requiredPlayers || detail.participants?.length || 2);
         scoreboard.innerHTML = (detail.participants || []).map(player => {
             const initial = escape((player.displayName || '?').trim().charAt(0).toUpperCase());
-            return '<span class="case-battle-compact-player" data-player-id="' + escape(player.userId) + '"><span aria-hidden="true">' + initial + '</span><strong>' + escape(player.displayName) + '</strong></span>';
+            return '<span class="case-battle-compact-player" data-player-id="' + escape(player.userId) + '"><span class="case-battle-compact-avatar">' + profileAvatar(player, initial) + '</span><strong>' + escape(player.displayName) + '</strong></span>';
         }).join('');
     }
     function renderResultRails(detail) {
-        if (!detail.pulls?.length) { results.innerHTML = '<p class="small-muted mb-0">Each player’s pulls will be collected here without covering the reels.</p>'; return; }
+        results.dataset.players = String(detail.requiredPlayers || detail.participants?.length || 2);
+        if (!detail.pulls?.length) { results.innerHTML = '<p class="small-muted mb-0">Each player’s battle results will appear here as the rounds complete.</p>'; return; }
         results.innerHTML = (detail.participants || []).map(player => {
             const pulls = pullsFor(detail, player.userId);
             const cards = pulls.map(pull => '<article class="case-battle-result" style="--battle-rarity:' + escape(pull.rarityColor) + '"><img src="' + escape(pull.imageUrl) + '" alt="" loading="lazy"><span class="case-battle-item-name" title="' + escape(pull.itemName) + '">' + escape(pull.itemName) + '</span><small class="case-battle-item-wear">' + escape(pull.wear || 'Wear unavailable') + '</small><b>' + money(pull.lockedValue) + '</b></article>').join('');
-            return '<section class="case-battle-result-rail"><header><strong>' + escape(player.displayName) + '</strong><span>' + pulls.length + ' pull' + (pulls.length === 1 ? '' : 's') + '</span></header><div class="case-battle-result-cards">' + (cards || '<span class="small-muted">No pulls yet</span>') + '</div></section>';
+            return '<section class="case-battle-result-rail"><header><strong>' + escape(player.displayName) + '</strong><span>' + pulls.length + ' item' + (pulls.length === 1 ? '' : 's') + '</span></header><div class="case-battle-result-cards">' + (cards || '<span class="small-muted">Awaiting results</span>') + '</div></section>';
         }).join('');
     }
     function slideTrackTo(index) {
@@ -44,9 +56,8 @@
         if (elapsed) elapsed.textContent = duration(Date.now() - battleCreatedAt);
         status.textContent = detail.status === 'settled' ? 'Battle complete' : detail.status === 'opening' ? 'Opening cases' : detail.joinedPlayers + ' / ' + detail.requiredPlayers + ' players in the room';
         renderScoreboard(detail, detail.pulls?.length > 0);
-        track.innerHTML = (detail.caseKeys || []).map((key, index) => '<span class="' + (shownRounds.has(index) ? 'is-complete' : '') + '" title="' + escape(key) + '"><b>' + (index + 1) + '</b><img src="' + escape(caseImages.get(String(key).toLowerCase()) || '') + '" alt=""></span>').join('');
+        track.innerHTML = (detail.caseKeys || []).map((key, index) => '<span class="' + (shownRounds.has(index) ? 'is-complete' : '') + '" title="' + escape(caseNames.get(String(key).toLowerCase()) || key) + '"><b>' + (index + 1) + '</b><img src="' + escape(caseImages.get(String(key).toLowerCase()) || '') + '" alt=""></span>').join('');
         window.requestAnimationFrame(() => slideTrackTo(Math.min(shownRounds.size, Math.max(0, detail.caseKeys.length - 1))));
-        pot.textContent = detail.pulls?.length ? 'Pot ' + money(detail.lockedPotValue) : 'Pot pending';
         renderResultRails(detail);
         const readyCount = (detail.participants || []).filter(player => player.isReady).length;
         currentReady = Boolean((detail.participants || []).find(player => String(player.userId) === document.body.dataset.userId)?.isReady);
@@ -63,7 +74,7 @@
         readySequenceShown = true;
         const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const totalSeconds = Math.max(1, Math.ceil(timings.readyCountdownMs / 1000));
-        arena.innerHTML = '<section class="case-battle-countdown" aria-live="assertive"><span class="case-battle-countdown-orbit" aria-hidden="true"></span><p class="eyebrow mb-1">Both players ready</p><strong data-countdown>' + totalSeconds + '</strong><span>Preparing the opening reels…</span></section>';
+        arena.innerHTML = '<section class="case-battle-countdown" aria-live="assertive"><span class="case-battle-countdown-orbit" aria-hidden="true"></span><p class="eyebrow mb-1">All players ready</p><strong data-countdown>' + totalSeconds + '</strong><span>Preparing the opening reels…</span></section>';
         window.caseBattleAudio?.start();
         arena.scrollIntoView({ behavior:reduced ? 'auto' : 'smooth', block:'center' });
         if (!reduced) await wait(timings.readyPauseMs);
@@ -77,13 +88,71 @@
         }
         if (detail.isCreator && !autoStartScheduled) { autoStartScheduled = true; request('/api/case-battles/' + encodeURIComponent(battleId) + '/start', 'POST').then(render).catch(message => { autoStartScheduled = false; readySequenceShown = false; personalToolsToast?.error(message || 'The battle could not be started.'); load(); }); }
     }
-    function spinLane(player, winner, allPulls) {
+    function isGold(item) {
+        return item?.isRareSpecial === true || String(item?.rarityKey || '').toLowerCase() === 'rare-special';
+    }
+    function goldCard(pool) {
+        return {
+            sourceItemId:'rare-special', itemName:'★ Rare Special Item ★', imageUrl:pool.caseImageUrl || '',
+            rarityKey:'rare-special', rarityColor:'#e4ae39', wear:'0.26% chance', lockedValue:null,
+            isRareSpecial:true, isGoldPlaceholder:true
+        };
+    }
+    function weightedDecoy(pool, fallback) {
+        const source = (pool.items || []).filter(Boolean);
+        if (!source.length) return fallback;
+        const availableOdds = (pool.odds || []).map(odd => ({
+            rarityKey:String(odd.rarityKey || '').toLowerCase(),
+            weight:Math.max(0, Number(odd.percentage || 0))
+        })).filter(odd => odd.weight > 0 && source.some(item => String(item.rarityKey || '').toLowerCase() === odd.rarityKey));
+        if (!availableOdds.length) return source[Math.floor(Math.random() * source.length)];
+        let roll = Math.random() * availableOdds.reduce((total, odd) => total + odd.weight, 0);
+        let selectedRarity = availableOdds.at(-1).rarityKey;
+        for (const odd of availableOdds) {
+            roll -= odd.weight;
+            if (roll < 0) { selectedRarity = odd.rarityKey; break; }
+        }
+        if (selectedRarity === 'rare-special') return goldCard(pool);
+        const eligible = source.filter(item => String(item.rarityKey || '').toLowerCase() === selectedRarity);
+        return eligible[Math.floor(Math.random() * eligible.length)] || fallback;
+    }
+    function buildDecoySequence(pool, winner, length) {
+        const sequence = [];
+        while (sequence.length < length) sequence.push(weightedDecoy(pool, winner));
+        return sequence;
+    }
+    function loadCaseReelPool(caseKey, fallback) {
+        const key = String(caseKey || '').toLowerCase();
+        if (!key) return Promise.resolve({ items:fallback || [], odds:[], caseImageUrl:'' });
+        if (!caseReelPools.has(key)) {
+            caseReelPools.set(key, fetch('/api/case-opening/cases/' + encodeURIComponent(caseKey), { credentials:'same-origin', cache:'no-store' })
+                .then(response => response.ok ? response.json() : Promise.reject())
+                .then(caseDetail => ({
+                    caseImageUrl:caseDetail.imageUrl || '',
+                    odds:caseDetail.odds || [],
+                    items:(caseDetail.items || []).map(item => ({
+                        sourceItemId:item.sourceItemId,
+                        itemName:item.name,
+                        imageUrl:item.imageUrl,
+                        rarityKey:item.rarityKey,
+                        rarityColor:item.rarityColor,
+                        wear:item.wear || '',
+                        lockedValue:item.estimatedPrice,
+                        isRareSpecial:item.isRareSpecial === true
+                    }))
+                }))
+                .catch(() => ({ items:fallback || [], odds:[], caseImageUrl:'' })));
+        }
+        return caseReelPools.get(key);
+    }
+    function spinLane(player, winner, reelPool) {
         const lane = document.createElement('article'); lane.className = 'case-battle-spin-lane';
         lane.innerHTML = '<header><strong></strong><span>Opening…</span></header><div class="case-battle-reel-window"><i class="case-battle-reel-marker" aria-hidden="true"></i><div class="case-battle-reel"></div></div>';
         lane.querySelector('header strong').textContent = player.displayName;
-        const reel = lane.querySelector('.case-battle-reel'), decoys = allPulls.length ? allPulls : [winner];
-        Array.from({ length: 18 }, (_, index) => index === 14 ? winner : decoys[(index * 7 + winner.roundNumber) % decoys.length]).forEach(item => {
-            const card = document.createElement('article'); card.className = 'case-battle-reel-item'; card.style.setProperty('--rarity', item.rarityColor || '#e4ae39'); card.innerHTML = '<img alt=""><span><strong></strong><small></small><b></b></span>'; card.querySelector('img').src = item.imageUrl || ''; card.querySelector('strong').textContent = item.itemName || 'Unknown item'; card.querySelector('small').textContent = item.wear || 'Wear unavailable'; card.querySelector('b').textContent = money(item.lockedValue); reel.append(card);
+        const reel = lane.querySelector('.case-battle-reel'), items = buildDecoySequence(reelPool, winner, 18);
+        items[14] = isGold(winner) ? goldCard(reelPool) : winner;
+        items.forEach(item => {
+            const card = document.createElement('article'); card.className = 'case-battle-reel-item' + (item.isGoldPlaceholder ? ' is-gold-placeholder' : ''); card.style.setProperty('--rarity', item.rarityColor || '#e4ae39'); card.innerHTML = '<img alt=""><span><strong></strong><small></small><b></b></span>'; card.querySelector('img').src = item.imageUrl || ''; card.querySelector('strong').textContent = item.itemName || 'Unknown item'; card.querySelector('small').textContent = item.wear || 'Wear unavailable'; card.querySelector('b').textContent = item.isGoldPlaceholder ? 'GOLD' : money(item.lockedValue); reel.append(card);
         });
         return { lane, reel };
     }
@@ -102,9 +171,12 @@
     async function replayRound(detail, round) {
         const pulls = (detail.pulls || []).filter(pull => pull.roundNumber === round); if (!pulls.length) return;
         const byUser = new Map(pulls.map(pull => [pull.originalOwnerUserId, pull]));
-        arena.innerHTML = '<header class="case-battle-round-heading"><span>Round ' + (round + 1) + ' of ' + detail.caseKeys.length + '</span><strong>' + escape(detail.caseKeys[round] || 'Case') + '</strong></header><div class="case-battle-spin-grid"></div>';
+        const reelPool = await loadCaseReelPool(detail.caseKeys[round], detail.pulls || []);
+        const caseKey = detail.caseKeys[round] || '', caseName = caseNames.get(String(caseKey).toLowerCase()) || caseKey || 'Case';
+        arena.innerHTML = '<header class="case-battle-round-heading"><span>Round ' + (round + 1) + ' of ' + detail.caseKeys.length + '</span><strong>' + escape(caseName) + '</strong></header><div class="case-battle-spin-grid"></div>';
         const grid = arena.querySelector('.case-battle-spin-grid');
-        const lanes = (detail.participants || []).map(player => spinLane(player, byUser.get(player.userId), detail.pulls || [])); lanes.forEach(item => grid.append(item.lane));
+        grid.dataset.lanes = String(detail.requiredPlayers || detail.participants?.length || 2);
+        const lanes = (detail.participants || []).map(player => spinLane(player, byUser.get(player.userId), reelPool)); lanes.forEach(item => grid.append(item.lane));
         await new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
         if (round === 0) arena.scrollIntoView({ behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'center' });
         // The track advances only as this round's reels start, so its highlighted case always
@@ -165,6 +237,7 @@
     }
     function animateEarnings(element, from, to, duration) {
         if (!element) return;
+        if (!duration) { element.textContent = money(to); return; }
         const started = performance.now();
         const frame = now => { const progress = Math.min(1, (now - started) / duration); const eased = 1 - Math.pow(1 - progress, 4); element.textContent = money(from + ((to - from) * eased)); if (progress < 1) window.requestAnimationFrame(frame); };
         window.requestAnimationFrame(frame);
@@ -174,40 +247,41 @@
         showcaseShown = true;
         showcaseDismissEnabled = false;
         window.caseBattleAudio?.duckForReveal();
-        const winnerId = String(detail.winningUserId), highlight = [...(detail.pulls || [])].sort((left, right) => Number(right.lockedValue || 0) - Number(left.lockedValue || 0))[0];
+        const winnerId = String(detail.winningUserId), reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const highlight = [...(detail.pulls || [])].filter(pull => String(pull.originalOwnerUserId) === winnerId).sort((left, right) => Number(right.lockedValue || 0) - Number(left.lockedValue || 0))[0];
         const panels = (detail.participants || []).map(player => '<article class="case-battle-finalist" data-user-id="' + escape(player.userId) + '"><span class="case-battle-smoke" aria-hidden="true"></span><span class="case-battle-finalist-status"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i>Awaiting verdict</span><p class="eyebrow mb-1">Final total</p><strong>' + escape(player.displayName) + '</strong><b data-earnings>£0.00</b></article>').join('');
         const sparks = Array.from({ length:28 }, (_, index) => '<i style="--spark:' + index + '"></i>').join('');
-        showcase.innerHTML = '<button class="case-battle-winner-dismiss" type="button" data-winner-dismiss aria-label="Close winner reveal" hidden><i class="fa-solid fa-xmark" aria-hidden="true"></i></button><div class="case-battle-victory-effects" aria-hidden="true"><span class="case-battle-victory-flash"></span><span class="case-battle-victory-rings"></span><span class="case-battle-victory-fireworks">' + sparks + '</span></div><div class="case-battle-showcase-title"><p class="eyebrow mb-1">Battle complete</p><h2 class="h3 mb-0">Final verdict</h2><span>Calculating the winner…</span></div><div class="case-battle-victory-item">' + (highlight ? '<img src="' + escape(highlight.imageUrl) + '" alt=""><span><small>Signature pull</small><strong>' + escape(highlight.itemName) + '</strong></span>' : '') + '</div><div class="case-battle-finalists">' + panels + '</div>';
+        showcase.innerHTML = '<button class="case-battle-winner-dismiss" type="button" data-winner-dismiss aria-label="Close winner reveal" hidden><i class="fa-solid fa-xmark" aria-hidden="true"></i></button><div class="case-battle-victory-effects" aria-hidden="true"><span class="case-battle-victory-flash"></span><span class="case-battle-victory-rings"></span><span class="case-battle-victory-fireworks">' + sparks + '</span></div><div class="case-battle-showcase-title"><p class="eyebrow mb-1">Battle complete</p><h2 class="h3 mb-0">Final verdict</h2><span>Calculating the winner…</span></div><div class="case-battle-victory-item">' + (highlight ? '<img src="' + escape(highlight.imageUrl) + '" alt=""><span><small>Signature pull</small><strong>' + escape(highlight.itemName) + '</strong></span>' : '') + '</div><div class="case-battle-finalists" data-finalists="' + (detail.participants || []).length + '">' + panels + '</div>';
         winnerBackdrop?.classList.remove('d-none');
         showcase.classList.remove('d-none');
         showcase.focus({ preventScroll:true });
-        await wait(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : timings.winnerIntroPauseMs);
+        await wait(reduced ? 0 : timings.winnerIntroPauseMs);
         const winner = showcase.querySelector('[data-user-id="' + CSS.escape(winnerId) + '"]');
-        const loser = [...showcase.querySelectorAll('.case-battle-finalist')].find(panel => panel !== winner);
+        const finalists = [...showcase.querySelectorAll('.case-battle-finalist')], losers = finalists.filter(panel => panel !== winner);
         const valueFor = panel => Number((detail.participants || []).find(player => String(player.userId) === panel?.dataset.userId)?.totalValue || 0);
-        const winnerValue = valueFor(winner), loserValue = valueFor(loser), finalWinnerValue = Number(detail.lockedPotValue || winnerValue + loserValue);
-        const winnerEarnings = winner?.querySelector('[data-earnings]'), loserEarnings = loser?.querySelector('[data-earnings]');
+        const winnerValue = valueFor(winner), finalWinnerValue = Number(detail.lockedPotValue || finalists.reduce((total, panel) => total + valueFor(panel), 0));
+        const winnerEarnings = winner?.querySelector('[data-earnings]');
+        const tallyDuration = reduced ? 0 : timings.winnerTallyDurationMs, transferDuration = reduced ? 0 : timings.winnerTransferDurationMs;
 
         showcase.querySelector('.case-battle-showcase-title span').textContent = 'Tallying the battle earnings…';
-        await Promise.all([
-            new Promise(resolve => { animateEarnings(winnerEarnings, 0, winnerValue, timings.winnerTallyDurationMs); window.setTimeout(resolve, timings.winnerTallyDurationMs); }),
-            new Promise(resolve => { animateEarnings(loserEarnings, 0, loserValue, timings.winnerTallyDurationMs); window.setTimeout(resolve, timings.winnerTallyDurationMs); })
-        ]);
-        await wait(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : timings.winnerVerdictPauseMs);
-        winner?.classList.add('is-winner'); loser?.classList.add('is-loser');
-        winner?.querySelector('.case-battle-finalist-status')?.replaceChildren('Winner'); loser?.querySelector('.case-battle-finalist-status')?.replaceChildren('Runner-up');
+        await Promise.all(finalists.map(panel => new Promise(resolve => { animateEarnings(panel.querySelector('[data-earnings]'), 0, valueFor(panel), tallyDuration); window.setTimeout(resolve, tallyDuration); })));
+        await wait(reduced ? 0 : timings.winnerVerdictPauseMs);
+        winner?.classList.add('is-winner');
+        losers.forEach(loser => loser.classList.add('is-loser'));
+        winner?.querySelector('.case-battle-finalist-status')?.replaceChildren('Winner');
+        losers.forEach(loser => loser.querySelector('.case-battle-finalist-status')?.replaceChildren('Runner-up'));
         showcase.querySelector('.case-battle-showcase-title span').textContent = (winner?.querySelector('strong')?.textContent || 'Winner') + ' takes the pot';
         const transferAnimation = Promise.all([
-            new Promise(resolve => { animateEarnings(loserEarnings, loserValue, 0, timings.winnerTransferDurationMs); window.setTimeout(resolve, timings.winnerTransferDurationMs); }),
-            new Promise(resolve => { animateEarnings(winnerEarnings, winnerValue, finalWinnerValue, timings.winnerTransferDurationMs); window.setTimeout(resolve, timings.winnerTransferDurationMs); })
+            ...losers.map(loser => new Promise(resolve => { animateEarnings(loser.querySelector('[data-earnings]'), valueFor(loser), 0, transferDuration); window.setTimeout(resolve, transferDuration); })),
+            new Promise(resolve => { animateEarnings(winnerEarnings, winnerValue, finalWinnerValue, transferDuration); window.setTimeout(resolve, transferDuration); })
         ]);
         // Let the winner's final profit counter visibly begin before the celebration enters. This
         // keeps the neutral side-by-side tally from revealing the outcome ahead of the verdict.
-        const celebrationDelay = Math.min(280, Math.max(40, Number(timings.winnerTransferDurationMs || 0) * .12));
-        await wait(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : celebrationDelay);
+        const celebrationDelay = Math.min(280, Math.max(40, Number(transferDuration || 0) * .12));
+        await wait(reduced ? 0 : celebrationDelay);
         winner?.classList.add('is-tallying-winner');
         window.caseBattleAudio?.playWinnerReveal();
-        if (winner && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        if (winner && !reduced) {
             const crownRain = document.createElement('span');
             crownRain.className = 'case-battle-crown-rain';
             crownRain.setAttribute('aria-hidden', 'true');
@@ -242,16 +316,18 @@
     });
     let lastReactionSentAt = 0;
     document.querySelector('#caseBattleReactionButton')?.nextElementSibling?.addEventListener('click', event => { const button = event.target.closest('[data-battle-reaction]'); if (!button || !realtimeConnection || realtimeConnection.state !== window.signalR?.HubConnectionState.Connected) return; const now = performance.now(); if (now - lastReactionSentAt < 275) return; lastReactionSentAt = now; realtimeConnection.invoke('SendReaction', battleId, button.dataset.battleReaction).catch(() => personalToolsToast?.error('Reaction could not be sent.')); });
-    function connectRealtime() { if (!battleId || !window.signalR) return; realtimeConnection = new window.signalR.HubConnectionBuilder().withUrl('/hubs/case-battles').withAutomaticReconnect([0, 1000, 3000, 8000]).build(); realtimeConnection.on('BattleChanged', () => { window.clearTimeout(refreshTimer); refreshTimer = window.setTimeout(load, 80); }); realtimeConnection.on('CaseBattleReaction', reaction => showReaction(reaction?.emoji)); realtimeConnection.onreconnected(() => realtimeConnection.invoke('JoinBattle', battleId).then(load).catch(() => {})); realtimeConnection.start().then(() => realtimeConnection.invoke('JoinBattle', battleId)).then(load).catch(() => { status.dataset.connection = 'offline'; }); }
+    document.querySelector('#caseBattleEffectButton')?.nextElementSibling?.addEventListener('click', event => { const button=event.target.closest('[data-battle-effect]'); if(!button||!realtimeConnection)return; realtimeConnection.invoke('SendEffect',battleId,button.dataset.battleEffect).catch(error=>personalToolsToast?.error(error?.message?.includes('wait') ? 'Arena effects are cooling down.' : 'Arena effect could not be sent.')); });
+    function connectRealtime() { if (!battleId || !window.signalR) return; realtimeConnection = new window.signalR.HubConnectionBuilder().withUrl('/hubs/case-battles').withAutomaticReconnect([0, 1000, 3000, 8000]).build(); realtimeConnection.on('BattleChanged', () => { window.clearTimeout(refreshTimer); refreshTimer = window.setTimeout(load, 80); }); realtimeConnection.on('CaseBattleReaction', reaction => showReaction(reaction)); realtimeConnection.on('CaseBattleEffect', effect => showEffect(effect?.effectKey)); realtimeConnection.onreconnected(() => realtimeConnection.invoke('JoinBattle', battleId).then(load).catch(() => {})); realtimeConnection.start().then(() => realtimeConnection.invoke('JoinBattle', battleId)).then(load).catch(() => { status.dataset.connection = 'offline'; }); }
     // Keep the Tycoon transition over the destination while the room's three data sources are
     // prepared. The first visible frame therefore has the case art, pacing settings and battle
     // state together instead of popping each in after navigation.
+    loadReactions();
     Promise.all([
         fetch('/api/case-battles/timings', { credentials:'same-origin', cache:'no-store' }).then(response => response.ok ? response.json() : null),
         fetch('/api/case-opening/cases', { credentials:'same-origin', cache:'no-store' }).then(response => response.ok ? response.json() : [])
     ]).then(([settings, items]) => {
         if (settings) timings = { ...timings, ...settings };
-        (items || []).forEach(item => caseImages.set(String(item.caseKey || '').toLowerCase(), item.imageUrl || ''));
+        (items || []).forEach(item => { const key = String(item.caseKey || '').toLowerCase(); caseImages.set(key, item.imageUrl || ''); caseNames.set(key, item.name || item.caseKey || 'Case'); });
         return load();
     }).then(() => { window.caseBattleTransition?.complete(); connectRealtime(); window.setTimeout(() => { if (arena.children.length) arena.scrollIntoView({ behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'center' }); }, 240); }).catch(() => { window.caseBattleTransition?.complete(); load().then(connectRealtime); });
 })();

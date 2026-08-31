@@ -96,6 +96,12 @@ body {
     transition: background-color .2s ease,color .2s ease
 }
 
+/* Case Tycoon is an app-like touch surface. Keep ordinary one-finger scrolling available while
+   preventing double-tap and pinch gestures from scaling the interface over its fixed controls. */
+body.case-tycoon-page {
+    touch-action: pan-x pan-y;
+}
+
 .app-navbar {
     background: var(--pt-surface);
     border-bottom: 1px solid var(--pt-line);
@@ -2381,18 +2387,19 @@ body {
 
 .app-toast {
     --app-toast-accent: var(--pt-mint);
+    --app-toast-glow: color-mix(in srgb, var(--app-toast-accent) 22%, transparent);
     align-items: center;
-    background: color-mix(in srgb, var(--pt-surface) 96%, transparent);
-    border: 1px solid color-mix(in srgb, var(--app-toast-accent) 32%, var(--pt-line));
+    background: linear-gradient(105deg, color-mix(in srgb, var(--app-toast-accent) 18%, var(--pt-surface)), var(--pt-surface) 72%);
+    border: 1px solid color-mix(in srgb, var(--app-toast-accent) 68%, var(--pt-line));
     border-radius: .9rem;
-    box-shadow: 0 .9rem 2.8rem rgba(13, 21, 38, .16);
+    box-shadow: 0 .9rem 2.8rem rgba(13, 21, 38, .22), 0 0 1.25rem var(--app-toast-glow);
     color: var(--pt-ink);
     display: grid;
-    gap: .75rem;
-    grid-template-columns: .22rem 2rem minmax(0, 1fr);
-    min-height: 3.65rem;
+    gap: .8rem;
+    grid-template-columns: .3rem 2.35rem minmax(0, 1fr);
+    min-height: 4.35rem;
     overflow: hidden;
-    padding: .58rem .65rem .58rem 0;
+    padding: .72rem .85rem .72rem 0;
     pointer-events: auto;
     cursor: pointer;
     transform: translateX(1.2rem) scale(.98);
@@ -2436,6 +2443,18 @@ body {
     --app-toast-accent: #4b83d1;
 }
 
+.app-toast-system {
+    --app-toast-accent: #18a6b8;
+}
+
+.app-toast-achievement {
+    --app-toast-accent: #e5ad28;
+}
+
+.app-toast-collection {
+    --app-toast-accent: #9a62e8;
+}
+
 [data-theme="dark"] .app-toast {
     box-shadow: 0 .9rem 2.8rem rgba(0, 0, 0, .38);
 }
@@ -2448,31 +2467,34 @@ body {
 
 .app-toast-icon {
     align-items: center;
-    background: color-mix(in srgb, var(--app-toast-accent) 14%, transparent);
+    background: color-mix(in srgb, var(--app-toast-accent) 22%, var(--pt-surface));
+    border: 1px solid color-mix(in srgb, var(--app-toast-accent) 58%, transparent);
     border-radius: 50%;
     color: var(--app-toast-accent);
     display: inline-flex;
-    height: 1.8rem;
+    height: 2.2rem;
     justify-content: center;
-    width: 1.8rem;
+    width: 2.2rem;
 }
 
 .app-toast-copy {
     display: grid;
-    gap: .12rem;
-    line-height: 1.25;
+    gap: .2rem;
+    line-height: 1.32;
     min-width: 0;
 }
 
     .app-toast-copy strong {
-        font-size: .78rem;
-        font-weight: 750;
-        letter-spacing: -.01em;
+        color: var(--pt-ink);
+        font-size: .9rem;
+        font-weight: 850;
+        letter-spacing: 0;
     }
 
     .app-toast-copy > span {
-        color: var(--pt-ink-soft);
-        font-size: .7rem;
+        color: color-mix(in srgb, var(--pt-ink) 86%, var(--app-toast-accent));
+        font-size: .82rem;
+        font-weight: 600;
         overflow-wrap: anywhere;
     }
 
@@ -2487,7 +2509,7 @@ body {
     }
 
     .app-toast {
-        min-height: 4rem;
+        min-height: 4.35rem;
         transform: translateY(.85rem) scale(.98);
     }
 
@@ -2502,7 +2524,7 @@ body {
     /* The case page marks its body explicitly.  Do not rely on :has() here: older in-app
        mobile browsers can otherwise leave feedback sitting underneath the fixed game dock. */
     body.case-tycoon-page .app-toast-container {
-        bottom: calc(var(--case-mobile-dock-bottom, 1.1rem) + 5.65rem);
+        bottom: calc(var(--case-mobile-dock-bottom, 1.1rem) + 4.3rem);
     }
 }
 

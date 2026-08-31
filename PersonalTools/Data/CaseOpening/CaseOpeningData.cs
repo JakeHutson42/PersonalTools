@@ -28,6 +28,8 @@ public interface ICaseOpeningData
     Task<CaseOpeningInventoryUpgradeDbModel> GetCaseOpeningInventoryUpgrades(Guid userId, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningUpgradeDefinitionObj>> GetCaseOpeningUpgradeDefinitions(Guid userId, CancellationToken cancellationToken = default);
     Task UnlockCaseOpeningInventoryUpgrade(Guid userId, string upgradeKey, int costStars, long costGbpPence, CancellationToken cancellationToken = default);
+    Task<List<string>> GetCaseBattleReactionUnlocks(Guid userId, CancellationToken cancellationToken = default);
+    Task PurchaseCaseBattleReaction(Guid userId, string reactionKey, int costStars, long costGbpPence, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningAutoBuyRuleDbModel>> GetCaseOpeningAutoBuyRules(Guid userId, CancellationToken cancellationToken = default);
     Task SetCaseOpeningAutoBuyRule(Guid userId, string caseKey, int thresholdQuantity, int purchaseQuantity, bool isEnabled, int ruleSlotCap, CancellationToken cancellationToken = default);
     Task DeleteCaseOpeningAutoBuyRule(Guid userId, string caseKey, CancellationToken cancellationToken = default);
@@ -924,6 +926,18 @@ public sealed class CaseOpeningData : ICaseOpeningData
                 ("p_open_speed_level", openSpeedLevel)),
             cancellationToken);
         return await GetCaseOpeningProgress(userId, cancellationToken);
+    }
+
+    public Task<List<string>> GetCaseBattleReactionUnlocks(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return _database.GetBulkDataSP("sp_case_battle_reaction_unlocks_get", reader => reader.GetString("ReactionKey"),
+            Parameters(("p_user_id", userId)), cancellationToken);
+    }
+
+    public Task PurchaseCaseBattleReaction(Guid userId, string reactionKey, int costStars, long costGbpPence, CancellationToken cancellationToken = default)
+    {
+        return _database.ExecuteSP("sp_case_battle_reaction_purchase",
+            Parameters(("p_user_id", userId), ("p_reaction_key", reactionKey), ("p_cost_stars", costStars), ("p_cost_gbp_pence", costGbpPence)), cancellationToken);
     }
 
     public Task SetCaseOpeningCaseUnlockDev(Guid userId, string caseKey, bool unlock, CancellationToken cancellationToken = default)

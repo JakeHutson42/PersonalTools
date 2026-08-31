@@ -12,6 +12,7 @@
     track.preload = 'auto';
     winnerReveal.preload = 'auto';
     let musicLevel = 1;
+    meter?.setAttribute('aria-label', 'Music volume');
     const volumeToGain = volume => Math.pow(Math.max(0, Math.min(1, Number(volume) || 0)), 1.6);
     const syncMusicVolume = () => { track.volume = volumeToGain(state.volume) * musicLevel; };
     const syncWinnerVolume = () => { winnerReveal.volume = Math.min(.28, Math.pow(Math.max(0, Math.min(1, Number(state.volume) || 0)), .9) * .55); };
@@ -108,8 +109,26 @@
         render();
     }
     button.addEventListener('click', () => { state.enabled = !state.enabled; if (state.enabled) start(); else { disarmUnlock(); fadeOut(); winnerReveal.pause(); winnerReveal.currentTime = 0; } save(); render(); });
-    meter?.addEventListener('pointerdown', event => { meter.setPointerCapture?.(event.pointerId); setVolume(event); });
-    meter?.addEventListener('pointermove', event => { if (event.buttons) setVolume(event); });
+    let volumeDragging = false;
+    meter?.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        volumeDragging = true;
+        meter.setPointerCapture?.(event.pointerId);
+        setVolume(event);
+    });
+    meter?.addEventListener('pointermove', event => {
+        if (!volumeDragging) return;
+        event.preventDefault();
+        setVolume(event);
+    });
+    const stopVolumeDrag = event => {
+        if (!volumeDragging) return;
+        volumeDragging = false;
+        if (meter?.hasPointerCapture?.(event.pointerId)) meter.releasePointerCapture(event.pointerId);
+    };
+    meter?.addEventListener('pointerup', stopVolumeDrag);
+    meter?.addEventListener('pointercancel', stopVolumeDrag);
+    meter?.addEventListener('lostpointercapture', () => { volumeDragging = false; });
     meter?.addEventListener('keydown', event => {
         if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
         event.preventDefault();

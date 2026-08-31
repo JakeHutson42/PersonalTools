@@ -49,21 +49,16 @@ builder.Logging.AddApplicationLogViewer();
 // Keep authentication and protected user settings readable across restarts.
 // Never put the key ring in the deployed application directory: production files
 // are owned separately from the account that runs the service.
-string defaultDataProtectionPath = OperatingSystem.IsWindows()
-    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PersonalTools", "DataProtection-Keys")
-    : "/var/lib/personaltools/data-protection-keys";
+string defaultDataProtectionPath = OperatingSystem.IsWindows() ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PersonalTools", "DataProtection-Keys") : "/var/lib/personaltools/data-protection-keys";
 string dataProtectionPath = builder.Configuration["DataProtection:KeyDirectory"] ?? defaultDataProtectionPath;
 Directory.CreateDirectory(dataProtectionPath);
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionPath))
-    .SetApplicationName("PersonalTools");
+builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(dataProtectionPath)).SetApplicationName("PersonalTools");
 
 builder.Services.AddRazorPages();
 builder.Services.Configure<PersonalTools.Entities.CaseBattles.CaseBattleFeatureOptions>(builder.Configuration.GetSection("CaseBattles"));
 builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddControllersWithViews(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()))
-    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddControllersWithViews(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute())).AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddMemoryCache();
 builder.Services.AddRateLimiter(options =>
 {

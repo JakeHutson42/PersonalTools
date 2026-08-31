@@ -6,7 +6,21 @@
     @Html.AntiForgeryToken()
     <partial name="_CaseBattleHud" />
     <header class="case-battle-page-hero"><div class="case-battle-page-hero-icon"><i class="fa-solid fa-people-group" aria-hidden="true"></i></div><div class="case-battle-page-hero-copy"><p class="eyebrow mb-1">Case battle</p><h1>Battle lobby</h1><p id="caseBattleLobbyStatus">Preparing your lobby…</p></div><div class="case-battle-page-hero-meta"><span class="case-battle-elapsed"><i class="fa-regular fa-clock" aria-hidden="true"></i><span>Lobby time</span><strong id="caseBattleLobbyElapsed">00:00</strong></span><a class="btn btn-outline-secondary" asp-page="/CaseOpening/Index" data-case-battle-transition-link><i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i>Simulator</a></div></header>
-    <section class="case-battle-room card case-battle-lobby-room"><div class="card-body"><div class="case-battle-scoreboard" id="caseBattleLobbyScoreboard" aria-live="polite"></div><div class="case-battle-lobby-stage"><div><p class="eyebrow mb-1">Case track</p><h2 class="h5 mb-1">Both players open every case in this order</h2><div class="case-battle-case-track" id="caseBattleLobbyTrack"></div></div><aside class="case-battle-lobby-ready" id="caseBattleLobbyReady" aria-live="polite"></aside></div><div class="case-battle-actions" id="caseBattleLobbyActions" aria-live="polite"></div></div></section>
+    <section class="case-battle-room card case-battle-lobby-room">
+        <div class="case-battle-lobby-scan" aria-hidden="true"></div>
+        <div class="card-body">
+            <header class="case-battle-lobby-room-heading">
+                <div><p class="eyebrow mb-1">Room status</p><h2 class="h5 mb-0">Player connections</h2></div>
+                <span class="case-battle-lobby-network"><i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i>Live room</span>
+            </header>
+            <div class="case-battle-scoreboard" id="caseBattleLobbyScoreboard" aria-live="polite"></div>
+            <div class="case-battle-lobby-stage">
+                <div class="case-battle-lobby-track-panel"><p class="eyebrow mb-1">Case track</p><h2 class="h5 mb-1">Every player opens each case in this order</h2><div class="case-battle-case-track" id="caseBattleLobbyTrack"></div></div>
+                <aside class="case-battle-lobby-ready" id="caseBattleLobbyReady" aria-live="polite"></aside>
+            </div>
+            <footer class="case-battle-lobby-command-bar"><span><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i><span><small>Your controls</small><strong>Battle command</strong></span></span><div class="case-battle-actions" id="caseBattleLobbyActions" aria-live="polite"></div></footer>
+        </div>
+    </section>
 </main>
 <partial name="_CaseBattleTransition" />
 @section Scripts { <script src="~/js/pages/page-case-battle-transition.js" asp-append-version="true"></script><script src="~/js/pages/page-case-battle-hud.js" asp-append-version="true"></script><script src="~/js/pages/page-case-battle-lobby.js" asp-append-version="true"></script> }
