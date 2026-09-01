@@ -105,6 +105,8 @@ builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLi
 builder.Services.AddScoped<IMariaDbDataAccess, MariaDbDataAccess>();
 builder.Services.AddScoped<IAuthData, AuthData>();
 builder.Services.AddScoped<IAuthFuncs, AuthFuncs>();
+builder.Services.AddScoped<ISocialProfileData, SocialProfileData>();
+builder.Services.AddScoped<ISocialProfileFuncs, SocialProfileFuncs>();
 builder.Services.AddHttpClient<ISteamOpenIdData, SteamOpenIdData>(client =>
 {
     client.BaseAddress = new Uri("https://steamcommunity.com/");
@@ -341,6 +343,7 @@ app.UseAuthorization();
 app.MapRazorPages();
 app.MapControllers();
 app.MapHub<LiveWinnersHub>("/hubs/live-winners");
+app.MapHub<SocialPresenceHub>("/hubs/social-presence");
 app.MapHub<CaseBattleHub>("/hubs/case-battles");
 
 app.Run();

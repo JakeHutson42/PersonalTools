@@ -76,7 +76,7 @@
                     <span class="live-winners-live-dot" aria-hidden="true"></span><span class="live-winners-count" id="liveWinnersCount">—</span>
                 </button>
                 <section class="live-winners-panel" id="liveWinnersPanel" hidden>
-                    <div class="live-winners-header"><div><p>24-hour hall of fame</p><h2 id="liveWinnersTitle">Recent winners</h2></div></div>
+                    <div class="live-winners-header"><div><p>24-hour hall of fame</p><h2 id="liveWinnersTitle">Recent winners</h2></div><div class="case-user-scope" role="group" aria-label="Online player count"><button class="active" type="button" data-user-scope="global" aria-pressed="true">Global</button><button type="button" data-user-scope="friends" aria-pressed="false">Friends</button></div></div>
                     <div class="live-winners-tabs" role="tablist" aria-label="Hall of fame category"><button class="active" type="button" role="tab" data-live-winners-tab="pulls" aria-selected="true">Daily pulls</button><button type="button" role="tab" data-live-winners-tab="battles" aria-selected="false">Battle winners</button></div>
                     <ol class="live-winners-list" id="liveWinnersList"><li class="live-winners-empty">Loading the latest wins…</li></ol>
                     <span class="live-winners-scroll-cue" id="liveWinnersScrollCue" aria-hidden="true" hidden><i class="fa-solid fa-chevron-down"></i></span>
@@ -926,7 +926,8 @@
 
                 <nav class="case-profile-tabs" aria-label="Player profile sections">
                     <div class="nav nav-pills" id="caseProfileTabs" role="tablist">
-                        <button class="nav-link active" id="caseProfileAchievementsTab" data-bs-toggle="pill" data-bs-target="#caseProfileAchievementsPane" type="button" role="tab" aria-controls="caseProfileAchievementsPane" aria-selected="true"><i class="fa-solid fa-medal" aria-hidden="true"></i><span>Achievements</span></button>
+                        <button class="nav-link active" id="caseProfileSocialTab" data-bs-toggle="pill" data-bs-target="#caseProfileSocialPane" type="button" role="tab" aria-controls="caseProfileSocialPane" aria-selected="true"><i class="fa-solid fa-user-group" aria-hidden="true"></i><span>Profile</span></button>
+                        <button class="nav-link" id="caseProfileAchievementsTab" data-bs-toggle="pill" data-bs-target="#caseProfileAchievementsPane" type="button" role="tab" aria-controls="caseProfileAchievementsPane" aria-selected="false"><i class="fa-solid fa-medal" aria-hidden="true"></i><span>Achievements</span></button>
                         <button class="nav-link" id="caseProfileStatisticsTab" data-bs-toggle="pill" data-bs-target="#caseProfileStatisticsPane" type="button" role="tab" aria-controls="caseProfileStatisticsPane" aria-selected="false"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Statistics</span></button>
                         <button class="nav-link" id="caseProfileCollectionsTab" data-bs-toggle="pill" data-bs-target="#caseProfileCollectionsPane" type="button" role="tab" aria-controls="caseProfileCollectionsPane" aria-selected="false"><i class="fa-solid fa-layer-group" aria-hidden="true"></i><span>Collections</span></button>
                         <button class="nav-link" id="caseProfileProgressionTab" data-bs-toggle="pill" data-bs-target="#caseProfileProgressionPane" type="button" role="tab" aria-controls="caseProfileProgressionPane" aria-selected="false"><i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i><span>Progression</span></button>
@@ -936,7 +937,14 @@
             </div>
 
             <div class="tab-content case-profile-content" id="caseProfileTabContent">
-                <section class="tab-pane fade show active" id="caseProfileAchievementsPane" role="tabpanel" aria-labelledby="caseProfileAchievementsTab" tabindex="0">
+                <section class="tab-pane fade show active" id="caseProfileSocialPane" role="tabpanel" aria-labelledby="caseProfileSocialTab" tabindex="0">
+                    <div class="case-social-identity" id="caseSocialIdentity"><span class="case-profile-avatar" aria-hidden="true">😎</span><div><p class="eyebrow mb-1">Case Tycoon account</p><h3 class="h5 mb-0">Loading profile…</h3><span></span></div></div>
+                    <div class="case-profile-pane-heading"><div><p class="eyebrow mb-1">Squad</p><h3 class="h5 mb-1">Friends</h3><p class="small-muted mb-0">Find players by username, display name or account ID.</p></div><span class="case-profile-metric" id="caseSocialFriendCount">0 friends</span></div>
+                    <label class="case-social-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input class="form-control" id="caseSocialSearch" type="search" maxlength="100" autocomplete="off" placeholder="Username, name or #account ID" aria-label="Find a player" /></label>
+                    <div class="case-social-results d-none" id="caseSocialResults" aria-live="polite"></div>
+                    <div class="case-social-list" id="caseSocialFriends" aria-live="polite"><div class="case-profile-collections-empty"><i class="fa-solid fa-user-group" aria-hidden="true"></i><span>Loading friends…</span></div></div>
+                </section>
+                <section class="tab-pane fade" id="caseProfileAchievementsPane" role="tabpanel" aria-labelledby="caseProfileAchievementsTab" tabindex="0">
                     <div class="case-profile-pane-heading">
                         <div><p class="eyebrow mb-1">Career milestones</p><h3 class="h5 mb-1">Achievements</h3><p class="small-muted mb-0">Rewards are securely applied once per account.</p></div>
                         <span class="case-profile-metric" id="caseAchievementCollections">0 collections · 0 rarity sets</span>

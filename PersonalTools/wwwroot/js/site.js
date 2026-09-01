@@ -306,7 +306,7 @@
         function renderWinners(summary, animate = true) {
             latest = summary;
             const liveUserCount = Number(summary.liveUserCount || 0);
-            count.textContent = liveUserCount.toLocaleString();
+            if (count.dataset.userScope !== 'friends') count.textContent = liveUserCount.toLocaleString();
             const winners = Array.isArray(summary.winners) ? summary.winners : [];
             if (!winners.length) {
                 list.replaceChildren(Object.assign(document.createElement('li'), { className: 'live-winners-empty', textContent: 'No priced wins in the last 24 hours yet.' }));

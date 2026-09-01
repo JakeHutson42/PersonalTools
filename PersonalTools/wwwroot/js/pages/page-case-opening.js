@@ -6669,6 +6669,83 @@
     });
     loadCaseProfileEmoji();
 
+    let socialLoaded = false, socialSummary = null, socialSearchTimer = 0, socialPresenceConnection = null, socialHeartbeat = 0;
+    const socialEscape = value => $('<div>').text(String(value ?? '')).html();
+    const socialAvatarImages = { 'avatar:operative':'/images/case-tycoon/avatars/operative.svg', 'avatar:vanguard':'/images/case-tycoon/avatars/vanguard.svg', 'avatar:synth':'/images/case-tycoon/avatars/synth.svg' };
+    function socialLastSeen(player) {
+        if (player.isOnline) return 'Online now';
+        if (!player.lastSeenUtc) return 'Offline';
+        const seconds = Math.max(0, Math.floor((Date.now() - new Date(player.lastSeenUtc).getTime()) / 1000));
+        if (seconds < 60) return 'Last online just now';
+        if (seconds < 3600) return `Last online ${Math.floor(seconds / 60)}m ago`;
+        if (seconds < 86400) return `Last online ${Math.floor(seconds / 3600)}h ago`;
+        const days = Math.floor(seconds / 86400); return `Last online ${days}d ago`;
+    }
+    function socialPlayerRow(player, removable) {
+        const avatar = socialAvatarImages[player.avatar] ? `<img src="${socialAvatarImages[player.avatar]}" alt="">` : socialEscape(player.avatar || '😎');
+        const action = removable ? `<button class="btn btn-sm btn-outline-danger" type="button" data-social-remove="${socialEscape(player.userId)}" aria-label="Remove ${socialEscape(player.displayName)}"><i class="fa-solid fa-user-minus" aria-hidden="true"></i></button>` : `<button class="btn btn-sm ${player.isFriend ? 'btn-outline-danger' : 'btn-warning'}" type="button" data-social-${player.isFriend ? 'remove' : 'add'}="${socialEscape(player.userId)}">${player.isFriend ? 'Remove' : 'Add'}</button>`;
+        return `<article class="case-social-player" data-social-user-id="${socialEscape(player.userId)}" data-last-seen-utc="${socialEscape(player.lastSeenUtc || '')}"><span class="case-social-player-avatar" aria-hidden="true">${avatar}<i class="case-social-presence-dot ${player.isOnline ? 'is-online' : ''}"></i></span><span class="case-social-player-copy"><strong>${socialEscape(player.displayName)}</strong><small class="case-social-handle">@${socialEscape(player.username)} · #${Number(player.accountId)}</small><small class="case-social-presence-copy">${socialLastSeen(player)}</small></span>${action}</article>`;
+    }
+    function refreshSocialTimes() {
+        $('.case-social-player').each(function () {
+            const $row=$(this), online=$row.find('.case-social-presence-dot').hasClass('is-online');
+            $row.find('.case-social-presence-copy').text(socialLastSeen({isOnline:online,lastSeenUtc:$row.attr('data-last-seen-utc')}));
+        });
+    }
+    function applyPresence(change) {
+        const id=String(change.userId||'').toLowerCase(), online=Boolean(change.isOnline), when=change.lastSeenUtc||new Date().toISOString();
+        if (socialSummary) {
+            socialSummary.globalOnlineCount=Math.max(0,socialSummary.globalOnlineCount+(online?1:-1));
+            const player=socialSummary.friends.find(item=>String(item.userId).toLowerCase()===id);
+            if (player && player.isOnline !== online) { player.isOnline=online; player.lastSeenUtc=when; socialSummary.friendsOnlineCount=Math.max(0,socialSummary.friendsOnlineCount+(online?1:-1)); applySocialCount($('.case-user-scope button.active').data('user-scope')||'global'); }
+        }
+        $(`.case-social-player[data-social-user-id="${CSS.escape(String(change.userId||''))}"]`).each(function(){
+            const $row=$(this), wasOnline=$row.find('.case-social-presence-dot').hasClass('is-online');
+            $row.attr('data-last-seen-utc',when).find('.case-social-presence-dot').toggleClass('is-online',online);
+            $row.find('.case-social-presence-copy').text(socialLastSeen({isOnline:online,lastSeenUtc:when}));
+            if(wasOnline!==online){ $row.removeClass('presence-arrived presence-left'); void this.offsetWidth; $row.addClass(online?'presence-arrived':'presence-left'); setTimeout(()=>$(this).removeClass('presence-arrived presence-left'),900); }
+        });
+    }
+    function connectSocialPresence() {
+        if (socialPresenceConnection || !window.signalR) return;
+        socialPresenceConnection=new window.signalR.HubConnectionBuilder().withUrl('/hubs/social-presence').withAutomaticReconnect([0,1000,3000,8000]).build();
+        socialPresenceConnection.on('PresenceChanged',applyPresence);
+        socialPresenceConnection.onreconnected(()=>loadSocial(true));
+        socialPresenceConnection.start().then(()=>{ clearInterval(socialHeartbeat); socialHeartbeat=setInterval(()=>{ if(document.visibilityState==='visible') socialPresenceConnection.invoke('Heartbeat').catch(()=>{}); },45000); }).catch(()=>{ socialPresenceConnection=null; });
+    }
+    function applySocialCount(scope) {
+        if (!socialSummary) return;
+        $('#liveWinnersCount').attr('data-user-scope',scope).text(scope === 'friends' ? socialSummary.friendsOnlineCount : socialSummary.globalOnlineCount);
+    }
+    function renderSocial(summary) {
+        socialSummary = summary; socialLoaded = true;
+        const profile = summary.profile, $identity = $('#caseSocialIdentity');
+        renderCaseProfileAvatar($identity.find('.case-profile-avatar'), profile.avatar);
+        $identity.find('h3').text(profile.displayName); $identity.find('div > span').text(`@${profile.username} · Account #${profile.accountId}`);
+        $('#caseSocialFriendCount').text(`${summary.friends.length} friend${summary.friends.length === 1 ? '' : 's'}`);
+        $('#caseSocialFriends').html(summary.friends.length ? summary.friends.map(item => socialPlayerRow(item, true)).join('') : '<div class="case-profile-collections-empty"><i class="fa-solid fa-user-plus" aria-hidden="true"></i><span>Find a player above to build your friends list.</span></div>');
+        applySocialCount($('.case-user-scope button.active').data('user-scope') || 'global');
+        connectSocialPresence(); refreshSocialTimes();
+    }
+    function loadSocial(force) {
+        if (socialLoaded && !force) return;
+        request('/api/social/summary','GET',{showLoader:false,showToast:false}).done(renderSocial).fail(() => $('#caseSocialFriends').html('<div class="case-profile-collections-empty"><span>Friends could not be loaded.</span></div>'));
+    }
+    $('#caseProfileSocialTab').on('shown.bs.tab', () => loadSocial(false));
+    $('#casePlayerProfile').on('shown.bs.offcanvas', () => { if ($('#caseProfileSocialTab').hasClass('active')) loadSocial(false); });
+    $('.case-user-scope').on('click','button',function(){ $('.case-user-scope button').removeClass('active').attr('aria-pressed','false'); $(this).addClass('active').attr('aria-pressed','true'); loadSocial(false); applySocialCount($(this).data('user-scope')); });
+    $('#caseSocialSearch').on('input',function(){
+        clearTimeout(socialSearchTimer); const query = $(this).val().trim(), $results = $('#caseSocialResults');
+        if (query.length < 2) { $results.addClass('d-none').empty(); return; }
+        socialSearchTimer = setTimeout(() => request(`/api/social/search?query=${encodeURIComponent(query)}`,'GET',{showLoader:false,showToast:false}).done(items => $results.toggleClass('d-none',!items.length).html(items.length ? items.map(item => socialPlayerRow(item,false)).join('') : '')).fail(() => $results.removeClass('d-none').html('<p class="small-muted mb-0">Search is unavailable.</p>')),300);
+    });
+    $('#caseProfileSocialPane').on('click','[data-social-add],[data-social-remove]',function(){
+        const $button=$(this).prop('disabled',true), add=$button.is('[data-social-add]'), id=$button.data(add?'social-add':'social-remove');
+        request(`/api/social/friends/${encodeURIComponent(id)}`,add?'POST':'DELETE',{showLoader:false}).done(() => { $('#caseSocialSearch').val(''); $('#caseSocialResults').addClass('d-none').empty(); loadSocial(true); }).fail(response => { window.personalToolsToast?.error(response.responseJSON?.message || 'Friend list could not be updated.'); $button.prop('disabled',false); });
+    });
+    loadSocial(false);
+    setInterval(refreshSocialTimes,30000);
+
     function renderCaseBattleAdminStatus(status) {
         $('#caseTweakBattlesEnabled').prop('checked', Boolean(status.caseBattlesEnabled)).prop('disabled', false);
         $('#caseTweakBattleFfa3Enabled').prop('checked', Boolean(status.freeForAll3Enabled)).prop('disabled', false);
