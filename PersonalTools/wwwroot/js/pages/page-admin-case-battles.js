@@ -3,10 +3,11 @@ $(function () {
     const token = () => $('input[name="__RequestVerificationToken"]').first().val();
     const date = value => value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
     const escape = value => $('<div>').text(value || '').html();
-    const modeLabel = mode => ({ duel: '1v1', 'ffa-3': '1v1v1' }[String(mode || '').toLowerCase()] || mode || 'Unknown mode');
+    const modeLabel = mode => ({ duel: '1v1', 'ffa-3': '1v1v1', 'ffa-4': '1v1v1v1' }[String(mode || '').toLowerCase()] || mode || 'Unknown mode');
     function renderBot(status) {
         $('#caseBattlesEnabled').prop('checked', status.caseBattlesEnabled).prop('disabled', false);
         $('#caseBattleFfa3Enabled').prop('checked', status.freeForAll3Enabled).prop('disabled', false);
+        $('#caseBattleFfa4Enabled').prop('checked', status.freeForAll4Enabled).prop('disabled', false);
         $('#caseBattleBotEnabled').prop('checked', status.enabled).prop('disabled', false);
         $('#caseBattleBotStats strong').each(function (index) { $(this).text([status.battlesAttempted, status.battlesWon, status.skinsDiscarded, new Intl.NumberFormat('en-GB', { style:'currency', currency:'GBP' }).format(Number(status.valueDiscarded || 0))][index]); });
     }
@@ -28,6 +29,7 @@ $(function () {
     $('#caseBattleAdminRefresh').on('click', load);
     $('#caseBattlesEnabled').on('change', function () { const control = $(this).prop('disabled', true); $.ajax({ url:'/api/admin/case-battles/feature-status', method:'PUT', contentType:'application/json', data:JSON.stringify(control.prop('checked')), headers:{ RequestVerificationToken:token() }, success:renderBot }).fail(() => { window.personalToolsToast?.error('Case Battle visibility could not be saved.'); load(); }); });
     $('#caseBattleFfa3Enabled').on('change', function () { const control = $(this).prop('disabled', true); $.ajax({ url:'/api/admin/case-battles/ffa-3-status', method:'PUT', contentType:'application/json', data:JSON.stringify(control.prop('checked')), headers:{ RequestVerificationToken:token() }, success:renderBot }).fail(() => { window.personalToolsToast?.error('1v1v1 visibility could not be saved.'); load(); }); });
+    $('#caseBattleFfa4Enabled').on('change', function () { const control = $(this).prop('disabled', true); $.ajax({ url:'/api/admin/case-battles/ffa-4-status', method:'PUT', contentType:'application/json', data:JSON.stringify(control.prop('checked')), headers:{ RequestVerificationToken:token() }, success:renderBot }).fail(() => { window.personalToolsToast?.error('1v1v1v1 visibility could not be saved.'); load(); }); });
     $('#caseBattleBotEnabled').on('change', function () { const control = $(this).prop('disabled', true); $.ajax({ url:'/api/admin/case-battles/bot-status', method:'PUT', contentType:'application/json', data:JSON.stringify(control.prop('checked')), headers:{ RequestVerificationToken:token() }, success:renderBot }).fail(() => { window.personalToolsToast?.error('Battle Bot visibility could not be saved.'); load(); }); });
     $('#caseBattleTimingsSave').on('click', function () {
         const button = $(this).prop('disabled', true), payload = Object.fromEntries(timingFields.map(field => [field, Number($('#' + field).val())]));

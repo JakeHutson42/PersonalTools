@@ -4219,6 +4219,17 @@ body:has(.case-opening-page) .form-switch .form-check-label {
         color: var(--rarity,var(--pt-ink));
     }
 
+.case-instant-repeat { align-self:center; margin-top:.45rem; }
+.case-opening-page.has-streamlined-results .case-result-slot { min-height:3.75rem; margin-top:.65rem; }
+.case-opening-page.has-streamlined-results .case-result .eyebrow { display:none; }
+.case-opening-page.has-streamlined-results .case-result h3 { margin-bottom:.15rem !important; font-size:1rem; }
+.case-opening-page.has-streamlined-results .case-result #caseResultMeta { overflow:hidden; font-size:.7rem; text-overflow:ellipsis; white-space:nowrap; }
+.case-opening-page.has-streamlined-results .case-open-controls { margin-top:.75rem !important; }
+
+@media (max-width:575.98px) {
+    .case-instant-repeat { width:100%; }
+}
+
 .case-no-stock {
     position: relative;
     display: grid;
@@ -7778,8 +7789,8 @@ body:has(.case-player-profile.show) {
 }
 
     .case-profile-tabs .nav {
-        display: grid;
-        grid-template-columns: repeat(4,minmax(0,1fr));
+        display: flex;
+        flex-wrap: nowrap;
         gap: .35rem;
     }
 
@@ -7788,6 +7799,8 @@ body:has(.case-player-profile.show) {
         align-items: center;
         justify-content: center;
         gap: .4rem;
+        flex: 0 0 2.65rem;
+        width: 2.65rem;
         min-height: 2.65rem;
         padding: .4rem .5rem;
         color: var(--pt-ink-soft);
@@ -7796,6 +7809,23 @@ body:has(.case-player-profile.show) {
         font-size: .72rem;
         font-weight: 750;
     }
+
+        .case-profile-tabs .nav-link span {
+            display: none;
+        }
+
+        .case-profile-tabs .nav-link.active {
+            flex: 1 1 auto;
+            width: auto;
+            min-width: 0;
+        }
+
+        .case-profile-tabs .nav-link.active span {
+            display: inline;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
 
         .case-profile-tabs .nav-link:hover {
             color: var(--pt-ink);
@@ -7807,6 +7837,299 @@ body:has(.case-player-profile.show) {
             border-color: var(--case-gold);
             background: var(--case-gold);
         }
+
+/* The compact floating XP bar now uses the same purple-to-gold progression language as the
+   profile sidebar, so level progress reads as one system wherever the player sees it. */
+.case-game-hud .case-hud-player .case-xp-track {
+    height: .42rem;
+    border-color: color-mix(in srgb,var(--case-purple) 48%,var(--pt-line));
+    background: color-mix(in srgb,var(--pt-surface) 72%,var(--pt-ink));
+}
+
+/* Phase-one RPG upgrade tree. Nodes are deliberately positioned by server-provided row/column
+   coordinates while the SVG connection layer follows their rendered centres at every width. */
+.case-skill-tree-shell {
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb,var(--case-gold) 28%,var(--pt-line));
+    border-radius: var(--pt-card-radius);
+    background: radial-gradient(circle at 50% 0,color-mix(in srgb,var(--case-purple) 13%,transparent),transparent 32rem),linear-gradient(180deg,color-mix(in srgb,var(--pt-surface) 96%,var(--case-purple)),var(--pt-canvas));
+    box-shadow: inset 0 1px 0 color-mix(in srgb,#fff 7%,transparent),0 .8rem 2rem rgba(0,0,0,.12);
+}
+
+.case-skill-tree-intro {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid var(--pt-line);
+    background: color-mix(in srgb,var(--pt-surface) 88%,transparent);
+}
+
+.case-skill-tree-balance {
+    display: grid;
+    min-width: 8rem;
+    gap: .05rem;
+    padding: .5rem .75rem;
+    border: 1px solid color-mix(in srgb,var(--case-gold) 42%,var(--pt-line));
+    border-radius: var(--pt-small-radius);
+    background: color-mix(in srgb,var(--case-gold) 8%,var(--pt-surface));
+    text-align: end;
+}
+
+.case-skill-tree-balance small { color:var(--pt-ink-soft); font-size:.58rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+.case-skill-tree-balance strong { overflow-wrap:anywhere; color:var(--case-gold); font-size:.9rem; font-variant-numeric:tabular-nums; }
+
+.case-skill-tree-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: .55rem 1rem;
+    padding: .65rem 1rem;
+    color: var(--pt-ink-soft);
+    border-bottom: 1px solid var(--pt-line);
+    font-size: .63rem;
+    font-weight: 700;
+}
+
+.case-skill-tree-legend span { display:inline-flex; align-items:center; gap:.35rem; }
+.case-skill-tree-legend i { width:.65rem; height:.65rem; border:1px solid var(--pt-line); border-radius:50%; background:var(--pt-canvas); }
+.case-skill-tree-legend .is-available { border-color:var(--case-gold); box-shadow:0 0 .4rem color-mix(in srgb,var(--case-gold) 42%,transparent); }
+.case-skill-tree-legend .is-purchased { border-color:var(--case-gold); background:color-mix(in srgb,var(--case-gold) 18%,var(--pt-canvas)); }
+.case-skill-tree-legend .is-complete { border-color:#ffe18a; background:var(--case-gold); }
+
+.case-skill-tree {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(5,minmax(4.7rem,1fr));
+    grid-auto-rows: 7.4rem;
+    align-items: center;
+    justify-items: center;
+    min-height: 18rem;
+    padding: 2.25rem 1.25rem 3rem;
+    isolation: isolate;
+}
+
+.case-skill-tree-lines { position:absolute; inset:0; z-index:-1; width:100%; height:100%; overflow:visible; pointer-events:none; }
+.case-skill-tree-lines path { fill:none; stroke:color-mix(in srgb,var(--pt-ink-soft) 26%,var(--pt-line)); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+.case-skill-tree-lines path.is-ready { stroke:color-mix(in srgb,var(--case-gold) 48%,var(--pt-line)); }
+.case-skill-tree-lines path.is-complete { stroke:var(--case-gold); filter:drop-shadow(0 0 .28rem color-mix(in srgb,var(--case-gold) 55%,transparent)); }
+.case-skill-tree-lines path.is-cosmetic { stroke-dasharray:5 6; }
+.case-skill-tree-lines path.is-cosmetic.is-ready { stroke:color-mix(in srgb,var(--case-purple) 45%,var(--pt-line)); }
+.case-skill-tree-lines path.is-cosmetic.is-complete { stroke:color-mix(in srgb,var(--case-purple) 64%,var(--case-gold)); }
+
+.case-skill-tree-node {
+    position: relative;
+    grid-row: var(--skill-row);
+    grid-column: var(--skill-column);
+    display: grid;
+    justify-items: center;
+    gap: .38rem;
+    width: 5.4rem;
+    padding: 0;
+    color: var(--pt-ink-soft);
+    border: 0;
+    background: transparent;
+    text-align: center;
+    touch-action: manipulation;
+}
+
+.case-skill-tree-node-ring {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 3.8rem;
+    height: 3.8rem;
+    color: color-mix(in srgb,var(--pt-ink-soft) 58%,var(--pt-canvas));
+    border: .18rem solid color-mix(in srgb,var(--pt-ink-soft) 35%,var(--pt-line));
+    border-radius: 50%;
+    background: linear-gradient(145deg,color-mix(in srgb,var(--pt-surface) 80%,var(--pt-ink)),var(--pt-canvas));
+    box-shadow: 0 .42rem 1rem rgba(0,0,0,.2),inset 0 1px 0 color-mix(in srgb,#fff 7%,transparent);
+    font-size: 1.05rem;
+    transition: color .18s ease,border-color .18s ease,background-color .18s ease,box-shadow .18s ease;
+}
+
+.case-skill-tree-node-name { display:-webkit-box; max-width:6.5rem; overflow:hidden; color:inherit; font-size:.62rem; font-weight:800; line-height:1.15; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
+.case-skill-tree-node.is-locked { cursor:not-allowed; opacity:.4; filter:grayscale(.8); }
+.case-skill-tree-node.is-unaffordable { opacity:.82; }
+.case-skill-tree-node.is-unaffordable .case-skill-tree-node-ring { color:var(--pt-ink-soft); border-color:color-mix(in srgb,var(--case-gold) 40%,var(--pt-line)); box-shadow:0 0 0 .1rem color-mix(in srgb,var(--case-gold) 7%,transparent),0 .42rem 1rem rgba(0,0,0,.2); }
+.case-skill-tree-node.is-available { color:var(--pt-ink); cursor:pointer; }
+.case-skill-tree-node.is-available .case-skill-tree-node-ring { color:var(--case-gold); border-color:var(--case-gold); background:linear-gradient(145deg,color-mix(in srgb,var(--case-gold) 15%,var(--pt-surface)),var(--pt-canvas)); box-shadow:0 0 0 .16rem color-mix(in srgb,var(--case-gold) 13%,transparent),0 0 1rem color-mix(in srgb,var(--case-gold) 24%,transparent),0 .45rem 1rem rgba(0,0,0,.2); }
+.case-skill-tree-node.is-available .case-skill-tree-node-ring { animation:case-skill-ready-pulse 2.4s ease-in-out infinite; }
+.case-skill-tree-node.is-purchasing .case-skill-tree-node-ring { animation:case-skill-purchase .55s ease-out both; }
+.case-skill-tree-node.is-purchased { color:var(--pt-ink); cursor:default; }
+.case-skill-tree-node.is-purchased .case-skill-tree-node-ring { color:var(--case-gold); border-color:var(--case-gold); background:linear-gradient(145deg,color-mix(in srgb,var(--case-gold) 18%,var(--pt-surface)),var(--pt-canvas)); }
+.case-skill-tree-node.is-complete { color:var(--case-gold); cursor:default; }
+.case-skill-tree-node.is-complete .case-skill-tree-node-ring { color:#211604; border-color:#ffe18a; background:linear-gradient(145deg,#ffe078,var(--case-gold)); box-shadow:0 0 0 .18rem color-mix(in srgb,var(--case-gold) 18%,transparent),0 0 1.25rem color-mix(in srgb,var(--case-gold) 38%,transparent),inset 0 1px 0 rgba(255,255,255,.35); }
+.case-skill-tree-node.is-cosmetic .case-skill-tree-node-ring { border-style:dashed; background:linear-gradient(145deg,color-mix(in srgb,var(--case-purple) 18%,var(--pt-surface)),var(--pt-canvas)); }
+.case-skill-tree-node.is-cosmetic.is-available .case-skill-tree-node-ring { color:color-mix(in srgb,var(--case-purple) 56%,var(--case-gold)); border-color:color-mix(in srgb,var(--case-purple) 62%,var(--case-gold)); }
+.case-skill-tree-node.is-cosmetic.is-complete .case-skill-tree-node-ring { color:#211604; border-style:solid; border-color:#ffe18a; background:linear-gradient(145deg,#f4d8ff,var(--case-gold)); }
+.case-skill-tree-node:hover .case-skill-tree-node-ring,.case-skill-tree-node:focus-visible .case-skill-tree-node-ring { border-color:color-mix(in srgb,var(--case-gold) 84%,#fff); box-shadow:0 0 0 .2rem color-mix(in srgb,var(--case-gold) 20%,transparent),0 0 1rem color-mix(in srgb,var(--case-gold) 25%,transparent),0 .45rem 1rem rgba(0,0,0,.2); }
+.case-skill-tree-node:focus-visible { outline:0; }
+
+.case-skill-tree-tooltip {
+    position: absolute;
+    left: calc(100% + .75rem);
+    top: 50%;
+    z-index: 8;
+    display: grid;
+    width: 17rem;
+    gap: .3rem;
+    padding: .75rem;
+    color: var(--pt-ink);
+    border: 1px solid color-mix(in srgb,var(--case-gold) 35%,var(--pt-line));
+    border-radius: var(--pt-small-radius);
+    background: color-mix(in srgb,var(--pt-surface) 96%,var(--case-purple));
+    box-shadow: 0 .75rem 1.8rem rgba(0,0,0,.3);
+    text-align: left;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%);
+    transition: opacity .14s ease;
+}
+
+.case-skill-tree-tooltip-family { color:var(--case-gold); font-size:.56rem; font-weight:850; letter-spacing:.09em; text-transform:uppercase; }
+.case-skill-tree-tooltip strong { font-size:.82rem; }
+.case-skill-tree-tooltip > span:not(.case-skill-tree-tooltip-family) { color:var(--pt-ink-soft); font-size:.68rem; line-height:1.45; }
+.case-skill-tree-tooltip small { margin-top:.2rem; padding-top:.4rem; color:var(--pt-ink); border-top:1px solid var(--pt-line); font-size:.62rem; font-weight:750; }
+.case-skill-tree-node.is-branch-right .case-skill-tree-tooltip { left:auto; right:calc(100% + .75rem); }
+.case-skill-tree-node:hover .case-skill-tree-tooltip,.case-skill-tree-node:focus-visible .case-skill-tree-tooltip,.case-skill-tree-node.is-inspecting .case-skill-tree-tooltip { opacity:1; }
+
+@keyframes case-skill-ready-pulse { 0%,100%{box-shadow:0 0 0 .12rem color-mix(in srgb,var(--case-gold) 10%,transparent),0 0 .65rem color-mix(in srgb,var(--case-gold) 18%,transparent),0 .45rem 1rem rgba(0,0,0,.2)} 50%{box-shadow:0 0 0 .2rem color-mix(in srgb,var(--case-gold) 16%,transparent),0 0 1.05rem color-mix(in srgb,var(--case-gold) 30%,transparent),0 .45rem 1rem rgba(0,0,0,.2)} }
+@keyframes case-skill-purchase { 0%{filter:brightness(1)} 45%{filter:brightness(1.55);box-shadow:0 0 1.8rem color-mix(in srgb,var(--case-gold) 58%,transparent)} 100%{filter:brightness(1)} }
+
+.case-trade-up-history-list { display:grid; gap:.55rem; }
+.case-trade-up-history-row { display:grid; grid-template-columns:3rem minmax(0,1fr) auto; align-items:center; gap:.75rem; padding:.65rem; border:1px solid var(--pt-line); border-radius:var(--pt-small-radius); background:var(--pt-surface); }
+.case-trade-up-history-row img,.case-trade-up-history-placeholder { display:grid; width:3rem; height:3rem; place-items:center; object-fit:contain; border-radius:.5rem; background:var(--pt-canvas); }
+.case-trade-up-history-row div { min-width:0; }
+.case-trade-up-history-row strong,.case-trade-up-history-row span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.case-trade-up-history-row span,.case-trade-up-history-row time { color:var(--pt-ink-soft); font-size:.7rem; }
+@media (max-width:575.98px) { .case-trade-up-history-row { grid-template-columns:2.65rem minmax(0,1fr); }.case-trade-up-history-row img,.case-trade-up-history-placeholder{width:2.65rem;height:2.65rem}.case-trade-up-history-row time{grid-column:2} }
+
+.case-skill-tree-automation {
+    padding: 1rem;
+    border-top: 1px solid color-mix(in srgb,var(--case-gold) 24%,var(--pt-line));
+    background: linear-gradient(180deg,color-mix(in srgb,var(--case-gold) 5%,var(--pt-surface)),color-mix(in srgb,var(--pt-canvas) 92%,var(--case-purple)));
+}
+
+.case-skill-tree-automation-heading { margin-bottom:.8rem; }
+.case-skill-tree-automation-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; }
+.case-skill-tree-automation-grid > .case-auto-sell-panel { min-width:0; margin-top:0 !important; }
+.case-skill-tree-automation-grid .js-unlock-inventory-upgrade { display:none !important; }
+
+@media (max-width:767.98px) {
+    .case-skill-tree-intro { align-items:flex-start; padding:.85rem; }
+    .case-skill-tree-balance { min-width:6.6rem; padding:.42rem .55rem; }
+    .case-skill-tree-legend { justify-content:flex-start; padding-inline:.85rem; }
+    .case-skill-tree { grid-template-columns:repeat(3,minmax(4.5rem,1fr)); grid-auto-rows:7.2rem; padding:2rem .35rem 4.5rem; }
+    .case-skill-tree-node { grid-column:2 !important; }
+    .case-skill-tree-tooltip,.case-skill-tree-node.is-branch-right .case-skill-tree-tooltip { left:50%; right:auto; top:calc(100% + .45rem); width:min(17rem,calc(100vw - 3rem)); transform:translateX(-50%); }
+    .case-skill-tree-automation { padding:.85rem; }
+    .case-skill-tree-automation-grid { grid-template-columns:minmax(0,1fr); }
+}
+
+@media (max-width:420px) {
+    .case-skill-tree-intro { display:grid; }
+    .case-skill-tree-balance { width:100%; text-align:left; }
+    .case-skill-tree-legend { gap:.45rem .7rem; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+    .case-skill-tree-node-ring,.case-skill-tree-tooltip { animation:none !important; transition-duration:.01ms !important; }
+    .case-skill-tree-lines path { filter:none !important; }
+}
+
+.case-game-hud .case-hud-player .case-xp-fill {
+    background: linear-gradient(90deg,var(--case-purple),var(--case-gold));
+    box-shadow: 0 0 .65rem color-mix(in srgb,var(--case-purple) 35%,transparent);
+}
+
+.case-profile-battle-history {
+    display: grid;
+    gap: .85rem;
+}
+
+.case-profile-battle-card {
+    --battle-result: var(--case-gold);
+    position: relative;
+    display: grid;
+    overflow: hidden;
+    color: var(--pt-ink);
+    border: 1px solid color-mix(in srgb,var(--battle-result) 42%,var(--pt-line));
+    border-radius: calc(var(--pt-small-radius) + .2rem);
+    background: radial-gradient(circle at 12% 20%,color-mix(in srgb,var(--battle-result) 12%,transparent),transparent 40%),linear-gradient(145deg,color-mix(in srgb,var(--case-purple) 6%,var(--pt-surface)),var(--pt-surface));
+    box-shadow: 0 .75rem 1.8rem rgba(0,0,0,.14),inset 0 1px 0 color-mix(in srgb,#fff 7%,transparent);
+    text-decoration: none;
+    transition: transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+}
+
+.case-profile-battle-card.is-defeat { --battle-result: var(--case-red); }
+.case-profile-battle-card:hover { color: var(--pt-ink); border-color: color-mix(in srgb,var(--battle-result) 72%,var(--pt-line)); box-shadow: 0 1rem 2.2rem rgba(0,0,0,.2),0 0 0 .12rem color-mix(in srgb,var(--battle-result) 11%,transparent); transform: translateY(-2px); }
+.case-profile-battle-card:focus-visible { outline: 0; box-shadow: 0 0 0 .2rem color-mix(in srgb,var(--battle-result) 30%,transparent),0 .8rem 2rem rgba(0,0,0,.2); }
+
+.case-profile-battle-card-head {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+    align-items: center;
+    gap: .6rem;
+    padding: .65rem .8rem;
+    border-bottom: 1px solid var(--pt-line);
+    background: color-mix(in srgb,var(--pt-canvas) 60%,transparent);
+}
+
+.case-profile-battle-mode { display:flex; align-items:center; gap:.4rem; color:var(--pt-ink-soft); font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.055em; }
+.case-profile-battle-mode i { color:var(--battle-result); }
+.case-profile-battle-result { padding:.25rem .65rem; border:1px solid color-mix(in srgb,var(--battle-result) 58%,var(--pt-line)); border-radius:999px; color:var(--battle-result); background:color-mix(in srgb,var(--battle-result) 10%,var(--pt-surface)); font-size:.65rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.case-profile-battle-card-head time { justify-self:end; color:var(--pt-ink-soft); font-size:.65rem; font-weight:650; }
+
+.case-profile-battle-matchup {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 2.75rem minmax(0,1fr);
+    align-items: center;
+    gap: .45rem;
+    padding: 1.5rem .9rem 1.25rem;
+}
+
+.case-profile-battle-losers { display:grid; grid-template-columns:repeat(auto-fit,minmax(5.25rem,1fr)); gap:.45rem; min-width:0; }
+.case-profile-battle-player { position:relative; display:grid; justify-items:center; align-content:start; min-width:0; gap:.3rem; text-align:center; }
+.case-profile-battle-player > strong { overflow:hidden; width:100%; font-size:.78rem; text-overflow:ellipsis; white-space:nowrap; }
+.case-profile-battle-verdict { color:var(--pt-ink-soft); font-size:.58rem; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
+.case-profile-battle-player.is-winner .case-profile-battle-verdict { color:var(--case-gold); }
+.case-profile-battle-player.is-loser .case-profile-battle-verdict { color:var(--case-red); }
+
+.case-profile-battle-avatar {
+    position:relative;
+    display:grid;
+    place-items:center;
+    width:4.4rem;
+    height:4.4rem;
+    margin:.2rem 0;
+    overflow:visible;
+    color:var(--pt-ink);
+    border:.19rem solid var(--case-red);
+    border-radius:50%;
+    background:color-mix(in srgb,var(--case-red) 9%,var(--pt-canvas));
+    box-shadow:0 0 0 .18rem color-mix(in srgb,var(--case-red) 16%,transparent),0 .55rem 1.2rem rgba(0,0,0,.2);
+    font-size:1.35rem;
+    font-weight:900;
+}
+
+.case-profile-battle-player.is-winner .case-profile-battle-avatar { border-color:var(--case-gold); background:color-mix(in srgb,var(--case-gold) 10%,var(--pt-canvas)); box-shadow:0 0 0 .18rem color-mix(in srgb,var(--case-gold) 18%,transparent),0 0 1.1rem color-mix(in srgb,var(--case-gold) 18%,transparent),0 .55rem 1.2rem rgba(0,0,0,.2); }
+.case-profile-battle-avatar img { width:100%; height:100%; border-radius:inherit; object-fit:cover; }
+.case-profile-battle-crown { position:absolute; top:-1.25rem; right:-.45rem; z-index:2; color:#f5bd35; font-size:1.75rem; filter:drop-shadow(0 .16rem .08rem rgba(0,0,0,.45)); text-shadow:-1px -1px 0 #fff0a3,1px 1px 0 #8b5a00; transform:rotate(18deg); transform-origin:50% 100%; }
+
+.case-profile-battle-value { display:grid; gap:.03rem; }
+.case-profile-battle-value small { color:var(--pt-ink-soft); font-size:.56rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.case-profile-battle-value b { color:var(--pt-ink); font-size:.78rem; font-variant-numeric:tabular-nums; }
+.case-profile-battle-vs { display:grid; place-items:center; width:2.4rem; height:2.4rem; justify-self:center; color:var(--case-gold); border:1px solid color-mix(in srgb,var(--case-gold) 45%,var(--pt-line)); border-radius:50%; background:var(--pt-canvas); box-shadow:0 0 1rem color-mix(in srgb,var(--case-gold) 12%,transparent); font-size:.72rem; font-style:italic; font-weight:950; }
+
+.case-profile-battle-payout { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.7rem .85rem; border-top:1px solid var(--pt-line); background:linear-gradient(90deg,color-mix(in srgb,var(--case-gold) 8%,var(--pt-surface)),transparent); }
+.case-profile-battle-payout > span:first-child { display:grid; gap:.05rem; }
+.case-profile-battle-payout small { color:var(--pt-ink-soft); font-size:.56rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }
+.case-profile-battle-payout strong { color:var(--case-gold); font-size:1rem; font-variant-numeric:tabular-nums; }
+.case-profile-battle-open { display:flex; align-items:center; gap:.4rem; color:var(--pt-ink-soft); font-size:.65rem; font-weight:750; }
+.case-profile-battle-open i { color:var(--battle-result); transition:transform .18s ease; }
+.case-profile-battle-card:hover .case-profile-battle-open i { transform:translateX(.2rem); }
 
 .case-profile-content {
     padding: 1rem 1.25rem 1.5rem;
@@ -8265,12 +8588,26 @@ body:has(.case-player-profile.show) {
     }
 
         .case-profile-tabs .nav-link {
-            flex-direction: column;
-            gap: .1rem;
-            min-height: 3.15rem;
-            padding: .3rem .15rem;
-            font-size: .58rem;
+            flex-direction: row;
+            gap: .3rem;
+            flex-basis: 2.45rem;
+            width: 2.45rem;
+            min-height: 2.65rem;
+            padding: .3rem;
+            font-size: .65rem;
         }
+
+        .case-profile-tabs .nav-link.active { flex:1 1 auto; width:auto; }
+
+    .case-profile-battle-card-head { grid-template-columns:1fr auto; }
+    .case-profile-battle-card-head time { display:none; }
+    .case-profile-battle-matchup { grid-template-columns:minmax(0,1fr) 2.25rem minmax(0,1fr); gap:.2rem; padding:1.35rem .45rem 1rem; }
+    .case-profile-battle-avatar { width:3.8rem; height:3.8rem; }
+    .case-profile-battle-crown { top:-1.1rem; right:-.35rem; font-size:1.5rem; }
+    .case-profile-battle-vs { width:2rem; height:2rem; font-size:.62rem; }
+    .case-profile-battle-losers { grid-template-columns:1fr; }
+    .case-profile-battle-losers:has(.case-profile-battle-player:nth-child(2)) .case-profile-battle-avatar { width:3rem; height:3rem; }
+    .case-profile-battle-payout { padding:.65rem .7rem; }
 
     .case-profile-summary {
         padding: .85rem;
@@ -10030,3 +10367,6 @@ body:has(.case-player-profile.show) {
     }
 }
 .case-reaction-upgrade{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:.75rem}.case-reaction-upgrade-preview{display:grid;place-items:center;width:2.75rem;height:2.75rem;border:1px solid color-mix(in srgb,var(--case-gold,#e4ae39) 35%,var(--pt-line));border-radius:var(--pt-small-radius);background:color-mix(in srgb,var(--case-gold,#e4ae39) 8%,var(--pt-surface));font-size:1.5rem}.case-reaction-upgrade-preview img{width:2.1rem;height:2.1rem;object-fit:contain}@media(max-width:575.98px){.case-reaction-upgrade{grid-template-columns:auto 1fr}.case-reaction-upgrade .btn{grid-column:1/-1;width:100%}}
+.case-social-reaction-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}.case-profile-battle-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;margin-bottom:1rem}.case-profile-showcase-item{display:flex;align-items:center;gap:1rem;padding:.8rem;border:1px solid rgba(228,174,57,.32);border-radius:1rem;background:linear-gradient(135deg,rgba(228,174,57,.1),rgba(12,17,27,.75))}.case-profile-showcase-item img{width:5.5rem;height:4rem;object-fit:contain;filter:drop-shadow(0 .45rem .7rem rgba(0,0,0,.35))}.case-profile-showcase-item span{display:grid;gap:.2rem;min-width:0}.case-profile-showcase-item strong,.case-profile-showcase-item small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (min-width:768px){.case-social-reaction-layout{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:480px){.case-profile-battle-filters{grid-template-columns:1fr}}

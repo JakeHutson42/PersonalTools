@@ -3,7 +3,7 @@
     'use strict';
     const status = document.querySelector('#caseBattleStatus'), elapsed = document.querySelector('#caseBattleElapsed'), scoreboard = document.querySelector('#caseBattleScoreboard'), track = document.querySelector('#caseBattleCaseTrack'), arena = document.querySelector('#caseBattleArena'), actions = document.querySelector('#caseBattleActions'), results = document.querySelector('#caseBattleResults'), resultsSection = document.querySelector('#caseBattleResultsSection'), showcase = document.querySelector('#caseBattleShowcase'), winnerBackdrop = document.querySelector('#caseBattleWinnerBackdrop');
     const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
-    let battleId = document.querySelector('[data-case-battle-id]')?.dataset.caseBattleId || null, latestDetail = null, replaying = false, refreshTimer = 0, showcaseShown = false, showcaseDismissEnabled = false, battleCreatedAt = null, currentReady = false, readySequenceShown = false, autoStartScheduled = false, realtimeConnection = null;
+    let battleId = document.querySelector('[data-case-battle-id]')?.dataset.caseBattleId || null, latestDetail = null, replaying = false, refreshTimer = 0, showcaseShown = false, showcaseDismissEnabled = false, battleCreatedAt = null, currentReady = false, readySequenceShown = false, autoStartScheduled = false, realtimeConnection = null, victoryEmoteKey = '', victoryEmoteSent = false;
     let timings = { readyPauseMs:900, readyCountdownMs:3000, preSpinPauseMs:2500, spinDurationMs:5000, resultsPauseMs:1100, winnerIntroPauseMs:2500, winnerTallyDurationMs:4200, winnerVerdictPauseMs:1800, winnerTransferDurationMs:3500 };
     const caseImages = new Map();
     const caseNames = new Map();
@@ -24,7 +24,17 @@
         : '<span aria-hidden="true">' + escape(player.profileAvatar || initial) + '</span>';
     function showReaction(payload) { if (!reactionStage || !payload?.value) return; const reaction = document.createElement('span'); reaction.className = 'case-battle-floating-reaction' + (payload.kind === 'image' ? ' is-image' : ''); if (payload.kind === 'image') { const image=document.createElement('img'); image.src=payload.value; image.alt=''; reaction.append(image); } else reaction.textContent = payload.value; reaction.style.setProperty('--reaction-x', (1.1 + Math.random() * 4.5).toFixed(1) + 'rem'); reaction.style.setProperty('--reaction-drift', (10 + Math.random() * 32).toFixed(1) + 'vw'); reaction.style.setProperty('--reaction-sway', ((Math.random() * 14) - 7).toFixed(1) + 'vw'); reaction.style.setProperty('--reaction-peak', (42 + Math.random() * 18).toFixed(1) + 'vh'); reaction.style.setProperty('--reaction-turn', ((Math.random() * 52) - 26).toFixed(0) + 'deg'); reaction.style.setProperty('--reaction-duration', (2.15 + Math.random() * .7).toFixed(2) + 's'); reactionStage.append(reaction); window.setTimeout(() => reaction.remove(), 3100); }
     function showEffect(key) { if (!effectStage) return; effectStage.className='case-battle-effect-stage is-' + key; effectStage.replaceChildren(); const count=key==='ak-rain' ? 24 : 14; for(let i=0;i<count;i++){ const part=document.createElement('i'); part.className=key==='ak-rain' ? 'fa-solid fa-gun' : key==='gold-burst' ? 'fa-solid fa-star' : 'fa-solid fa-bolt'; part.style.setProperty('--effect-x',(Math.random()*100).toFixed(1)+'vw'); part.style.setProperty('--effect-delay',(Math.random()*1.1).toFixed(2)+'s'); part.style.setProperty('--effect-turn',((Math.random()*180)-90).toFixed(0)+'deg'); part.style.setProperty('--effect-colour',`hsl(${Math.floor(Math.random()*360)} 85% 62%)`); effectStage.append(part); } window.setTimeout(()=>{ effectStage.className='case-battle-effect-stage'; effectStage.replaceChildren(); },4000); }
-    function loadReactions() { request('/api/case-opening/battle-reactions','GET').then(shop => { if(!reactionMenu)return; reactionMenu.innerHTML=(shop.items||[]).filter(item=>item.isOwned).map(item=>`<button type="button" data-battle-reaction="${escape(item.key)}" aria-label="${escape(item.name)}">${item.kind==='image' ? `<img src="${escape(item.value)}" alt="">` : escape(item.value)}</button>`).join(''); }).catch(()=>{}); }
+    function loadReactions() {
+        return Promise.all([request('/api/case-opening/battle-reactions','GET'), request('/api/case-opening/opening-preferences','GET'), request('/api/case-opening/inventory/upgrades','GET')]).then(([shop, preferences, upgrades]) => {
+            if (!reactionMenu) return;
+            const unlocked = key => (upgrades?.availableUpgrades || []).some(item => String(item.upgradeKey).toLowerCase() === key && item.isUnlocked === true);
+            const owned = (shop.items || []).filter(item => item.isOwned);
+            const saved = unlocked('saved-reaction-layout') ? String(preferences?.reactionLayout || '').split(',').filter(Boolean) : [];
+            const ordered = saved.map(key => owned.find(item => item.key === key)).filter(Boolean).concat(owned.filter(item => !saved.includes(item.key)));
+            reactionMenu.innerHTML = ordered.slice(0, unlocked('reaction-wheel-slots') ? 8 : 4).map(item=>`<button type="button" data-battle-reaction="${escape(item.key)}" aria-label="${escape(item.name)}">${item.kind==='image' ? `<img src="${escape(item.value)}" alt="">` : escape(item.value)}</button>`).join('');
+            victoryEmoteKey = unlocked('victory-emote-slot') && owned.some(item => item.key === preferences?.victoryEmoteKey) ? preferences.victoryEmoteKey : '';
+        }).catch(()=>{});
+    }
     window.setInterval(() => { if (elapsed && battleCreatedAt) elapsed.textContent = duration(Date.now() - battleCreatedAt); }, 1000);
 
     function renderScoreboard(detail, useReplayTotals) {
@@ -268,6 +278,10 @@
         await wait(reduced ? 0 : timings.winnerVerdictPauseMs);
         winner?.classList.add('is-winner');
         losers.forEach(loser => loser.classList.add('is-loser'));
+        if (!victoryEmoteSent && victoryEmoteKey && winnerId === String(document.body.dataset.userId || '') && realtimeConnection?.state === window.signalR?.HubConnectionState.Connected) {
+            victoryEmoteSent = true;
+            realtimeConnection.invoke('SendReaction', battleId, victoryEmoteKey).catch(() => { victoryEmoteSent = false; });
+        }
         winner?.querySelector('.case-battle-finalist-status')?.replaceChildren('Winner');
         losers.forEach(loser => loser.querySelector('.case-battle-finalist-status')?.replaceChildren('Runner-up'));
         showcase.querySelector('.case-battle-showcase-title span').textContent = (winner?.querySelector('strong')?.textContent || 'Winner') + ' takes the pot';

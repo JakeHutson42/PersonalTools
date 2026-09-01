@@ -448,6 +448,8 @@ public sealed class CaseOpeningDailyDropObj
     public int RequiredXp { get; set; } = 100;
     public bool IsCompleted { get; set; }
     public bool IsClaimed { get; set; }
+    public bool IsPreview { get; set; }
+    public int ClaimChoiceCount { get; set; } = 2;
     public List<CaseOpeningDailyDropRewardObj> Rewards { get; set; } = [];
     public List<CaseOpeningDailyDropUpgradeObj> Upgrades { get; set; } = [];
 }
@@ -611,6 +613,40 @@ public sealed class CaseOpeningGameSettingsObj
     public int TradeUpHoldingUpgradeCostIncrementStars { get; set; } = 50;
     public long TradeUpHoldingUpgradeBaseCostGbpPence { get; set; } = 250;
     public long TradeUpHoldingUpgradeCostIncrementGbpPence { get; set; } = 50;
+}
+
+public sealed class CaseOpeningSkillTreeSettingsObj
+{
+    public bool Enabled { get; set; }
+}
+
+public sealed class CaseOpeningSkillTreeNodeObj
+{
+    public string NodeId { get; set; } = string.Empty;
+    public string UpgradeKey { get; set; } = string.Empty;
+    public string PurchaseKind { get; set; } = string.Empty;
+    public string Family { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Icon { get; set; } = string.Empty;
+    public List<string> PrerequisiteNodeIds { get; set; } = [];
+    public int Row { get; set; }
+    public int Column { get; set; }
+    public long Cost { get; set; }
+    public int RequiredLevel { get; set; }
+    public bool IsPurchased { get; set; }
+    public bool IsAvailable { get; set; }
+    public bool CanAfford { get; set; }
+    public bool IsTerminal { get; set; }
+}
+
+public sealed class CaseOpeningSkillTreeObj
+{
+    public bool Enabled { get; set; }
+    public string EconomyMode { get; set; } = CaseOpeningEconomyModes.Stars;
+    public string CurrencyCode { get; set; } = "STAR";
+    public long Balance { get; set; }
+    public List<CaseOpeningSkillTreeNodeObj> Nodes { get; set; } = [];
 }
 
 public sealed class CaseOpeningCaseSettingsObj
@@ -918,6 +954,37 @@ public class CaseOpeningBotServerDbModel
     public DateTime CreatedUtc { get; set; }
     public int SpeedLevel { get; set; }
     public bool IsEnabled { get; set; } = true;
+}
+
+public sealed class CaseOpeningTradeUpHistoryObj
+{
+    public Guid TradeUpId { get; set; }
+    public string InputRarityKey { get; set; } = string.Empty;
+    public string OutputRarityKey { get; set; } = string.Empty;
+    public string OutputCaseKey { get; set; } = string.Empty;
+    public string OutputName { get; set; } = string.Empty;
+    public string OutputImageUrl { get; set; } = string.Empty;
+    public string OutputWear { get; set; } = string.Empty;
+    public bool OutputIsStatTrak { get; set; }
+    public decimal OutputEstimatedPrice { get; set; }
+    public decimal AverageInputFloat { get; set; }
+    public DateTime CreatedUtc { get; set; }
+}
+
+public sealed class CaseOpeningUserPreferencesObj
+{
+    public int LastOpenQuantity { get; set; } = 1;
+    public long AutoBuyReserveMinor { get; set; }
+    public bool FollowSelectedCase { get; set; }
+    public string? SelectedCaseKey { get; set; }
+    public long AutoSellProtectAboveMinor { get; set; }
+    public int AutoSellDuplicateCopies { get; set; }
+    public string AutoSellWears { get; set; } = string.Empty;
+    public int TradeUpReserve { get; set; }
+    public int PauseAutomationFreeSlots { get; set; }
+    public string ReactionLayout { get; set; } = string.Empty;
+    public string? VictoryEmoteKey { get; set; }
+    public Guid? ProfileShowcaseOpeningId { get; set; }
 }
 
 public sealed class CaseBattleReactionShopItemObj

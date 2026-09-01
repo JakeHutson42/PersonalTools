@@ -28,6 +28,10 @@ public interface ICaseOpeningData
     Task<CaseOpeningInventoryUpgradeDbModel> GetCaseOpeningInventoryUpgrades(Guid userId, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningUpgradeDefinitionObj>> GetCaseOpeningUpgradeDefinitions(Guid userId, CancellationToken cancellationToken = default);
     Task UnlockCaseOpeningInventoryUpgrade(Guid userId, string upgradeKey, int costStars, long costGbpPence, CancellationToken cancellationToken = default);
+    Task<CaseOpeningUserPreferencesObj> GetCaseOpeningUserPreferences(Guid userId, CancellationToken cancellationToken = default);
+    Task<CaseOpeningUserPreferencesObj> SetCaseOpeningLastQuantity(Guid userId, int quantity, CancellationToken cancellationToken = default);
+    Task<CaseOpeningUserPreferencesObj> SetCaseOpeningAutomationPreferences(Guid userId, CaseOpeningUserPreferencesObj preferences, CancellationToken cancellationToken = default);
+    Task<CaseOpeningUserPreferencesObj> SetCaseOpeningSocialPreferences(Guid userId, CaseOpeningUserPreferencesObj preferences, CancellationToken cancellationToken = default);
     Task<List<string>> GetCaseBattleReactionUnlocks(Guid userId, CancellationToken cancellationToken = default);
     Task PurchaseCaseBattleReaction(Guid userId, string reactionKey, int costStars, long costGbpPence, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningAutoBuyRuleDbModel>> GetCaseOpeningAutoBuyRules(Guid userId, CancellationToken cancellationToken = default);
@@ -43,6 +47,7 @@ public interface ICaseOpeningData
         bool? isMatch,
         CancellationToken cancellationToken = default);
     Task<List<CaseOpeningTradeUpRecipeObj>> GetCaseOpeningTradeUpRecipes(Guid userId, CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningTradeUpHistoryObj>> GetCaseOpeningTradeUpHistory(Guid userId, CancellationToken cancellationToken = default);
     Task CreateCaseOpeningTradeUpRecipe(Guid userId, CaseOpeningTradeUpRecipeDbModel recipe, int costStars, long costGbpPence, int recipeSlotCap, CancellationToken cancellationToken = default);
     Task SetCaseOpeningTradeUpRecipeActive(Guid userId, Guid recipeId, bool isActive, int recipeSlotCap, CancellationToken cancellationToken = default);
     Task DeleteCaseOpeningTradeUpRecipe(Guid userId, Guid recipeId, CancellationToken cancellationToken = default);
@@ -81,6 +86,8 @@ public interface ICaseOpeningData
     Task ResetCaseOpeningDailyDrop(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningGameSettingsObj> GetGameSettings(CancellationToken cancellationToken = default);
     Task SetGameSettings(CaseOpeningGameSettingsObj settings, CancellationToken cancellationToken = default);
+    Task<bool> GetCaseOpeningSkillTreeEnabled(CancellationToken cancellationToken = default);
+    Task SetCaseOpeningSkillTreeEnabled(bool enabled, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningCaseSettingsObj>> GetCaseSettings(CancellationToken cancellationToken = default);
     Task<List<CaseOpeningTierEconomySettingsObj>> GetTierEconomySettings(CancellationToken cancellationToken = default);
     Task SetTierEconomySettings(int tier, int targetProfitBasisPoints, int priceRoundingPence, CancellationToken cancellationToken = default);
@@ -768,6 +775,31 @@ public sealed class CaseOpeningData : ICaseOpeningData
         return _database.GetBulkDataSP("sp_case_opening_case_settings_get_all", ReadCaseSettings, cancellationToken: cancellationToken);
     }
 
+    public Task<List<CaseOpeningTradeUpHistoryObj>> GetCaseOpeningTradeUpHistory(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return _database.GetBulkDataSP("sp_case_opening_trade_up_history_get", reader => new CaseOpeningTradeUpHistoryObj
+        {
+            TradeUpId=Guid.Parse(reader.GetString("TradeUpId")),InputRarityKey=reader.GetString("InputRarityKey"),OutputRarityKey=reader.GetString("OutputRarityKey"),OutputCaseKey=reader.GetString("OutputCaseKey"),
+            AverageInputFloat=reader.GetDecimal("AverageInputFloat"),CreatedUtc=reader.GetDateTime("CreatedUtc"),OutputName=reader.GetString("OutputName"),OutputImageUrl=reader.GetString("OutputImageUrl"),OutputWear=reader.GetString("OutputWear"),OutputIsStatTrak=reader.GetBoolean("OutputIsStatTrak"),OutputEstimatedPrice=reader.GetDecimal("OutputEstimatedPrice")
+        }, Parameters(("p_user_id",userId)), cancellationToken);
+    }
+
+    public async Task<bool> GetCaseOpeningSkillTreeEnabled(CancellationToken cancellationToken = default)
+    {
+        return await _database.GetDataSP(
+            "sp_case_opening_skill_tree_settings_get",
+            reader => reader.GetBoolean("Enabled"),
+            cancellationToken: cancellationToken);
+    }
+
+    public Task SetCaseOpeningSkillTreeEnabled(bool enabled, CancellationToken cancellationToken = default)
+    {
+        return _database.ExecuteSP(
+            "sp_case_opening_skill_tree_settings_set",
+            Parameters(("p_enabled", enabled)),
+            cancellationToken);
+    }
+
     public Task<List<CaseOpeningTierEconomySettingsObj>> GetTierEconomySettings(CancellationToken cancellationToken = default)
     {
         return _database.GetBulkDataSP(
@@ -926,6 +958,40 @@ public sealed class CaseOpeningData : ICaseOpeningData
                 ("p_open_speed_level", openSpeedLevel)),
             cancellationToken);
         return await GetCaseOpeningProgress(userId, cancellationToken);
+    }
+
+    public async Task<CaseOpeningUserPreferencesObj> GetCaseOpeningUserPreferences(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _database.GetDataSP("sp_case_opening_user_preferences_get",
+            ReadUserPreferences,
+            Parameters(("p_user_id", userId)), cancellationToken) ?? new CaseOpeningUserPreferencesObj();
+    }
+
+    public async Task<CaseOpeningUserPreferencesObj> SetCaseOpeningAutomationPreferences(Guid userId, CaseOpeningUserPreferencesObj preferences, CancellationToken cancellationToken = default)
+    {
+        return await _database.GetDataSP("sp_case_opening_automation_preferences_set", ReadUserPreferences,
+            Parameters(("p_user_id",userId),("p_auto_buy_reserve",preferences.AutoBuyReserveMinor),("p_follow_selected",preferences.FollowSelectedCase),("p_selected_case_key",preferences.SelectedCaseKey ?? string.Empty),("p_auto_sell_protect_above",preferences.AutoSellProtectAboveMinor),("p_duplicate_copies",preferences.AutoSellDuplicateCopies),("p_wears",preferences.AutoSellWears),("p_trade_up_reserve",preferences.TradeUpReserve),("p_pause_free_slots",preferences.PauseAutomationFreeSlots)), cancellationToken) ?? preferences;
+    }
+
+    private static CaseOpeningUserPreferencesObj ReadUserPreferences(MySqlDataReader reader) => new()
+    {
+        LastOpenQuantity=reader.GetInt32("LastOpenQuantity"), AutoBuyReserveMinor=reader.GetInt64("AutoBuyReserveMinor"),
+        FollowSelectedCase=reader.GetBoolean("FollowSelectedCase"), SelectedCaseKey=reader.IsDBNull(reader.GetOrdinal("SelectedCaseKey")) ? null : reader.GetString("SelectedCaseKey"),
+        AutoSellProtectAboveMinor=reader.GetInt64("AutoSellProtectAboveMinor"), AutoSellDuplicateCopies=reader.GetInt32("AutoSellDuplicateCopies"),
+        AutoSellWears=reader.GetString("AutoSellWears"), TradeUpReserve=reader.GetInt32("TradeUpReserve"), PauseAutomationFreeSlots=reader.GetInt32("PauseAutomationFreeSlots")
+        ,ReactionLayout=reader.GetString("ReactionLayout"),VictoryEmoteKey=reader.IsDBNull(reader.GetOrdinal("VictoryEmoteKey"))?null:reader.GetString("VictoryEmoteKey"),ProfileShowcaseOpeningId=reader.IsDBNull(reader.GetOrdinal("ProfileShowcaseOpeningId"))?null:Guid.Parse(reader.GetString("ProfileShowcaseOpeningId"))
+    };
+
+    public async Task<CaseOpeningUserPreferencesObj> SetCaseOpeningSocialPreferences(Guid userId, CaseOpeningUserPreferencesObj preferences, CancellationToken cancellationToken = default)
+    {
+        return await _database.GetDataSP("sp_case_opening_social_preferences_set",ReadUserPreferences,Parameters(("p_user_id",userId),("p_layout",preferences.ReactionLayout),("p_victory_emote",preferences.VictoryEmoteKey??string.Empty),("p_showcase_id",preferences.ProfileShowcaseOpeningId?.ToString()??string.Empty)),cancellationToken) ?? preferences;
+    }
+
+    public async Task<CaseOpeningUserPreferencesObj> SetCaseOpeningLastQuantity(Guid userId, int quantity, CancellationToken cancellationToken = default)
+    {
+        return await _database.GetDataSP("sp_case_opening_last_quantity_set",
+            reader => new CaseOpeningUserPreferencesObj { LastOpenQuantity = reader.GetInt32("LastOpenQuantity") },
+            Parameters(("p_user_id", userId), ("p_quantity", quantity)), cancellationToken) ?? new CaseOpeningUserPreferencesObj();
     }
 
     public Task<List<string>> GetCaseBattleReactionUnlocks(Guid userId, CancellationToken cancellationToken = default)

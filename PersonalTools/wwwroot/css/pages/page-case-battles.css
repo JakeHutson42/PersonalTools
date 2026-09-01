@@ -401,4 +401,17 @@ body:has(.case-battle-game-page) .app-content-shell { margin-left:0 !important; 
 @media (max-width:1199.98px) { .case-battle-lobby-room .case-battle-scoreboard[data-players="4"] { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:767.98px) { .case-battle-lobby-command-bar { align-items:stretch; flex-direction:column; }.case-battle-lobby-command-bar > span { display:none; }.case-battle-lobby-command-bar .case-battle-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.case-battle-lobby-action { min-width:0; }.case-battle-lobby-room .case-battle-scoreboard[data-players="3"],.case-battle-lobby-room .case-battle-scoreboard[data-players="4"] { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:575.98px) { .case-battle-lobby-room .card-body { padding:.65rem; }.case-battle-lobby-room-heading { align-items:start; }.case-battle-lobby-room .case-battle-scoreboard,.case-battle-lobby-room .case-battle-scoreboard[data-players="3"],.case-battle-lobby-room .case-battle-scoreboard[data-players="4"] { grid-template-columns:1fr; }.case-battle-lobby-room .case-battle-player { min-height:4.8rem; }.case-battle-lobby-command-bar .case-battle-actions { grid-template-columns:1fr; }.case-battle-lobby-action { width:100%; }.case-battle-lobby-network { font-size:0; }.case-battle-lobby-network i:nth-child(3) { margin-right:0; } }
+
+/* Mobile lobby: let the case track occupy its full panel and keep the two primary controls
+   within thumb reach without covering the final lobby content. */
+@media (max-width:767.98px) {
+    .case-battles-page[data-case-battle-lobby] { padding-bottom:calc(5.8rem + env(safe-area-inset-bottom)); }
+    .case-battle-lobby-track-panel,.case-battle-lobby-track-panel .case-battle-case-track { width:100%; }
+    .case-battle-lobby-track-panel .case-battle-case-track { display:grid; grid-template-columns:repeat(auto-fit,minmax(5.25rem,1fr)); align-items:stretch; }
+    .case-battle-lobby-track-panel .case-battle-case-track span { grid-template-columns:1.2rem minmax(0,1fr); width:100%; padding:.35rem; }
+    .case-battle-lobby-track-panel .case-battle-case-track img { width:100%; max-width:4.5rem; justify-self:center; }
+    .case-battle-lobby-command-bar { position:fixed; z-index:1035; right:.75rem; bottom:max(.5rem,env(safe-area-inset-bottom)); left:.75rem; margin:0; padding:.5rem; border-color:color-mix(in srgb,var(--case-gold,#e4ae39) 32%,var(--pt-line)); background:color-mix(in srgb,var(--pt-surface) 94%,transparent); box-shadow:0 -.65rem 1.8rem rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.08); backdrop-filter:blur(.75rem); }
+    .case-battle-lobby-command-bar .case-battle-actions { grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
+    .case-battle-lobby-action { min-height:3.35rem; padding:.35rem .45rem; }
+}
 @media (prefers-reduced-motion:reduce) { .case-battle-lobby-scan,.case-battle-lobby-network i,.case-battle-player,.case-battle-player::after,.case-battle-player-connection i,.case-battle-player.is-open .case-battle-player-avatar,.case-battle-player.is-pending .case-battle-ready-state i,.case-battle-lobby-track-panel .case-battle-case-track span::after,.case-battle-lobby-command-bar > span > i,.case-battle-lobby-action::after { animation:none !important; } }

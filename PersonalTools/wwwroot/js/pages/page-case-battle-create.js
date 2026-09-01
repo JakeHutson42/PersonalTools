@@ -44,7 +44,9 @@
     const remaining = value => Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 1000));
     const initials = value => String(value || '?').trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join('').toUpperCase() || '?';
     const mode = () => modeInput?.value || 'duel';
-    const requiredOpponentCount = () => mode() === 'ffa-3' ? 2 : 1;
+    const playerCount = () => ({ duel:2, 'ffa-3':3, 'ffa-4':4 }[mode()] || 2);
+    const requiredOpponentCount = () => playerCount() - 1;
+    const botIdsForMode = () => Array.from({ length:requiredOpponentCount() }, (_, index) => 'battle-bot-' + (index + 1));
     const hasRequiredOpponents = () => selectedOpponentIds.length === requiredOpponentCount();
     const sharedUnlockedCases = () => {
         if (!hasRequiredOpponents()) return null;
@@ -87,9 +89,8 @@
     function renderOpponents() {
         if (!opponentCards) return;
         const selectedIds = new Set(selectedOpponentIds);
-        const botEntries = !battleBot?.enabled ? [] : mode() === 'ffa-3'
-            ? [{ userId:'battle-bot-1', displayName:'Battle Bot Alpha', isBot:true }, { userId:'battle-bot-2', displayName:'Battle Bot Bravo', isBot:true }]
-            : [{ userId:'battle-bot-1', displayName:'Battle Bot', isBot:true }];
+        const botNames = ['Alpha', 'Bravo', 'Charlie'];
+        const botEntries = !battleBot?.enabled ? [] : botIdsForMode().map((userId, index) => ({ userId, displayName:requiredOpponentCount() === 1 ? 'Battle Bot' : 'Battle Bot ' + botNames[index], isBot:true }));
         const entries = [
             ...botEntries,
             ...opponents
@@ -146,7 +147,7 @@
         if (!card || opponent.disabled) return;
         const id = card.dataset.opponentId;
         if (id.startsWith('battle-bot')) {
-            const botIds = mode() === 'ffa-3' ? ['battle-bot-1','battle-bot-2'] : ['battle-bot-1'];
+            const botIds = botIdsForMode();
             selectedOpponentIds = selectedOpponentIds.some(value => value.startsWith('battle-bot')) ? [] : botIds;
         } else {
             selectedOpponentIds = selectedOpponentIds.filter(value => !value.startsWith('battle-bot'));
@@ -178,18 +179,16 @@
         return fetch('/api/case-battles/invitations/pending', { credentials:'same-origin', cache:'no-store' }).then(response => response.ok ? response.json() : []).then(items => {
             incomingHost?.classList.toggle('d-none', !items.length);
             if (!incomingList) return;
-            incomingList.innerHTML = (items || []).map(item => '<article data-incoming-battle="' + escape(item.battleId) + '"><span><strong>' + escape(item.creatorDisplayName) + ' challenged you</strong><small>' + (item.caseKeys || []).length + ' round' + ((item.caseKeys || []).length === 1 ? '' : 's') + ' · <b data-incoming-expiry="' + escape(item.expiresUtc) + '">' + remaining(item.expiresUtc) + 's left</b></small></span><span><button class="btn btn-sm btn-outline-secondary" type="button" data-incoming-decline="' + escape(item.battleId) + '">Decline</button><button class="btn btn-sm btn-warning" type="button" data-incoming-accept="' + escape(item.battleId) + '"><i class="fa-solid fa-cart-shopping me-1" aria-hidden="true"></i>Buy &amp; join</button></span></article>').join('');
+            incomingList.innerHTML = (items || []).map(item => '<article data-incoming-battle="' + escape(item.battleId) + '"><span><strong>' + escape(item.creatorDisplayName) + ' challenged you</strong><small>' + (item.caseKeys || []).length + ' round' + ((item.caseKeys || []).length === 1 ? '' : 's') + ' · <b data-incoming-expiry="' + escape(item.expiresUtc) + '">' + remaining(item.expiresUtc) + 's left</b></small></span><span><button class="btn btn-sm btn-outline-secondary" type="button" data-incoming-decline="' + escape(item.battleId) + '">Decline</button><a class="btn btn-sm btn-warning" data-case-battle-transition-link href="/CaseOpening/Battles/Lobby/' + encodeURIComponent(item.battleId) + '"><i class="fa-solid fa-door-open me-1" aria-hidden="true"></i>Open lobby</a></span></article>').join('');
         }).catch(() => {});
     }
     incomingList?.addEventListener('click', event => {
-        const acceptButton = event.target.closest('[data-incoming-accept]');
         const declineButton = event.target.closest('[data-incoming-decline]');
-        const battleId = acceptButton?.dataset.incomingAccept || declineButton?.dataset.incomingDecline;
+        const battleId = declineButton?.dataset.incomingDecline;
         if (!battleId) return;
         const row = event.target.closest('[data-incoming-battle]');
         row?.querySelectorAll('button').forEach(button => { button.disabled = true; });
-        if (acceptButton) request('/api/case-battles/' + encodeURIComponent(battleId) + '/invite/buy-and-accept', 'POST').then(result => { const target='/CaseOpening/Battles/' + encodeURIComponent(result.battleId); if(window.caseBattleTransition)window.caseBattleTransition.navigate(target);else window.location.assign(target); }).catch(message => { personalToolsToast?.error(message || 'The invitation could not be accepted.'); loadIncomingInvitations(); });
-        else request('/api/case-battles/' + encodeURIComponent(battleId) + '/invite/decline', 'POST').then(() => { row?.remove(); if (!incomingList.children.length) incomingHost?.classList.add('d-none'); personalToolsToast?.info('Battle invitation declined.'); loadPendingCreated(); }).catch(message => { personalToolsToast?.error(message || 'The invitation could not be declined.'); loadIncomingInvitations(); });
+        request('/api/case-battles/' + encodeURIComponent(battleId) + '/invite/decline', 'POST').then(() => { row?.remove(); if (!incomingList.children.length) incomingHost?.classList.add('d-none'); personalToolsToast?.info('Battle invitation declined.'); loadPendingCreated(); }).catch(message => { personalToolsToast?.error(message || 'The invitation could not be declined.'); loadIncomingInvitations(); });
     });
     pendingList?.addEventListener('click', event => {
         const cancelButton = event.target.closest('[data-cancel-pending]');
@@ -247,8 +246,8 @@
         selectedOpponentIds = [];
         opponent.value = '';
         selected = [];
-        if (opponentHelp) opponentHelp.textContent = mode() === 'ffa-3' ? 'Select two rivals. Only cases unlocked by all three players will be available.' : 'Your shared unlocked cases are checked as soon as you select a player.';
-        if (contributionCopy) contributionCopy.textContent = mode() === 'ffa-3' ? 'All three players contribute one of every case below. The highest combined value wins the entire pot.' : 'Both players contribute one of every case below. Reorder the rounds before sending your invitation.';
+        if (opponentHelp) opponentHelp.textContent = requiredOpponentCount() > 1 ? 'Select ' + requiredOpponentCount() + ' rivals. Only cases unlocked by all ' + playerCount() + ' players will be available.' : 'Your shared unlocked cases are checked as soon as you select a player.';
+        if (contributionCopy) contributionCopy.textContent = playerCount() > 2 ? 'All ' + playerCount() + ' players contribute one of every case below. The highest combined value wins the entire pot.' : 'Both players contribute one of every case below. Reorder the rounds before sending your invitation.';
         render();
     }));
     create.addEventListener('click', () => {
@@ -263,7 +262,7 @@
         fetch('/api/case-battles/bot-status', { credentials:'same-origin', cache:'no-store' }).then(response => response.ok ? response.json() : { enabled:false }),
         fetch('/api/case-battles/timings', { credentials:'same-origin', cache:'no-store' }).then(response => response.ok ? response.json() : null)
     ]), { title:'Preparing your battle', message:'Loading cases and available opponents…' })
-        .then(([caseData, users, bot, settings]) => { cases = Array.isArray(caseData) ? caseData : []; opponents = Array.isArray(users) ? users : []; battleBot = bot || null; maxCases = Math.max(1, Number(settings?.maxCasesPerBattle || 20)); const botOption = bot?.enabled ? '<option value="battle-bot">Battle Bot · auto-ready</option>' : ''; opponent.innerHTML = '<option value="">Choose an opponent…</option>' + botOption + opponents.map(user => '<option value="' + escape(user.userId) + '">' + escape(user.displayName) + '</option>').join(''); opponent.disabled = !opponents.length && !bot?.enabled; const ffaButton = modeButtons.find(button => button.dataset.battleMode === 'ffa-3'); if (ffaButton) { ffaButton.disabled = !bot?.freeForAll3Enabled; ffaButton.title = bot?.freeForAll3Enabled ? 'Three-player winner-takes-all battle' : '1v1v1 is disabled by an administrator'; } render(); })
+        .then(([caseData, users, bot, settings]) => { cases = Array.isArray(caseData) ? caseData : []; opponents = Array.isArray(users) ? users : []; battleBot = bot || null; maxCases = Math.max(1, Number(settings?.maxCasesPerBattle || 20)); const botOption = bot?.enabled ? '<option value="battle-bot">Battle Bot · auto-ready</option>' : ''; opponent.innerHTML = '<option value="">Choose an opponent…</option>' + botOption + opponents.map(user => '<option value="' + escape(user.userId) + '">' + escape(user.displayName) + '</option>').join(''); opponent.disabled = !opponents.length && !bot?.enabled; [{ mode:'ffa-3', enabled:bot?.freeForAll3Enabled, label:'1v1v1', players:3 }, { mode:'ffa-4', enabled:bot?.freeForAll4Enabled, label:'1v1v1v1', players:4 }].forEach(option => { const button = modeButtons.find(candidate => candidate.dataset.battleMode === option.mode); if (button) { button.disabled = !option.enabled; button.title = option.enabled ? option.players + '-player winner-takes-all battle' : option.label + ' is disabled by an administrator'; } }); render(); })
         .catch(() => { summary.textContent = 'Cases or available users could not be loaded.'; opponent.innerHTML = '<option value="">No users available</option>'; });
     loadPendingCreated();
     loadIncomingInvitations();

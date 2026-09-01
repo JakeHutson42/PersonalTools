@@ -139,7 +139,35 @@
                     <span class="case-shop-stars"><i class="fa-solid fa-star" aria-hidden="true"></i><strong id="caseUpgradeStarsBalance">0</strong></span>
                 </div>
             </div>
-            <div class="row g-3">
+            <section class="case-skill-tree-shell d-none" id="caseSkillTreeShell" aria-labelledby="caseSkillTreeTitle">
+                <div class="case-skill-tree-intro">
+                    <div>
+                        <p class="eyebrow mb-1">Workshop progression</p>
+                        <h3 class="h5 mb-1" id="caseSkillTreeTitle">Opening mastery</h3>
+                        <p class="small-muted mb-0">Advance through connected upgrades to build a faster opening workflow.</p>
+                    </div>
+                    <span class="case-skill-tree-balance"><small>Available</small><strong id="caseSkillTreeBalance">0</strong></span>
+                </div>
+                <div class="case-skill-tree-legend" aria-label="Upgrade node states">
+                    <span><i class="is-locked"></i>Locked</span>
+                    <span><i class="is-available"></i>Available</span>
+                    <span><i class="is-purchased"></i>Purchased</span>
+                    <span><i class="is-complete"></i>Mastered</span>
+                </div>
+                <div class="case-skill-tree" id="caseSkillTree" role="tree" aria-label="Case Tycoon upgrade tree"></div>
+                <section class="case-skill-tree-automation d-none" id="caseSkillTreeAutomationControls" aria-labelledby="caseSkillTreeAutomationTitle">
+                    <div class="case-skill-tree-automation-heading">
+                        <div>
+                            <p class="eyebrow mb-1">Unlocked controls</p>
+                            <h4 class="h6 mb-1" id="caseSkillTreeAutomationTitle">Automation command deck</h4>
+                            <p class="small-muted mb-0">Configure the automation abilities you have unlocked above.</p>
+                        </div>
+                    </div>
+                    <div class="case-skill-tree-automation-grid" id="caseSkillTreeAutomationHost"></div>
+                </section>
+                <p class="visually-hidden" id="caseSkillTreeStatus" aria-live="polite"></p>
+            </section>
+            <div class="row g-3" id="caseLegacyUpgradeStoreContent">
                 <div class="col-12">
                     <article class="case-shop-storage" id="caseShopStorageCard">
                         <div>
@@ -203,7 +231,8 @@
                         </div>
                         <span class="case-upgrade-card-metric mt-3" id="caseBulkSellStatus">Current limit: 100 items</span>
                     </div>
-                    <div class="case-auto-sell-panel mt-3">
+                    <span class="d-none" id="caseAutoSellPanelHome"></span>
+                    <div class="case-auto-sell-panel mt-3" id="caseAutoSellPanel">
                         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div><p class="eyebrow mb-1">Automatic selling</p><h3 class="h6 mb-1">Rarity control deck</h3><p class="small-muted mb-0" id="caseAutoSellUpgradeDescription">Begin with rare Covert drops, then work toward the more common tiers for stronger passive Star income.</p></div><button class="btn btn-outline-warning btn-sm js-unlock-inventory-upgrade d-none" type="button" id="caseAutoSellUpgradeButton"></button></div>
                         <ol class="case-auto-sell-progression" id="caseAutoSellProgression" aria-label="Auto-sell unlock progression"></ol>
                         <div class="case-preserve-stattrak-control mt-3" id="casePreserveStatTrakControl"><div class="form-check form-switch m-0"><input class="form-check-input pt-switch" id="casePreserveStatTrak" type="checkbox" checked disabled /><label class="form-check-label small fw-semibold" for="casePreserveStatTrak">Always keep StatTrak™</label></div><small id="casePreserveStatTrakHint">Unlock an auto-sell tier first</small></div>
@@ -211,6 +240,7 @@
                     </div>
                 </div>
                 <div class="col-12">
+                    <span class="d-none" id="caseAutoBuyPanelHome"></span>
                     <div class="case-auto-sell-panel mt-3" id="caseAutoBuyPanel">
                         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                             <div>
@@ -231,6 +261,19 @@
                             <div class="d-flex justify-content-end mb-2"><span class="case-upgrade-card-metric" id="caseAutoBuyRuleStatus"></span></div>
                             <div class="case-auto-buy-grid" id="caseAutoBuyRules"></div>
                         </div>
+                    </div>
+                    <span class="d-none" id="caseAutomationSafeguardsHome"></span><div class="case-auto-sell-panel mt-3 d-none" id="caseAutomationSafeguardsPanel">
+                        <div class="mb-3"><p class="eyebrow mb-1">Automation safeguards</p><h3 class="h6 mb-1">Protected operating limits</h3><p class="small-muted mb-0">Only unlocked settings take effect. Values use the active game currency.</p></div>
+                        <div class="row g-3">
+                            <div class="col-6 col-lg-3" data-qol-setting="auto-buy-reserve"><label class="form-label small" for="caseAutoBuyReserve">Auto-Buy reserve</label><input class="form-control form-control-sm" id="caseAutoBuyReserve" type="number" min="0" step="1" value="0"></div>
+                            <div class="col-6 col-lg-3" data-qol-setting="auto-sell-price-floor"><label class="form-label small" for="caseAutoSellProtectAbove">Protect above</label><input class="form-control form-control-sm" id="caseAutoSellProtectAbove" type="number" min="0" step="1" value="0"></div>
+                            <div class="col-6 col-lg-3" data-qol-setting="auto-sell-duplicate-copies"><label class="form-label small" for="caseAutoSellDuplicates">Copies to keep</label><input class="form-control form-control-sm" id="caseAutoSellDuplicates" type="number" min="0" max="100" value="0"></div>
+                            <div class="col-6 col-lg-3" data-qol-setting="trade-up-reserve"><label class="form-label small" for="caseTradeUpReserve">Ingredients to keep</label><input class="form-control form-control-sm" id="caseTradeUpReserve" type="number" min="0" max="100" value="0"></div>
+                            <div class="col-12 col-lg-4" data-qol-setting="pause-automation-storage-low"><label class="form-label small" for="caseAutomationFreeSlots">Pause at free slots</label><input class="form-control form-control-sm" id="caseAutomationFreeSlots" type="number" min="0" max="10000" value="0"></div>
+                            <div class="col-12 col-lg-4" data-qol-setting="auto-buy-case-groups"><div class="form-check form-switch mt-lg-4"><input class="form-check-input pt-switch" id="caseFollowSelectedCase" type="checkbox"><label class="form-check-label small" for="caseFollowSelectedCase">Follow selected case</label></div></div>
+                            <div class="col-12 col-lg-4" data-qol-setting="auto-sell-wear-filters"><label class="form-label small" for="caseAutoSellWears">Allowed wears</label><select class="form-select form-select-sm" id="caseAutoSellWears" multiple size="3"><option>Factory New</option><option>Minimal Wear</option><option>Field-Tested</option><option>Well-Worn</option><option>Battle-Scarred</option></select></div>
+                        </div>
+                        <div class="d-flex justify-content-end mt-3"><button class="btn btn-warning btn-sm" id="saveCaseAutomationSafeguards" type="button">Save safeguards</button></div>
                     </div>
                 </div>
                 <div class="col-12">
@@ -347,6 +390,9 @@
                         <button class="btn" type="button" data-open-quantity="4" aria-pressed="false">4</button>
                         <button class="btn" type="button" data-open-quantity="5" aria-pressed="false">5</button>
                     </div>
+                    <button class="btn btn-outline-warning btn-sm case-instant-repeat d-none" id="caseInstantRepeat" type="button">
+                        <i class="fa-solid fa-rotate-right me-1" aria-hidden="true"></i><span>Open again</span>
+                    </button>
                 </div>
                 <p class="small-muted mt-2 mb-0 d-none" id="caseFreeAllowanceStatus" aria-live="polite"></p>
             </div>
@@ -686,6 +732,14 @@
         </div>
     </section>
 
+    <section class="case-game-panel section-spacing d-none" id="caseTradeUpHistoryPanel" data-case-destination-panel="tradeups" aria-labelledby="caseTradeUpHistoryTitle">
+        <div class="card-body p-3 p-lg-4">
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3"><div><p class="eyebrow mb-1">Contract archive</p><h2 class="h4 mb-1" id="caseTradeUpHistoryTitle">Trade Up history</h2><p class="small-muted mb-0">Filter completed manual and automatic contracts without changing their outcomes.</p></div><span class="case-upgrade-card-metric" id="caseTradeUpHistoryCount">0 contracts</span></div>
+            <div class="row g-2 mb-3"><div class="col-12 col-md"><label class="form-label small" for="caseTradeUpHistorySearch">Search</label><input class="form-control form-control-sm" id="caseTradeUpHistorySearch" type="search" placeholder="Output or case"></div><div class="col-6 col-md-3"><label class="form-label small" for="caseTradeUpHistoryInput">Input rarity</label><select class="form-select form-select-sm" id="caseTradeUpHistoryInput"><option value="">All inputs</option><option value="mil-spec">Mil-Spec</option><option value="restricted">Restricted</option><option value="classified">Classified</option></select></div><div class="col-6 col-md-3"><label class="form-label small" for="caseTradeUpHistoryOutput">Output rarity</label><select class="form-select form-select-sm" id="caseTradeUpHistoryOutput"><option value="">All outputs</option><option value="restricted">Restricted</option><option value="classified">Classified</option><option value="covert">Covert</option></select></div></div>
+            <div class="case-trade-up-history-list" id="caseTradeUpHistoryList" aria-live="polite"></div>
+        </div>
+    </section>
+
     <section class="section-spacing case-history-section case-tab-start d-none" data-case-destination-panel="inventory" aria-labelledby="caseHistoryTitle">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
             <div>
@@ -960,10 +1014,27 @@
                         <div><span><i class="fa-solid fa-clone" aria-hidden="true"></i>Simultaneous openings</span><strong id="caseProfileMultiOpen">1</strong></div>
                         <div><span><i class="fa-solid fa-robot" aria-hidden="true"></i>Opening bots</span><strong id="caseProfileBots">0</strong></div>
                     </div>
+                    <section class="case-profile-stat-section d-none" id="caseSocialLoadoutPanel" aria-labelledby="caseSocialLoadoutHeading">
+                        <div class="case-profile-stat-heading"><div><p class="eyebrow mb-1">Social loadout</p><h4 class="h6 mb-0" id="caseSocialLoadoutHeading">Battle and profile cosmetics</h4><p class="small-muted mb-0">Arrange only the cosmetics you own. These choices never affect battle results.</p></div></div>
+                        <div class="row g-2 mt-1">
+                            <div class="col-12 d-none" data-social-setting="saved-reaction-layout"><label class="form-label small" for="caseReactionLayout">Reaction wheel order</label><div class="case-social-reaction-layout" id="caseReactionLayout"></div></div>
+                            <div class="col-12 col-md-6 d-none" data-social-setting="victory-emote-slot"><label class="form-label small" for="caseVictoryEmote">Victory emote</label><select class="form-select form-select-sm" id="caseVictoryEmote"><option value="">None</option></select></div>
+                            <div class="col-12 col-md-6 d-none" data-social-setting="profile-showcase-slot"><label class="form-label small" for="caseProfileShowcaseSelect">Profile showcase</label><select class="form-select form-select-sm" id="caseProfileShowcaseSelect"><option value="">None</option></select></div>
+                        </div>
+                        <div class="d-flex justify-content-end mt-3"><button class="btn btn-warning btn-sm" id="saveCaseSocialLoadout" type="button">Save loadout</button></div>
+                    </section>
+                    <section class="case-profile-stat-section d-none" id="caseProfileShowcase" aria-labelledby="caseProfileShowcaseHeading">
+                        <div class="case-profile-stat-heading"><div><p class="eyebrow mb-1">Showcase</p><h4 class="h6 mb-0" id="caseProfileShowcaseHeading">Featured pull</h4></div></div>
+                        <div class="case-profile-showcase-item" id="caseProfileShowcaseItem"></div>
+                    </section>
                 </section>
                 <section class="tab-pane fade" id="caseProfileBattlesPane" role="tabpanel" aria-labelledby="caseProfileBattlesTab" tabindex="0">
                     <div class="case-profile-pane-heading"><div><p class="eyebrow mb-1">Case battles</p><h3 class="h5 mb-1">Battle history</h3><p class="small-muted mb-0">Your completed battles and locked settlement values.</p></div></div>
-                    <div class="case-profile-collections-grid" id="caseProfileBattleHistory" aria-live="polite"><div class="case-profile-collections-empty"><i class="fa-solid fa-trophy" aria-hidden="true"></i><span>No completed case battles yet.</span></div></div>
+                    <div class="case-profile-battle-filters d-none" id="caseProfileBattleFilters">
+                        <select class="form-select form-select-sm" id="caseProfileBattleResultFilter" aria-label="Filter battles by result"><option value="all">All results</option><option value="win">Victories</option><option value="loss">Defeats</option></select>
+                        <select class="form-select form-select-sm" id="caseProfileBattleModeFilter" aria-label="Filter battles by mode"><option value="all">All modes</option><option value="duel">1v1</option><option value="ffa-3">1v1v1</option><option value="ffa-4">1v1v1v1</option></select>
+                    </div>
+                    <div class="case-profile-battle-history" id="caseProfileBattleHistory" aria-live="polite"><div class="case-profile-collections-empty"><i class="fa-solid fa-trophy" aria-hidden="true"></i><span>No completed case battles yet.</span></div></div>
                 </section>
             </div>
         </div>
@@ -1171,6 +1242,7 @@
                                 <button class="case-profile-emoji-choice" type="button" data-case-profile-emoji="@emoji" role="radio" aria-checked="false"><span aria-hidden="true">@emoji</span></button>
                             }
                         </div>
+                        <div class="col-5 col-md-3 col-lg-2 d-none" id="caseHistoryWearWrap"><label class="form-label small fw-semibold" for="caseHistoryWear">Wear</label><select class="form-select form-select-sm" id="caseHistoryWear"><option value="">All wears</option><option>Factory New</option><option>Minimal Wear</option><option>Field-Tested</option><option>Well-Worn</option><option>Battle-Scarred</option></select></div>
                         <p class="case-player-settings-label">Illustrated profiles</p>
                         <div class="case-profile-image-choices" role="radiogroup" aria-label="Illustrated profile image">
                             <button class="case-profile-emoji-choice is-image" type="button" data-case-profile-emoji="avatar:operative" role="radio" aria-checked="false"><img src="~/images/case-tycoon/avatars/operative.svg" alt="Neon operative" /></button>
@@ -1382,6 +1454,9 @@
                                         </div>
                                         <div class="col-6 col-md-4 d-flex align-items-end">
                                             <label class="case-shop-switch-row w-100 mb-0" data-switch-target="caseTweakFreeAllowance"><span><strong>Free-case allowance</strong><small>Optional replenishing allowance</small></span><span class="form-check form-switch m-0"><input class="form-check-input pt-switch" id="caseTweakFreeAllowance" type="checkbox" role="switch" /></span></label>
+                                        </div>
+                                        <div class="col-12 col-md-4 d-flex align-items-end">
+                                            <label class="case-shop-switch-row w-100 mb-0" data-switch-target="caseTweakSkillTreeEnabled"><span><strong>RPG upgrade tree</strong><small>Preview the new node-based upgrades page</small></span><span class="form-check form-switch m-0"><input class="form-check-input pt-switch" id="caseTweakSkillTreeEnabled" type="checkbox" role="switch" /></span></label>
                                         </div>
                                         <div class="col-6 col-md-4"><label class="form-label small fw-semibold" for="caseTweakFreeAllowanceQuantity">Allowance quantity</label><input class="form-control" id="caseTweakFreeAllowanceQuantity" type="number" min="1" step="1" /></div>
                                         <div class="col-6 col-md-4"><label class="form-label small fw-semibold" for="caseTweakFreeAllowanceHours">Replenish after (hours)</label><input class="form-control" id="caseTweakFreeAllowanceHours" type="number" min="1" step="1" /></div>
@@ -1601,6 +1676,7 @@
                                     <div class="row g-3 align-items-stretch">
                                         <div class="col-12 col-lg-4"><div class="case-admin-toggle-card h-100"><div><strong>Case Battles</strong><span>Allow players to create battles and Buy all required cases.</span></div><div class="form-check form-switch pt-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="caseTweakBattlesEnabled" disabled><label class="visually-hidden" for="caseTweakBattlesEnabled">Case Battles visible to players</label></div></div></div>
                                         <div class="col-12 col-lg-4"><div class="case-admin-toggle-card h-100"><div><strong>1v1v1 battles</strong><span>Allow three-player free-for-all rooms with winner-takes-all settlement.</span></div><div class="form-check form-switch pt-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="caseTweakBattleFfa3Enabled" disabled><label class="visually-hidden" for="caseTweakBattleFfa3Enabled">1v1v1 battles visible to players</label></div></div></div>
+                                        <div class="col-12 col-lg-4"><div class="case-admin-toggle-card h-100"><div><strong>1v1v1v1 battles</strong><span>Allow four-player free-for-all rooms with winner-takes-all settlement.</span></div><div class="form-check form-switch pt-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="caseTweakBattleFfa4Enabled" disabled><label class="visually-hidden" for="caseTweakBattleFfa4Enabled">1v1v1v1 battles visible to players</label></div></div></div>
                                         <div class="col-12 col-lg-4"><div class="case-admin-toggle-card h-100"><div><strong>Battle Bot</strong><span>Offer an auto-ready system opponent once Case Battles are live.</span></div><div class="form-check form-switch pt-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="caseTweakBattleBotEnabled" disabled><label class="visually-hidden" for="caseTweakBattleBotEnabled">Battle Bot visible to players</label></div></div></div>
                                     </div>
                                 </section>

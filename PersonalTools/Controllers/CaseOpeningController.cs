@@ -115,6 +115,12 @@ public sealed class CaseOpeningController : ControllerBase
             "selected");
     }
 
+    [HttpGet("skill-tree")]
+    public Task<ActionResult<CaseOpeningSkillTreeObj>> GetSkillTree(CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.GetCaseOpeningSkillTree(UserId, cancellationToken), "load skill tree", "all");
+    }
+
     [HttpPost("daily-drop/claim")]
     public Task<ActionResult<CaseOpeningProgressObj>> ClaimDailyDrop([FromBody] CaseOpeningDailyDropClaimRequest request, CancellationToken cancellationToken)
     {
@@ -350,6 +356,35 @@ public sealed class CaseOpeningController : ControllerBase
     public Task<ActionResult<List<CaseOpeningCaseSettingsObj>>> GetCaseSettings(CancellationToken cancellationToken)
     {
         return Execute(() => _caseOpening.GetCaseSettings(cancellationToken), "load case settings", "all");
+    }
+
+    [HttpGet("trade-up-history")]
+    public Task<ActionResult<List<CaseOpeningTradeUpHistoryObj>>> GetTradeUpHistory(CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.GetCaseOpeningTradeUpHistory(UserId, cancellationToken), "load Trade Up history", "all");
+
+    [HttpGet("opening-preferences")]
+    public Task<ActionResult<CaseOpeningUserPreferencesObj>> GetOpeningPreferences(CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.GetCaseOpeningUserPreferences(UserId, cancellationToken), "load opening preferences", "all");
+
+    [HttpPut("opening-preferences/quantity")]
+    public Task<ActionResult<CaseOpeningUserPreferencesObj>> SetOpeningQuantity([FromBody] CaseOpeningQuantityPreferenceRequest request, CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.SetCaseOpeningLastQuantity(UserId, request?.Quantity ?? 1, cancellationToken), "save opening quantity", "quantity");
+
+    [HttpPut("automation-preferences")]
+    public Task<ActionResult<CaseOpeningUserPreferencesObj>> SetAutomationPreferences([FromBody] CaseOpeningUserPreferencesObj request, CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.SetCaseOpeningAutomationPreferences(UserId, request ?? new(), cancellationToken), "save automation safeguards", "all");
+
+    [HttpPut("social-preferences")]
+    public Task<ActionResult<CaseOpeningUserPreferencesObj>> SetSocialPreferences([FromBody] CaseOpeningUserPreferencesObj request, CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.SetCaseOpeningSocialPreferences(UserId,request??new(),cancellationToken),"save battle and profile layout","all");
+
+    [HttpPut("settings/skill-tree")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseOpeningSkillTreeSettingsObj>> UpdateSkillTreeSettings(
+        [FromBody] CaseOpeningSkillTreeSettingsObj request,
+        CancellationToken cancellationToken)
+    {
+        return Execute(() => _caseOpening.SetCaseOpeningSkillTreeEnabled(request?.Enabled == true, cancellationToken), "update skill tree setting", "all");
     }
 
     [HttpGet("battle-reactions")]
@@ -674,6 +709,7 @@ public sealed class CaseOpeningController : ControllerBase
 
 public sealed record CaseOpeningCaseSettingsRequest(int Tier, int UnlockCostStars, long UnlockCostGbpPence, int PurchaseCostStars, long PurchaseCostGbpPence, int XpRequirement);
 public sealed record CaseOpeningDailyDropClaimRequest(List<string> RewardKeys);
+public sealed record CaseOpeningQuantityPreferenceRequest(int Quantity);
 public sealed record CaseOpeningDailyDropSettingsRequest(int RequiredXp);
 public sealed record CaseOpeningInventoryUpgradeSettingsRequest(int CostStars, long CostGbpPence, int RequiredLevel);
 public sealed record CaseOpeningXpByRarityRequest(int XpAwarded);

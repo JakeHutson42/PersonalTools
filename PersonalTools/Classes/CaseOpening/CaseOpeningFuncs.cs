@@ -45,6 +45,10 @@ public interface ICaseOpeningFuncs
     Task<CaseOpeningInventoryLockObj> SetCaseOpeningInventoryLock(Guid userId, Guid openingId, bool isLocked, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryUpgradeObj> GetCaseOpeningInventoryUpgrades(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryUpgradeObj> UnlockCaseOpeningInventoryUpgrade(Guid userId, string upgradeKey, CancellationToken cancellationToken = default);
+    Task<CaseOpeningUserPreferencesObj> GetCaseOpeningUserPreferences(Guid userId, CancellationToken cancellationToken = default);
+    Task<CaseOpeningUserPreferencesObj> SetCaseOpeningLastQuantity(Guid userId, int quantity, CancellationToken cancellationToken = default);
+    Task<CaseOpeningUserPreferencesObj> SetCaseOpeningAutomationPreferences(Guid userId, CaseOpeningUserPreferencesObj preferences, CancellationToken cancellationToken = default);
+    Task<CaseOpeningUserPreferencesObj> SetCaseOpeningSocialPreferences(Guid userId, CaseOpeningUserPreferencesObj preferences, CancellationToken cancellationToken = default);
     Task<CaseBattleReactionShopObj> GetCaseBattleReactionShop(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseBattleReactionShopObj> PurchaseCaseBattleReaction(Guid userId, string reactionKey, CancellationToken cancellationToken = default);
     Task<CaseBattleReactionShopItemObj> GetOwnedCaseBattleReaction(Guid userId, string reactionKey, CancellationToken cancellationToken = default);
@@ -55,6 +59,7 @@ public interface ICaseOpeningFuncs
     Task<List<CaseOpeningCasePurchaseResultObj>> EvaluateCaseOpeningAutoBuyRules(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningTradeUpResultObj> CreateCaseOpeningTradeUp(Guid userId, List<Guid> openingIds, CancellationToken cancellationToken = default);
     Task<CaseOpeningTradeUpRecipeSummaryObj> GetCaseOpeningTradeUpRecipes(Guid userId, CancellationToken cancellationToken = default);
+    Task<List<CaseOpeningTradeUpHistoryObj>> GetCaseOpeningTradeUpHistory(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningTradeUpRecipeSummaryObj> CreateCaseOpeningTradeUpRecipe(Guid userId, CaseOpeningTradeUpRecipeRequestObj request, CancellationToken cancellationToken = default);
     Task<CaseOpeningTradeUpRecipeSummaryObj> SetCaseOpeningTradeUpRecipeActive(Guid userId, Guid recipeId, bool isActive, CancellationToken cancellationToken = default);
     Task<CaseOpeningTradeUpRecipeSummaryObj> DeleteCaseOpeningTradeUpRecipe(Guid userId, Guid recipeId, CancellationToken cancellationToken = default);
@@ -68,6 +73,8 @@ public interface ICaseOpeningFuncs
     // Game settings (global, shared) + per-case settings, for the variable-tweak modal.
     Task<CaseOpeningGameSettingsObj> GetGameSettings(CancellationToken cancellationToken = default);
     Task<CaseOpeningGameSettingsObj> SetGameSettings(CaseOpeningGameSettingsObj settings, CancellationToken cancellationToken = default);
+    Task<CaseOpeningSkillTreeObj> GetCaseOpeningSkillTree(Guid userId, CancellationToken cancellationToken = default);
+    Task<CaseOpeningSkillTreeSettingsObj> SetCaseOpeningSkillTreeEnabled(bool enabled, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningCaseSettingsObj>> GetCaseSettings(CancellationToken cancellationToken = default);
     Task<List<CaseOpeningTierEconomySettingsObj>> GetTierEconomySettings(CancellationToken cancellationToken = default);
     Task<List<CaseOpeningTierEconomySettingsObj>> SetTierEconomySettings(int tier, CaseOpeningTierEconomySettingsObj settings, CancellationToken cancellationToken = default);
@@ -107,6 +114,20 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     private const int MaximumTradeUpRecipeSlots = 20;
     private const int MaximumTradeUpRecipeHoldingCapacity = 20;
     private const string StarterCaseKey = "kilowatt";
+    private static string ToRoman(int value)
+    {
+        (int Value, string Numeral)[] numerals = [(10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")];
+        string result = string.Empty;
+        foreach ((int number, string numeral) in numerals)
+        {
+            while (value >= number)
+            {
+                result += numeral;
+                value -= number;
+            }
+        }
+        return result;
+    }
     private static readonly CaseBattleReactionShopItemObj[] BattleReactionCatalogue =
     [
         new() { Key="fire", Name="Fire", Value="🔥" }, new() { Key="surprised", Name="Surprised", Value="😮" }, new() { Key="laugh", Name="Laugh", Value="😂" }, new() { Key="skull", Name="Skull", Value="💀" },
@@ -130,6 +151,17 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     {
         CaseBattleReactionShopItemObj item = BattleReactionCatalogue.FirstOrDefault(candidate => candidate.Key.Equals(reactionKey, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException("That battle reaction is not available.");
         if (item.CostStars == 0) throw new InvalidOperationException("That battle reaction is already available.");
+        if (await _data.GetCaseOpeningSkillTreeEnabled(cancellationToken))
+        {
+            CaseOpeningProgressDbModel treeProgress = await _data.GetCaseOpeningProgress(userId, cancellationToken);
+            CaseOpeningGameSettingsObj treeSettings = await _data.GetGameSettings(cancellationToken);
+            if (treeProgress.OpenSpeedLevel < Math.Max(1, treeSettings.MaximumOpenSpeedLevel))
+                throw new InvalidOperationException("Master the Opening Speed branch before unlocking optional battle cosmetics.");
+            int qualityLevel = (await _data.GetCaseOpeningDailyDropUpgrades(userId, cancellationToken))
+                .FirstOrDefault(upgrade => upgrade.UpgradeKey.Equals("quality", StringComparison.OrdinalIgnoreCase))?.Level ?? 0;
+            if (qualityLevel < 3)
+                throw new InvalidOperationException("Master Higher Stakes III before unlocking optional battle cosmetics.");
+        }
         CaseBattleReactionShopObj current = await GetCaseBattleReactionShop(userId, cancellationToken);
         if (current.Items.Any(candidate => candidate.Key == item.Key && candidate.IsOwned)) throw new InvalidOperationException("That battle reaction is already unlocked.");
         await _data.PurchaseCaseBattleReaction(userId, item.Key, item.CostStars, item.CostGbpPence, cancellationToken);
@@ -701,6 +733,13 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         CaseOpeningGameSettingsObj gameSettings = await _data.GetGameSettings(cancellationToken);
         CaseOpeningProgressDbModel progress = await _data.GetCaseOpeningProgress(userId, cancellationToken);
 
+        if (upgradeKey.Equals("multi-open", StringComparison.OrdinalIgnoreCase)
+            && await _data.GetCaseOpeningSkillTreeEnabled(cancellationToken)
+            && progress.OpenSpeedLevel < Math.Min(2, Math.Max(1, gameSettings.MaximumOpenSpeedLevel)))
+        {
+            throw new InvalidOperationException("Unlock Faster Opening II before advancing Multi-Open.");
+        }
+
         // Speed's cost/requirement climb with the level already owned (mirrors the bot speed
         // upgrade's base+increment formula), unlike multi-open which is flat. Skip animation is no
         // longer independently purchasable - it's granted automatically as the final speed level
@@ -822,8 +861,10 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         CaseOpeningDailyDropDbModel daily = await _data.GetCaseOpeningDailyDrop(userId, cancellationToken);
         List<CaseOpeningDailyDropRewardObj> offer = ParseDailyDropOffer(daily.OfferJson);
         List<CaseOpeningDailyDropRewardObj> selected = offer.Where(reward => rewardKeys.Contains(reward.RewardKey, StringComparer.OrdinalIgnoreCase)).ToList();
-        if (selected.Count != 2 || rewardKeys.Distinct(StringComparer.OrdinalIgnoreCase).Count() != 2)
-            throw new InvalidOperationException("Choose exactly two Daily Drop rewards.");
+        HashSet<string> unlocked = (await _data.GetCaseOpeningUpgradeDefinitions(userId,cancellationToken)).Where(item=>item.IsUnlocked).Select(item=>item.UpgradeKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        int claimCount = unlocked.Contains("bonus-daily-choice") ? 3 : 2;
+        if (selected.Count != claimCount || rewardKeys.Distinct(StringComparer.OrdinalIgnoreCase).Count() != claimCount)
+            throw new InvalidOperationException($"Choose exactly {claimCount} Daily Drop rewards.");
         await _data.ClaimCaseOpeningDailyDrop(userId, rewardKeys, settings.EconomyMode, cancellationToken);
         foreach (CaseOpeningDailyDropRewardObj skin in selected.Where(reward => reward.Kind == "skin" && reward.Item is not null))
         {
@@ -841,6 +882,21 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         Dictionary<string, int> levels = (await _data.GetCaseOpeningDailyDropUpgrades(userId, cancellationToken)).ToDictionary(item => item.UpgradeKey, item => item.Level, StringComparer.OrdinalIgnoreCase);
         (int max, int stars, long pence) = DailyDropUpgradeCost(upgradeKey, levels.GetValueOrDefault(upgradeKey));
         if (levels.GetValueOrDefault(upgradeKey) >= max) throw new InvalidOperationException("This Daily Drop upgrade is already maxed.");
+        if (await _data.GetCaseOpeningSkillTreeEnabled(cancellationToken))
+        {
+            CaseOpeningProgressDbModel treeProgress = await _data.GetCaseOpeningProgress(userId, cancellationToken);
+            if (treeProgress.OpenSpeedLevel < Math.Max(1, settings.MaximumOpenSpeedLevel))
+                throw new InvalidOperationException("Master the Opening Speed branch before advancing Daily Drop mastery.");
+            string? prerequisite = upgradeKey.ToLowerInvariant() switch
+            {
+                "cash" => "focus",
+                "case-stash" => "cash",
+                "quality" => "case-stash",
+                _ => null
+            };
+            if (prerequisite is not null && levels.GetValueOrDefault(prerequisite) < 3)
+                throw new InvalidOperationException("Master the previous Daily Drop branch before advancing this upgrade.");
+        }
         await _data.UnlockCaseOpeningDailyDropUpgrade(userId, upgradeKey, stars, pence, settings.EconomyMode, cancellationToken);
         return await GetCaseOpeningProgress(userId, cancellationToken);
     }
@@ -899,6 +955,12 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 
         CaseOpeningProgressDbModel progress = await _data.GetCaseOpeningProgress(userId, cancellationToken);
         CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
+        bool skillTreeEnabled = await _data.GetCaseOpeningSkillTreeEnabled(cancellationToken);
+        if (skillTreeEnabled && definition.UpgradeKey.Equals("inventory-slots-250", StringComparison.OrdinalIgnoreCase)
+            && progress.OpenSpeedLevel < Math.Min(2, Math.Max(1, settings.MaximumOpenSpeedLevel)))
+        {
+            throw new InvalidOperationException("Unlock Faster Opening II before building Workshop Shelving.");
+        }
         if (CaseOpeningXpLevels.GetLevel(progress.Xp) < definition.RequiredLevel)
         {
             throw new InvalidOperationException($"Reach level {definition.RequiredLevel} to unlock {definition.Name}.");
@@ -933,11 +995,144 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
                 item.UpgradeKey.Equals(requiredUpgradeKey, StringComparison.OrdinalIgnoreCase));
             throw new InvalidOperationException($"Unlock {requiredUpgrade?.Name ?? "the previous capacity tier"} first.");
         }
+        if (skillTreeEnabled && definition.UpgradeKey.Equals("bulk-sell-200", StringComparison.OrdinalIgnoreCase)
+            && !definitions.Any(item => item.UpgradeKey.Equals("inventory-slots-1000", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
+        {
+            throw new InvalidOperationException("Unlock the Armory Extension before advancing Bulk Selling.");
+        }
+        if (skillTreeEnabled && definition.UpgradeKey is "auto-buy-unlock" or "auto-sell-covert" or "trade-up-unlock")
+        {
+            CaseOpeningUpgradeDefinitionObj? finalBulkSale = definitions
+                .Where(item => item.Category.Equals("bulk-sale", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(item => item.SortOrder)
+                .LastOrDefault();
+            if (finalBulkSale is not null && !finalBulkSale.IsUnlocked)
+            {
+                throw new InvalidOperationException($"Unlock {finalBulkSale.Name} before advancing into automation.");
+            }
+        }
+        if (skillTreeEnabled && definition.Category.Equals("opening-qol", StringComparison.OrdinalIgnoreCase))
+        {
+            string? prerequisiteKey = definition.UpgradeKey.ToLowerInvariant() switch
+            {
+                "remember-opening-quantity" => "instant-repeat",
+                "streamlined-results" => "remember-opening-quantity",
+                "batch-reveal" => "streamlined-results",
+                _ => null
+            };
+            if (progress.OpenSpeedLevel < Math.Max(1, settings.MaximumOpenSpeedLevel))
+                throw new InvalidOperationException("Master the Opening Speed branch before advancing opening workflow upgrades.");
+            if (prerequisiteKey is not null && !definitions.Any(item => item.UpgradeKey.Equals(prerequisiteKey, StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
+                throw new InvalidOperationException("Unlock the previous opening workflow upgrade first.");
+        }
+        if (skillTreeEnabled && definition.Category is "inventory-qol" or "automation-qol" or "trade-up-qol")
+        {
+            string? predecessor = definition.UpgradeKey.ToLowerInvariant() switch
+            {
+                "auto-buy-case-groups" => "auto-buy-reserve",
+                "auto-sell-duplicate-copies" => "auto-sell-price-floor",
+                "auto-sell-wear-filters" => "auto-sell-duplicate-copies",
+                _ => null
+            };
+            if (predecessor is not null && !definitions.Any(item => item.UpgradeKey.Equals(predecessor, StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
+                throw new InvalidOperationException("Unlock the previous automation safeguard first.");
+            if (definition.UpgradeKey.Equals("auto-buy-reserve", StringComparison.OrdinalIgnoreCase) && !definitions.Any(item => item.UpgradeKey.Equals("auto-buy-unlock", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked)) throw new InvalidOperationException("Unlock Auto-Buy before adding its reserve.");
+            if (definition.UpgradeKey.Equals("auto-sell-price-floor", StringComparison.OrdinalIgnoreCase) && !definitions.Where(item => item.Category.Equals("auto-sell", StringComparison.OrdinalIgnoreCase)).All(item => item.IsUnlocked)) throw new InvalidOperationException("Master Auto-Sell rarity control before adding price protection.");
+            if (definition.UpgradeKey.Equals("pause-automation-storage-low", StringComparison.OrdinalIgnoreCase) && !new[] { "auto-buy-case-groups", "auto-sell-wear-filters", "trade-up-reserve" }.All(key => definitions.Any(item => item.UpgradeKey.Equals(key, StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))) throw new InvalidOperationException("Complete the Auto-Buy, Auto-Sell and Trade-Up safeguard branches first.");
+            if (definition.UpgradeKey.Equals("inventory-filters", StringComparison.OrdinalIgnoreCase) && !definitions.Any(item => item.UpgradeKey.Equals("inventory-slots-1000", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
+                throw new InvalidOperationException("Unlock the Armory Extension before adding advanced inventory filters.");
+            if (definition.Category.Equals("trade-up-qol", StringComparison.OrdinalIgnoreCase) && !definitions.Any(item => item.UpgradeKey.Equals("trade-up-unlock", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
+                throw new InvalidOperationException("Unlock Auto Trade-Up before adding its reserve.");
+        }
+        if (skillTreeEnabled && definition.Category.Equals("trade-up-advanced", StringComparison.OrdinalIgnoreCase)
+            && !definitions.Any(item => item.UpgradeKey.Equals("trade-up-reserve", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
+            throw new InvalidOperationException("Unlock Trade-Up Reserve before advancing contract records.");
+        if (skillTreeEnabled && definition.Category.Equals("social-qol",StringComparison.OrdinalIgnoreCase))
+        {
+            string? previous=definition.UpgradeKey switch { "saved-reaction-layout"=>"reaction-wheel-slots","victory-emote-slot"=>"saved-reaction-layout","profile-showcase-slot"=>"victory-emote-slot","battle-history-filters"=>"profile-showcase-slot",_=>null };
+            if(previous is not null&&!definitions.Any(item=>item.UpgradeKey.Equals(previous,StringComparison.OrdinalIgnoreCase)&&item.IsUnlocked)) throw new InvalidOperationException("Unlock the previous social progression node first.");
+            if(previous is null&&(await _data.GetCaseOpeningDailyDropUpgrades(userId,cancellationToken)).FirstOrDefault(item=>item.UpgradeKey.Equals("quality",StringComparison.OrdinalIgnoreCase))?.Level<3) throw new InvalidOperationException("Master Higher Stakes III before advancing social tools.");
+        }
+        if (skillTreeEnabled && definition.Category.Equals("reward-endgame",StringComparison.OrdinalIgnoreCase))
+        {
+            string? previous=definition.UpgradeKey switch { "flexible-daily-choice"=>"reward-preview","streak-insurance"=>"flexible-daily-choice","bonus-daily-choice"=>"streak-insurance","case-variety"=>"bonus-daily-choice",_=>null };
+            if(previous is null && (await _data.GetCaseOpeningDailyDropUpgrades(userId,cancellationToken)).FirstOrDefault(item=>item.UpgradeKey.Equals("quality",StringComparison.OrdinalIgnoreCase))?.Level<3) throw new InvalidOperationException("Master Higher Stakes III before expanding Daily Drop rewards.");
+            if(previous is not null&&!definitions.Any(item=>item.UpgradeKey.Equals(previous,StringComparison.OrdinalIgnoreCase)&&item.IsUnlocked)) throw new InvalidOperationException("Unlock the previous reward expansion first.");
+        }
+        if (skillTreeEnabled && definition.Category.Equals("tree-convergence",StringComparison.OrdinalIgnoreCase))
+        {
+            string[] required=definition.UpgradeKey switch { "collector-convergence"=>["case-variety","battle-history-filters"],"automation-convergence"=>["batch-reveal","pause-automation-storage-low","contract-history-filters"],_=>["collector-convergence","automation-convergence"] };
+            if(!required.All(key=>definitions.Any(item=>item.UpgradeKey.Equals(key,StringComparison.OrdinalIgnoreCase)&&item.IsUnlocked))) throw new InvalidOperationException("Complete every branch feeding this convergence node first.");
+        }
+        if (skillTreeEnabled && definition.Category.Equals("endgame-mastery",StringComparison.OrdinalIgnoreCase))
+        {
+            string previous=definition.UpgradeKey switch { "tycoon-mastery-1"=>"reward-convergence","tycoon-mastery-2"=>"tycoon-mastery-1",_=>"tycoon-mastery-2" };
+            if(!definitions.Any(item=>item.UpgradeKey.Equals(previous,StringComparison.OrdinalIgnoreCase)&&item.IsUnlocked)) throw new InvalidOperationException("Complete the preceding mastery node first.");
+        }
 
         await _data.UnlockCaseOpeningInventoryUpgrade(userId, definition.UpgradeKey, definition.CostStars, definition.CostGbpPence, cancellationToken);
         await RecordPlayerActivity(userId, unlocksEarned: 1, starsSpent: IsGbp(settings) ? 0 : definition.CostStars, upgradesPurchased: 1, cancellationToken: cancellationToken);
         await EvaluateAchievements(userId, cancellationToken);
         return await GetCaseOpeningInventoryUpgrades(userId, cancellationToken);
+    }
+
+    public Task<CaseOpeningUserPreferencesObj> GetCaseOpeningUserPreferences(Guid userId, CancellationToken cancellationToken = default)
+        => _data.GetCaseOpeningUserPreferences(userId, cancellationToken);
+
+    public async Task<CaseOpeningUserPreferencesObj> SetCaseOpeningLastQuantity(Guid userId, int quantity, CancellationToken cancellationToken = default)
+    {
+        if (quantity is < 1 or > 5) throw new InvalidOperationException("Choose an opening quantity from 1 to 5.");
+        List<CaseOpeningUpgradeDefinitionObj> definitions = await _data.GetCaseOpeningUpgradeDefinitions(userId, cancellationToken);
+        if (!definitions.Any(item => item.UpgradeKey.Equals("remember-opening-quantity", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
+            throw new InvalidOperationException("Unlock Remember Opening Quantity before saving this preference.");
+        CaseOpeningProgressDbModel progress = await _data.GetCaseOpeningProgress(userId, cancellationToken);
+        if (quantity > 1 + progress.MultiOpenLevel)
+            throw new InvalidOperationException("That opening quantity has not been unlocked yet.");
+        return await _data.SetCaseOpeningLastQuantity(userId, quantity, cancellationToken);
+    }
+
+    public async Task<CaseOpeningUserPreferencesObj> SetCaseOpeningAutomationPreferences(Guid userId, CaseOpeningUserPreferencesObj preferences, CancellationToken cancellationToken = default)
+    {
+        preferences ??= new();
+        if (preferences.AutoBuyReserveMinor < 0 || preferences.AutoSellProtectAboveMinor < 0 || preferences.AutoSellDuplicateCopies is < 0 or > 100 || preferences.TradeUpReserve is < 0 or > 100 || preferences.PauseAutomationFreeSlots is < 0 or > 10000)
+            throw new InvalidOperationException("One or more automation safeguards are outside their allowed range.");
+        string[] allowedWears = ["Factory New","Minimal Wear","Field-Tested","Well-Worn","Battle-Scarred"];
+        List<string> wears = preferences.AutoSellWears.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (wears.Any(wear => !allowedWears.Contains(wear, StringComparer.OrdinalIgnoreCase))) throw new InvalidOperationException("Choose valid exterior wear filters.");
+        preferences.AutoSellWears = string.Join(',', wears);
+        if (!string.IsNullOrWhiteSpace(preferences.SelectedCaseKey))
+        {
+            ValidateCaseKey(preferences.SelectedCaseKey);
+            if (!(await _data.GetCaseOpeningUnlockedCases(userId, cancellationToken)).Contains(preferences.SelectedCaseKey, StringComparer.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The selected Auto-Buy case is not unlocked.");
+        }
+        HashSet<string> unlocked = (await _data.GetCaseOpeningUpgradeDefinitions(userId, cancellationToken)).Where(item => item.IsUnlocked).Select(item => item.UpgradeKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!unlocked.Contains("auto-buy-reserve")) preferences.AutoBuyReserveMinor = 0;
+        if (!unlocked.Contains("auto-buy-case-groups")) { preferences.FollowSelectedCase = false; preferences.SelectedCaseKey = null; }
+        if (!unlocked.Contains("auto-sell-price-floor")) preferences.AutoSellProtectAboveMinor = 0;
+        if (!unlocked.Contains("auto-sell-duplicate-copies")) preferences.AutoSellDuplicateCopies = 0;
+        if (!unlocked.Contains("auto-sell-wear-filters")) preferences.AutoSellWears = string.Empty;
+        if (!unlocked.Contains("trade-up-reserve")) preferences.TradeUpReserve = 0;
+        if (!unlocked.Contains("pause-automation-storage-low")) preferences.PauseAutomationFreeSlots = 0;
+        return await _data.SetCaseOpeningAutomationPreferences(userId, preferences, cancellationToken);
+    }
+
+    public async Task<CaseOpeningUserPreferencesObj> SetCaseOpeningSocialPreferences(Guid userId, CaseOpeningUserPreferencesObj preferences, CancellationToken cancellationToken = default)
+    {
+        preferences ??= new();
+        HashSet<string> unlocked = (await _data.GetCaseOpeningUpgradeDefinitions(userId,cancellationToken)).Where(item=>item.IsUnlocked).Select(item=>item.UpgradeKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        CaseBattleReactionShopObj shop = await GetCaseBattleReactionShop(userId,cancellationToken);
+        HashSet<string> owned = shop.Items.Where(item=>item.IsOwned).Select(item=>item.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        List<string> layout = preferences.ReactionLayout.Split(',',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        int slots = unlocked.Contains("reaction-wheel-slots") ? 8 : 4;
+        if (!unlocked.Contains("saved-reaction-layout")) layout=[];
+        if (layout.Count>slots || layout.Any(key=>!owned.Contains(key))) throw new InvalidOperationException("The saved reaction layout contains an unavailable reaction or too many slots.");
+        preferences.ReactionLayout=string.Join(',',layout);
+        if (!unlocked.Contains("victory-emote-slot")) preferences.VictoryEmoteKey=null;
+        if (!string.IsNullOrWhiteSpace(preferences.VictoryEmoteKey) && !owned.Contains(preferences.VictoryEmoteKey)) throw new InvalidOperationException("Choose an owned reaction for the victory emote.");
+        if (!unlocked.Contains("profile-showcase-slot")) preferences.ProfileShowcaseOpeningId=null;
+        if (preferences.ProfileShowcaseOpeningId is Guid showcaseId && !(await _data.GetCaseOpeningHistory(userId,cancellationToken)).Any(item=>item.OpeningId==showcaseId)) throw new InvalidOperationException("Choose a skin currently owned in your inventory.");
+        return await _data.SetCaseOpeningSocialPreferences(userId,preferences,cancellationToken);
     }
 
     public async Task<CaseOpeningInventoryUpgradeObj> SetCaseOpeningAutoSellPreference(Guid userId, string rarityKey, bool enabled, bool? preserveStatTrak, CancellationToken cancellationToken = default)
@@ -1093,8 +1288,13 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             return [];
         }
 
+        CaseOpeningUserPreferencesObj preferences = await _data.GetCaseOpeningUserPreferences(userId, cancellationToken);
+        CaseOpeningInventoryCapacityDbModel capacity = await _data.GetCaseOpeningInventoryCapacity(userId, cancellationToken);
+        if (preferences.PauseAutomationFreeSlots > 0 && capacity.AvailableSlots <= preferences.PauseAutomationFreeSlots) return [];
         List<CaseOpeningAutoBuyRuleDbModel> rules = await _data.GetCaseOpeningAutoBuyRules(userId, cancellationToken);
         List<CaseOpeningAutoBuyRuleDbModel> enabledRules = rules.Where(rule => rule.IsEnabled).ToList();
+        if (preferences.FollowSelectedCase && !string.IsNullOrWhiteSpace(preferences.SelectedCaseKey))
+            enabledRules = enabledRules.Where(rule => rule.CaseKey.Equals(preferences.SelectedCaseKey, StringComparison.OrdinalIgnoreCase)).ToList();
         if (enabledRules.Count == 0)
         {
             return [];
@@ -1104,6 +1304,9 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         Dictionary<string, int> ownedByKey = owned.ToDictionary(item => item.CaseKey, item => item.Quantity, StringComparer.OrdinalIgnoreCase);
 
         List<CaseOpeningCasePurchaseResultObj> purchases = [];
+        CaseOpeningProgressDbModel progress = await _data.GetCaseOpeningProgress(userId, cancellationToken);
+        CaseOpeningGameSettingsObj gameSettings = await _data.GetGameSettings(cancellationToken);
+        Dictionary<string, CaseOpeningCaseSettingsObj> caseSettings = await GetCaseSettingsByKey(cancellationToken);
         foreach (CaseOpeningAutoBuyRuleDbModel rule in enabledRules)
         {
             int ownedQuantity = ownedByKey.TryGetValue(rule.CaseKey, out int quantity) ? quantity : 0;
@@ -1114,6 +1317,12 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 
             try
             {
+                if (caseSettings.TryGetValue(rule.CaseKey, out CaseOpeningCaseSettingsObj? price))
+                {
+                    long purchaseCost = (IsGbp(gameSettings) ? price.PurchaseCostGbpPence : price.PurchaseCostStars) * rule.PurchaseQuantity;
+                    long currentBalance = IsGbp(gameSettings) ? progress.GbpPence : progress.Stars;
+                    if (currentBalance - purchaseCost < preferences.AutoBuyReserveMinor) continue;
+                }
                 purchases.Add(await PurchaseCaseOpeningCases(userId, rule.CaseKey, rule.PurchaseQuantity, cancellationToken));
             }
             catch (InvalidOperationException)
@@ -1130,6 +1339,14 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     {
         CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
         CaseOpeningInventoryCapacityDbModel capacity = await _data.GetCaseOpeningInventoryCapacity(userId, cancellationToken);
+        if (await _data.GetCaseOpeningSkillTreeEnabled(cancellationToken) && capacity.StorageContainerCount == 0)
+        {
+            List<CaseOpeningUpgradeDefinitionObj> definitions = await _data.GetCaseOpeningUpgradeDefinitions(userId, cancellationToken);
+            if (!definitions.Any(item => item.UpgradeKey.Equals("inventory-slots-1000", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
+            {
+                throw new InvalidOperationException("Unlock the Armory Extension before purchasing a Storage Container.");
+            }
+        }
         if (capacity.StorageContainerCount >= settings.MaximumStorageContainers)
         {
             throw new InvalidOperationException("You already own the maximum number of storage containers.");
@@ -1418,6 +1635,9 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     /// </summary>
     public async Task<List<CaseOpeningTradeUpResultObj>> EvaluateCaseOpeningTradeUpRecipes(Guid userId, CancellationToken cancellationToken = default)
     {
+        CaseOpeningUserPreferencesObj preferences = await _data.GetCaseOpeningUserPreferences(userId, cancellationToken);
+        CaseOpeningInventoryCapacityDbModel capacity = await _data.GetCaseOpeningInventoryCapacity(userId, cancellationToken);
+        if (preferences.PauseAutomationFreeSlots > 0 && capacity.AvailableSlots <= preferences.PauseAutomationFreeSlots) return [];
         List<CaseOpeningTradeUpRecipeObj> recipes = (await _data.GetCaseOpeningTradeUpRecipes(userId, cancellationToken))
             .Where(recipe => recipe.IsActive && recipe.HeldCount < recipe.HoldingCapacity)
             .OrderBy(recipe => recipe.CreatedUtc)
@@ -1440,6 +1660,7 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
                     && item.IsStatTrak == recipe.TargetStatTrak
                     && item.FloatValue is not null)
                 .OrderBy(item => item.OpenedUtc)
+                .Skip(preferences.TradeUpReserve)
                 .Take(10)
                 .ToList();
             if (matchingInputs.Count < 10)
@@ -1707,7 +1928,8 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         int focusLevel = (await _data.GetCaseOpeningDailyDropUpgrades(userId, cancellationToken))
             .FirstOrDefault(item => item.UpgradeKey.Equals("focus", StringComparison.OrdinalIgnoreCase))?.Level ?? 0;
         int dailyRequiredXp = Math.Max(40, DailyDropRequiredXp - (focusLevel * 10));
-        await _data.AddCaseOpeningDailyDropXp(userId, xpAward, dailyRequiredXp, cancellationToken);
+        int masteryBonus = (await _data.GetCaseOpeningUpgradeDefinitions(userId,cancellationToken)).Count(item=>item.IsUnlocked&&item.Category.Equals("endgame-mastery",StringComparison.OrdinalIgnoreCase));
+        await _data.AddCaseOpeningDailyDropXp(userId, xpAward + masteryBonus, dailyRequiredXp, cancellationToken);
         int totalXp = afterXp?.Xp ?? 0;
         int newLevel = CaseOpeningXpLevels.GetLevel(totalXp);
         int previousLevel = CaseOpeningXpLevels.GetLevel(totalXp - xpAward);
@@ -1734,14 +1956,24 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             "mil-spec" => autoSell.AutoSellMilSpecUnlocked && autoSell.AutoSellMilSpecEnabled,
             _ => false
         };
-        bool isAutoSold = autoSellEnabled && (!winner.IsStatTrak || !autoSell.PreserveStatTrak);
+        CaseOpeningUserPreferencesObj automationPreferences = await _data.GetCaseOpeningUserPreferences(userId, cancellationToken);
+        CaseOpeningGameSettingsObj economySettings = gameSettings ?? await _data.GetGameSettings(cancellationToken);
+        (int unlockCost, _, _) = GetCaseSettings(resolvedSaleSettings, caseKey);
+        int fallbackStars = GetSaleValue(rarityKey) * GetCaseSaleMultiplier(unlockCost);
+        CaseOpeningSaleAward prospectiveAward = CaseOpeningBalancePolicy.CalculateSaleAward(history.EstimatedPrice, economySettings.SkinSaleRateBasisPoints, fallbackStars);
+        long prospectiveValue = IsGbp(economySettings) ? prospectiveAward.GbpPence : prospectiveAward.Stars;
+        bool wearAllowed = string.IsNullOrWhiteSpace(automationPreferences.AutoSellWears)
+            || automationPreferences.AutoSellWears.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(winner.Wear ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+        int identicalCopies = automationPreferences.AutoSellDuplicateCopies > 0
+            ? (await _data.GetCaseOpeningHistory(userId, cancellationToken)).Count(item => item.SourceItemId == history.SourceItemId && item.Wear == history.Wear && item.IsStatTrak == history.IsStatTrak)
+            : int.MaxValue;
+        bool isAutoSold = autoSellEnabled && (!winner.IsStatTrak || !autoSell.PreserveStatTrak) && wearAllowed
+            && (automationPreferences.AutoSellProtectAboveMinor <= 0 || prospectiveValue <= automationPreferences.AutoSellProtectAboveMinor)
+            && identicalCopies > automationPreferences.AutoSellDuplicateCopies;
         int autoSoldStars = 0;
         if (isAutoSold)
         {
-            CaseOpeningGameSettingsObj economySettings = gameSettings ?? await _data.GetGameSettings(cancellationToken);
-            (int unlockCost, _, _) = GetCaseSettings(resolvedSaleSettings, caseKey);
-            int fallbackStars = GetSaleValue(rarityKey) * GetCaseSaleMultiplier(unlockCost);
-            CaseOpeningSaleAward autoSaleAward = CaseOpeningBalancePolicy.CalculateSaleAward(history.EstimatedPrice, economySettings.SkinSaleRateBasisPoints, fallbackStars);
+            CaseOpeningSaleAward autoSaleAward = prospectiveAward;
             autoSoldStars = autoSaleAward.Stars;
             long autoSoldGbpPence = autoSaleAward.GbpPence;
             await _data.SellCaseOpeningInventory(userId, [history.OpeningId], autoSoldStars, autoSoldGbpPence, cancellationToken);
@@ -1962,6 +2194,384 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         }
 
         await _data.SetInventoryUpgradeSettings(upgradeKey, StarsFromPence(costGbpPence), costGbpPence, requiredLevel, cancellationToken);
+    }
+
+    public async Task<List<CaseOpeningTradeUpHistoryObj>> GetCaseOpeningTradeUpHistory(Guid userId, CancellationToken cancellationToken = default)
+    {
+        List<CaseOpeningUpgradeDefinitionObj> definitions = await _data.GetCaseOpeningUpgradeDefinitions(userId, cancellationToken);
+        if (!definitions.Any(item => item.UpgradeKey.Equals("contract-history-filters", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
+            throw new InvalidOperationException("Unlock Contract History Filters before browsing completed contracts.");
+        return await _data.GetCaseOpeningTradeUpHistory(userId, cancellationToken);
+    }
+
+    public async Task<CaseOpeningSkillTreeObj> GetCaseOpeningSkillTree(Guid userId, CancellationToken cancellationToken = default)
+    {
+        bool enabled = await _data.GetCaseOpeningSkillTreeEnabled(cancellationToken);
+        CaseOpeningProgressDbModel progress = await _data.GetCaseOpeningProgress(userId, cancellationToken);
+        CaseOpeningGameSettingsObj settings = await _data.GetGameSettings(cancellationToken);
+        CaseOpeningInventoryCapacityDbModel capacity = await _data.GetCaseOpeningInventoryCapacity(userId, cancellationToken);
+        CaseOpeningInventoryUpgradeObj inventory = await GetCaseOpeningInventoryUpgrades(userId, cancellationToken);
+        List<CaseOpeningUpgradeDefinitionObj> definitions = inventory.AvailableUpgrades;
+        bool gbp = IsGbp(settings);
+        long balance = gbp ? progress.GbpPence : progress.Stars;
+        int playerLevel = CaseOpeningXpLevels.GetLevel(progress.Xp);
+        int maximumLevel = Math.Max(1, settings.MaximumOpenSpeedLevel);
+        List<CaseOpeningSkillTreeNodeObj> nodes = [];
+
+        for (int level = 1; level <= maximumLevel; level++)
+        {
+            bool purchased = progress.OpenSpeedLevel >= level;
+            bool prerequisiteMet = level == 1 || progress.OpenSpeedLevel >= level - 1;
+            int requiredLevel = settings.OpenSpeedUpgradeXpRequirement + level - 1;
+            long cost = gbp
+                ? settings.OpenSpeedUpgradeBaseCostGbpPence + ((level - 1L) * settings.OpenSpeedUpgradeCostIncrementGbpPence)
+                : settings.OpenSpeedUpgradeBaseCostStars + ((level - 1L) * settings.OpenSpeedUpgradeCostIncrementStars);
+            bool finalQuickOpenTier = level == maximumLevel && maximumLevel > 4;
+            string effect = finalQuickOpenTier
+                ? "Unlock Quick Open to reveal the secured result immediately."
+                : $"Increase case-opening and multi-open reveal speed to {1m + (Math.Min(level, 4) * .5m):0.#}×.";
+
+            nodes.Add(new CaseOpeningSkillTreeNodeObj
+            {
+                NodeId = $"open-speed-{level}",
+                UpgradeKey = "open-speed",
+                PurchaseKind = "opening",
+                Family = "Opening speed",
+                Name = finalQuickOpenTier ? "Quick Open" : $"Faster Opening {ToRoman(level)}",
+                Description = effect,
+                Icon = finalQuickOpenTier ? "fa-forward-step" : "fa-gauge-high",
+                PrerequisiteNodeIds = level == 1 ? [] : [$"open-speed-{level - 1}"],
+                Row = level,
+                Column = 0,
+                Cost = cost,
+                RequiredLevel = requiredLevel,
+                IsPurchased = purchased,
+                IsAvailable = !purchased && prerequisiteMet && playerLevel >= requiredLevel,
+                CanAfford = balance >= cost,
+                IsTerminal = level == maximumLevel
+            });
+        }
+
+        string openingBranchNode = $"open-speed-{Math.Min(2, maximumLevel)}";
+        for (int level = 1; level <= Math.Max(1, settings.MaximumMultiOpenLevel); level++)
+        {
+            bool purchased = progress.MultiOpenLevel >= level;
+            bool prerequisiteMet = level == 1 ? progress.OpenSpeedLevel >= Math.Min(2, maximumLevel) : progress.MultiOpenLevel >= level - 1;
+            long cost = gbp ? settings.MultiOpenCostGbpPence : settings.MultiOpenCostStars;
+            nodes.Add(new CaseOpeningSkillTreeNodeObj
+            {
+                NodeId = $"multi-open-{level}", UpgradeKey = "multi-open", PurchaseKind = "opening", Family = "Opening volume",
+                Name = $"Multi-Open {ToRoman(level)}", Description = $"Open up to {level + 1} cases together in one operation.", Icon = "fa-clone",
+                PrerequisiteNodeIds = level == 1 ? [openingBranchNode] : [$"multi-open-{level - 1}"],
+                Row = level + 2, Column = -1, Cost = cost, RequiredLevel = settings.MultiOpenXpRequirement,
+                IsPurchased = purchased, IsAvailable = !purchased && prerequisiteMet && playerLevel >= settings.MultiOpenXpRequirement,
+                CanAfford = balance >= cost, IsTerminal = level == settings.MaximumMultiOpenLevel
+            });
+        }
+
+        string[] capacityKeys = ["inventory-slots-250", "inventory-slots-500", "inventory-slots-1000"];
+        for (int index = 0; index < capacityKeys.Length; index++)
+        {
+            CaseOpeningUpgradeDefinitionObj? definition = definitions.FirstOrDefault(item => item.UpgradeKey.Equals(capacityKeys[index], StringComparison.OrdinalIgnoreCase));
+            if (definition is null) continue;
+            bool prerequisiteMet = index == 0
+                ? progress.OpenSpeedLevel >= Math.Min(2, maximumLevel)
+                : definitions.Any(item => item.UpgradeKey.Equals(capacityKeys[index - 1], StringComparison.OrdinalIgnoreCase) && item.IsUnlocked);
+            long cost = gbp ? definition.CostGbpPence : definition.CostStars;
+            nodes.Add(new CaseOpeningSkillTreeNodeObj
+            {
+                NodeId = definition.UpgradeKey, UpgradeKey = definition.UpgradeKey, PurchaseKind = "inventory", Family = "Workshop storage",
+                Name = definition.Name, Description = definition.Description, Icon = index == 2 ? "fa-warehouse" : "fa-layer-group",
+                PrerequisiteNodeIds = index == 0 ? [openingBranchNode] : [capacityKeys[index - 1]],
+                Row = index + 3, Column = 1, Cost = cost, RequiredLevel = definition.RequiredLevel,
+                IsPurchased = definition.IsUnlocked, IsAvailable = !definition.IsUnlocked && prerequisiteMet && playerLevel >= definition.RequiredLevel,
+                CanAfford = balance >= cost, IsTerminal = false
+            });
+        }
+
+        string storageParent = definitions.Any(item => item.UpgradeKey.Equals("inventory-slots-1000", StringComparison.OrdinalIgnoreCase))
+            ? "inventory-slots-1000" : openingBranchNode;
+        bool storageParentPurchased = definitions.Any(item => item.UpgradeKey.Equals("inventory-slots-1000", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked);
+        for (int level = 1; level <= settings.MaximumStorageContainers; level++)
+        {
+            bool purchased = capacity.StorageContainerCount >= level;
+            bool prerequisiteMet = level == 1 ? storageParentPurchased : capacity.StorageContainerCount >= level - 1;
+            long cost = gbp
+                ? settings.StorageContainerBaseCostGbpPence + ((level - 1L) * settings.StorageContainerCostIncrementGbpPence)
+                : settings.StorageContainerBaseCostStars + ((level - 1L) * settings.StorageContainerCostIncrementStars);
+            nodes.Add(new CaseOpeningSkillTreeNodeObj
+            {
+                NodeId = $"storage-container-{level}", UpgradeKey = "storage-container", PurchaseKind = "storage", Family = "Vault capacity",
+                Name = $"Storage Container {ToRoman(level)}", Description = $"Add {settings.StorageContainerSlots:N0} permanent case and skin slots.", Icon = "fa-box-archive",
+                PrerequisiteNodeIds = level == 1 ? [storageParent] : [$"storage-container-{level - 1}"],
+                Row = level + 5, Column = 2, Cost = cost, RequiredLevel = 0,
+                IsPurchased = purchased, IsAvailable = !purchased && prerequisiteMet, CanAfford = balance >= cost,
+                IsTerminal = level == settings.MaximumStorageContainers
+            });
+        }
+
+        List<CaseOpeningUpgradeDefinitionObj> bulkDefinitions = definitions
+            .Where(item => item.Category.Equals("bulk-sale", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.SortOrder)
+            .ToList();
+        for (int index = 0; index < bulkDefinitions.Count; index++)
+        {
+            CaseOpeningUpgradeDefinitionObj definition = bulkDefinitions[index];
+            bool prerequisiteMet = index == 0
+                ? storageParentPurchased
+                : bulkDefinitions[index - 1].IsUnlocked;
+            long cost = gbp ? definition.CostGbpPence : definition.CostStars;
+            nodes.Add(new CaseOpeningSkillTreeNodeObj
+            {
+                NodeId = definition.UpgradeKey, UpgradeKey = definition.UpgradeKey, PurchaseKind = "inventory", Family = "Inventory throughput",
+                Name = definition.Name, Description = definition.Description, Icon = "fa-coins",
+                PrerequisiteNodeIds = index == 0 ? [storageParent] : [bulkDefinitions[index - 1].UpgradeKey],
+                Row = index + 6, Column = 1, Cost = cost, RequiredLevel = definition.RequiredLevel,
+                IsPurchased = definition.IsUnlocked, IsAvailable = !definition.IsUnlocked && prerequisiteMet && playerLevel >= definition.RequiredLevel,
+                CanAfford = balance >= cost, IsTerminal = index == bulkDefinitions.Count - 1
+            });
+        }
+
+        string automationRoot = bulkDefinitions.LastOrDefault()?.UpgradeKey ?? storageParent;
+        bool automationRootPurchased = bulkDefinitions.LastOrDefault()?.IsUnlocked ?? storageParentPurchased;
+        List<CaseOpeningUpgradeDefinitionObj> autoBuyDefinitions = definitions
+            .Where(item => item.Category.Equals("automation", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.SortOrder)
+            .ToList();
+        for (int index = 0; index < autoBuyDefinitions.Count; index++)
+        {
+            CaseOpeningUpgradeDefinitionObj definition = autoBuyDefinitions[index];
+            bool prerequisiteMet = index == 0 ? automationRootPurchased : autoBuyDefinitions[index - 1].IsUnlocked;
+            long cost = gbp ? definition.CostGbpPence : definition.CostStars;
+            nodes.Add(new CaseOpeningSkillTreeNodeObj
+            {
+                NodeId = definition.UpgradeKey, UpgradeKey = definition.UpgradeKey, PurchaseKind = "inventory", Family = "Automatic restocking",
+                Name = definition.Name, Description = definition.Description, Icon = "fa-cart-arrow-down",
+                PrerequisiteNodeIds = index == 0 ? [automationRoot] : [autoBuyDefinitions[index - 1].UpgradeKey],
+                Row = bulkDefinitions.Count + index + 10, Column = 0, Cost = cost, RequiredLevel = definition.RequiredLevel,
+                IsPurchased = definition.IsUnlocked, IsAvailable = !definition.IsUnlocked && prerequisiteMet && playerLevel >= definition.RequiredLevel,
+                CanAfford = balance >= cost, IsTerminal = index == autoBuyDefinitions.Count - 1
+            });
+        }
+
+        List<CaseOpeningUpgradeDefinitionObj> autoSellDefinitions = definitions
+            .Where(item => item.Category.Equals("auto-sell", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.SortOrder)
+            .ToList();
+        for (int index = 0; index < autoSellDefinitions.Count; index++)
+        {
+            CaseOpeningUpgradeDefinitionObj definition = autoSellDefinitions[index];
+            bool prerequisiteMet = index == 0 ? automationRootPurchased : autoSellDefinitions[index - 1].IsUnlocked;
+            long cost = gbp ? definition.CostGbpPence : definition.CostStars;
+            nodes.Add(new CaseOpeningSkillTreeNodeObj
+            {
+                NodeId = definition.UpgradeKey, UpgradeKey = definition.UpgradeKey, PurchaseKind = "inventory", Family = "Automatic selling",
+                Name = definition.Name, Description = definition.Description, Icon = "fa-filter-circle-dollar",
+                PrerequisiteNodeIds = index == 0 ? [automationRoot] : [autoSellDefinitions[index - 1].UpgradeKey],
+                Row = bulkDefinitions.Count + index + 10, Column = -1, Cost = cost, RequiredLevel = definition.RequiredLevel,
+                IsPurchased = definition.IsUnlocked, IsAvailable = !definition.IsUnlocked && prerequisiteMet && playerLevel >= definition.RequiredLevel,
+                CanAfford = balance >= cost, IsTerminal = index == autoSellDefinitions.Count - 1
+            });
+        }
+        if (autoSellDefinitions.Count > 0)
+        {
+            bool safeguardUnlocked = autoSellDefinitions[0].IsUnlocked;
+            nodes.Add(new CaseOpeningSkillTreeNodeObj
+            {
+                NodeId = "stattrak-safeguard", UpgradeKey = string.Empty, PurchaseKind = string.Empty, Family = "Automatic selling",
+                Name = "StatTrak Safeguard", Description = "Unlock the setting that protects StatTrak™ items from every active auto-sell rule.", Icon = "fa-shield-halved",
+                PrerequisiteNodeIds = [autoSellDefinitions[0].UpgradeKey], Row = bulkDefinitions.Count + 11, Column = -2,
+                Cost = 0, RequiredLevel = 0, IsPurchased = safeguardUnlocked, IsAvailable = false, CanAfford = true, IsTerminal = true
+            });
+        }
+
+        CaseOpeningUpgradeDefinitionObj? tradeUpUnlock = definitions.FirstOrDefault(item => item.Category.Equals("trade-up-unlock", StringComparison.OrdinalIgnoreCase));
+        if (tradeUpUnlock is not null)
+        {
+            long unlockCost = gbp ? tradeUpUnlock.CostGbpPence : tradeUpUnlock.CostStars;
+            nodes.Add(new CaseOpeningSkillTreeNodeObj
+            {
+                NodeId = tradeUpUnlock.UpgradeKey, UpgradeKey = tradeUpUnlock.UpgradeKey, PurchaseKind = "inventory", Family = "Automatic trade-ups",
+                Name = tradeUpUnlock.Name, Description = tradeUpUnlock.Description, Icon = "fa-flask-vial",
+                PrerequisiteNodeIds = [automationRoot], Row = bulkDefinitions.Count + 10, Column = 1,
+                Cost = unlockCost, RequiredLevel = tradeUpUnlock.RequiredLevel, IsPurchased = tradeUpUnlock.IsUnlocked,
+                IsAvailable = !tradeUpUnlock.IsUnlocked && automationRootPurchased && playerLevel >= tradeUpUnlock.RequiredLevel,
+                CanAfford = balance >= unlockCost, IsTerminal = false
+            });
+
+            for (int slot = 2; slot <= inventory.MaximumTradeUpRecipeSlots; slot++)
+            {
+                bool purchased = inventory.TradeUpRecipeSlots >= slot;
+                bool prerequisiteMet = slot == 2 ? inventory.TradeUpRecipesUnlocked : inventory.TradeUpRecipeSlots >= slot - 1;
+                long cost = gbp
+                    ? settings.TradeUpSlotUpgradeBaseCostGbpPence + ((slot - 1L) * settings.TradeUpSlotUpgradeCostIncrementGbpPence)
+                    : settings.TradeUpSlotUpgradeBaseCostStars + ((slot - 1L) * settings.TradeUpSlotUpgradeCostIncrementStars);
+                nodes.Add(new CaseOpeningSkillTreeNodeObj
+                {
+                    NodeId = $"trade-up-slot-{slot}", UpgradeKey = "trade-up-slot", PurchaseKind = "trade-up-slot", Family = "Recipe capacity",
+                    Name = $"Recipe Slot {ToRoman(slot)}", Description = $"Run up to {slot} automatic Trade Up recipes at once.", Icon = "fa-list-check",
+                    PrerequisiteNodeIds = slot == 2 ? [tradeUpUnlock.UpgradeKey] : [$"trade-up-slot-{slot - 1}"],
+                    Row = bulkDefinitions.Count + slot + 9, Column = 1, Cost = cost, RequiredLevel = 0,
+                    IsPurchased = purchased, IsAvailable = !purchased && prerequisiteMet, CanAfford = balance >= cost,
+                    IsTerminal = slot == inventory.MaximumTradeUpRecipeSlots
+                });
+            }
+
+            nodes.Add(new CaseOpeningSkillTreeNodeObj
+            {
+                NodeId = "trade-up-holding-management", UpgradeKey = string.Empty, PurchaseKind = string.Empty, Family = "Recipe capacity",
+                Name = "Recipe Holding", Description = "Holding capacity remains upgradeable independently on each automatic Trade Up recipe.", Icon = "fa-boxes-stacked",
+                PrerequisiteNodeIds = [tradeUpUnlock.UpgradeKey], Row = bulkDefinitions.Count + 11, Column = 2,
+                Cost = 0, RequiredLevel = 0, IsPurchased = inventory.TradeUpRecipesUnlocked, IsAvailable = false, CanAfford = true, IsTerminal = true
+            });
+        }
+
+        List<CaseOpeningUpgradeDefinitionObj> openingQualityOfLife = definitions
+            .Where(item => item.Category.Equals("opening-qol", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.SortOrder)
+            .ToList();
+        string openingWorkflowParent = $"open-speed-{maximumLevel}";
+        bool openingWorkflowParentPurchased = progress.OpenSpeedLevel >= maximumLevel;
+        int openingWorkflowRow = nodes.Count == 0 ? maximumLevel + 1 : nodes.Max(item => item.Row) + 2;
+        string[] openingWorkflowIcons = ["fa-rotate-right", "fa-sliders", "fa-compress", "fa-layer-group"];
+        for (int index = 0; index < openingQualityOfLife.Count; index++)
+        {
+            CaseOpeningUpgradeDefinitionObj definition = openingQualityOfLife[index];
+            long cost = gbp ? definition.CostGbpPence : definition.CostStars;
+            nodes.Add(new CaseOpeningSkillTreeNodeObj
+            {
+                NodeId = definition.UpgradeKey, UpgradeKey = definition.UpgradeKey, PurchaseKind = "inventory", Family = "Opening workflow",
+                Name = definition.Name, Description = definition.Description, Icon = openingWorkflowIcons[Math.Min(index, openingWorkflowIcons.Length - 1)],
+                PrerequisiteNodeIds = [openingWorkflowParent], Row = openingWorkflowRow + index, Column = 0,
+                Cost = cost, RequiredLevel = definition.RequiredLevel, IsPurchased = definition.IsUnlocked,
+                IsAvailable = !definition.IsUnlocked && openingWorkflowParentPurchased && playerLevel >= definition.RequiredLevel,
+                CanAfford = balance >= cost, IsTerminal = index == openingQualityOfLife.Count - 1
+            });
+            openingWorkflowParent = definition.UpgradeKey;
+            openingWorkflowParentPurchased = definition.IsUnlocked;
+        }
+
+        List<CaseOpeningUpgradeDefinitionObj> phaseFiveB = definitions.Where(item => item.Category is "inventory-qol" or "automation-qol" or "trade-up-qol").OrderBy(item => item.SortOrder).ToList();
+        int phaseFiveBRow = nodes.Max(item => item.Row) + 2;
+        int automationOffset = 0;
+        foreach (CaseOpeningUpgradeDefinitionObj definition in phaseFiveB)
+        {
+            bool tradeBranch = definition.Category.Equals("trade-up-qol", StringComparison.OrdinalIgnoreCase);
+            bool inventoryBranch = definition.Category.Equals("inventory-qol", StringComparison.OrdinalIgnoreCase);
+            string[] parents = definition.UpgradeKey switch { "inventory-filters"=>[storageParent],"auto-buy-reserve"=>[autoBuyDefinitions.LastOrDefault()?.UpgradeKey ?? automationRoot],"auto-buy-case-groups"=>["auto-buy-reserve"],"auto-sell-price-floor"=>[autoSellDefinitions.LastOrDefault()?.UpgradeKey ?? automationRoot],"auto-sell-duplicate-copies"=>["auto-sell-price-floor"],"auto-sell-wear-filters"=>["auto-sell-duplicate-copies"],"trade-up-reserve"=>["trade-up-unlock"],"pause-automation-storage-low"=>["auto-buy-case-groups","auto-sell-wear-filters","trade-up-reserve"],_=>[automationRoot] };
+            bool parentPurchased = parents.All(parent => nodes.Any(node => node.NodeId.Equals(parent,StringComparison.OrdinalIgnoreCase) && node.IsPurchased));
+            long cost = gbp ? definition.CostGbpPence : definition.CostStars;
+            int column = definition.UpgradeKey.StartsWith("auto-buy",StringComparison.OrdinalIgnoreCase)?-1:definition.UpgradeKey.StartsWith("auto-sell",StringComparison.OrdinalIgnoreCase)?1:tradeBranch?2:inventoryBranch?-2:0;
+            nodes.Add(new CaseOpeningSkillTreeNodeObj { NodeId=definition.UpgradeKey,UpgradeKey=definition.UpgradeKey,PurchaseKind="inventory",Family=tradeBranch?"Trade-Up safeguard":inventoryBranch?"Inventory tools":"Automation safeguards",Name=definition.Name,Description=definition.Description,Icon=tradeBranch?"fa-shield":inventoryBranch?"fa-filter":"fa-gears",PrerequisiteNodeIds=parents.ToList(),Row=phaseFiveBRow+automationOffset,Column=column,Cost=cost,RequiredLevel=definition.RequiredLevel,IsPurchased=definition.IsUnlocked,IsAvailable=!definition.IsUnlocked&&parentPurchased&&playerLevel>=definition.RequiredLevel,CanAfford=balance>=cost,IsTerminal=definition.UpgradeKey is "trade-up-reserve" or "inventory-filters" or "pause-automation-storage-low" });
+            automationOffset++;
+        }
+        CaseOpeningUpgradeDefinitionObj? contractHistory = definitions.FirstOrDefault(item => item.UpgradeKey.Equals("contract-history-filters", StringComparison.OrdinalIgnoreCase));
+        if (contractHistory is not null)
+        {
+            long cost = gbp ? contractHistory.CostGbpPence : contractHistory.CostStars;
+            bool parentPurchased = definitions.Any(item => item.UpgradeKey.Equals("trade-up-reserve", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked);
+            nodes.Add(new CaseOpeningSkillTreeNodeObj { NodeId=contractHistory.UpgradeKey,UpgradeKey=contractHistory.UpgradeKey,PurchaseKind="inventory",Family="Contract records",Name=contractHistory.Name,Description=contractHistory.Description,Icon="fa-clock-rotate-left",PrerequisiteNodeIds=["trade-up-reserve"],Row=nodes.Max(item=>item.Row)+2,Column=2,Cost=cost,RequiredLevel=contractHistory.RequiredLevel,IsPurchased=contractHistory.IsUnlocked,IsAvailable=!contractHistory.IsUnlocked&&parentPurchased&&playerLevel>=contractHistory.RequiredLevel,CanAfford=balance>=cost,IsTerminal=true });
+        }
+
+        Dictionary<string, int> dailyLevels = (await _data.GetCaseOpeningDailyDropUpgrades(userId, cancellationToken))
+            .ToDictionary(item => item.UpgradeKey, item => item.Level, StringComparer.OrdinalIgnoreCase);
+        (string Key, string Name, string Family, string Icon)[] dailyBranches =
+        [
+            ("focus", "Focused Collector", "Daily Drop focus", "fa-bullseye"),
+            ("cash", "Cash Cache", "Daily Drop currency", "fa-sack-dollar"),
+            ("case-stash", "Case Stash", "Daily Drop cases", "fa-boxes-stacked"),
+            ("quality", "Higher Stakes", "Daily Drop quality", "fa-dice-d20")
+        ];
+        string dailyParentNode = $"open-speed-{maximumLevel}";
+        bool dailyParentPurchased = progress.OpenSpeedLevel >= maximumLevel;
+        int dailyStartRow = nodes.Count == 0 ? 1 : nodes.Max(item => item.Row) + 2;
+        int dailyNodeOffset = 0;
+        foreach ((string key, string name, string family, string icon) in dailyBranches)
+        {
+            int currentLevel = dailyLevels.GetValueOrDefault(key);
+            for (int level = 1; level <= 3; level++)
+            {
+                (int _, int stars, long pence) = DailyDropUpgradeCost(key, level - 1);
+                long cost = gbp ? pence : stars;
+                bool purchased = currentLevel >= level;
+                bool prerequisiteMet = level == 1 ? dailyParentPurchased : currentLevel >= level - 1;
+                string description = key switch
+                {
+                    "focus" => $"Reduce the XP required for each Daily Drop by another 10, to {Math.Max(40, DailyDropRequiredXp - (level * 10))} XP.",
+                    "cash" => $"Increase the Daily Drop cash reward by another {(gbp ? "£0.50" : "50 Stars")}.",
+                    "case-stash" => $"Add another 5 cases to the Daily Drop case-pack reward, for {10 + (level * 5)} total.",
+                    _ => "Exclude one more lowest-tier unlocked paid case from Daily Drop case-pack selection."
+                };
+                string nodeId = $"daily-{key}-{level}";
+                nodes.Add(new CaseOpeningSkillTreeNodeObj
+                {
+                    NodeId = nodeId, UpgradeKey = key, PurchaseKind = "daily-drop", Family = family,
+                    Name = $"{name} {ToRoman(level)}", Description = description, Icon = icon,
+                    PrerequisiteNodeIds = [dailyParentNode], Row = dailyStartRow + dailyNodeOffset, Column = -1,
+                    Cost = cost, RequiredLevel = 0, IsPurchased = purchased,
+                    IsAvailable = !purchased && prerequisiteMet, CanAfford = balance >= cost, IsTerminal = level == 3
+                });
+                dailyParentNode = nodeId;
+                dailyParentPurchased = purchased;
+                dailyNodeOffset++;
+            }
+        }
+
+        HashSet<string> ownedReactions = (await _data.GetCaseBattleReactionUnlocks(userId, cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        int cosmeticStartRow = dailyStartRow + dailyNodeOffset + 2;
+        for (int index = 0; index < BattleReactionCatalogue.Length; index++)
+        {
+            CaseBattleReactionShopItemObj reaction = BattleReactionCatalogue[index];
+            bool owned = reaction.CostStars == 0 || ownedReactions.Contains(reaction.Key);
+            long cost = gbp ? reaction.CostGbpPence : reaction.CostStars;
+            bool isSticker = reaction.Kind.Equals("image", StringComparison.OrdinalIgnoreCase);
+            nodes.Add(new CaseOpeningSkillTreeNodeObj
+            {
+                NodeId = $"battle-reaction-{reaction.Key}", UpgradeKey = reaction.Key, PurchaseKind = "battle-reaction",
+                Family = isSticker ? "Optional cosmetic · Battle sticker" : "Optional cosmetic · Battle reaction",
+                Name = reaction.Name, Description = $"Add {reaction.Name} to your battle reaction collection. Cosmetic only; it provides no competitive advantage.",
+                Icon = isSticker ? "fa-note-sticky" : "fa-face-smile",
+                PrerequisiteNodeIds = ["daily-quality-3"], Row = cosmeticStartRow + (index / 5), Column = (index % 5) - 2,
+                Cost = cost, RequiredLevel = 0, IsPurchased = owned,
+                IsAvailable = !owned && dailyLevels.GetValueOrDefault("quality") >= 3, CanAfford = balance >= cost, IsTerminal = true
+            });
+        }
+        List<CaseOpeningUpgradeDefinitionObj> socialDefinitions=definitions.Where(item=>item.Category.Equals("social-qol",StringComparison.OrdinalIgnoreCase)).OrderBy(item=>item.SortOrder).ToList();
+        string socialParent="daily-quality-3"; bool socialParentPurchased=dailyLevels.GetValueOrDefault("quality")>=3; int socialRow=nodes.Max(item=>item.Row)+2;
+        for(int index=0;index<socialDefinitions.Count;index++) { CaseOpeningUpgradeDefinitionObj definition=socialDefinitions[index]; long cost=gbp?definition.CostGbpPence:definition.CostStars; nodes.Add(new CaseOpeningSkillTreeNodeObj{NodeId=definition.UpgradeKey,UpgradeKey=definition.UpgradeKey,PurchaseKind="inventory",Family="Optional cosmetic · Social tools",Name=definition.Name,Description=definition.Description+" Cosmetic only; it provides no competitive advantage.",Icon=index switch{0=>"fa-grip",1=>"fa-arrow-down-short-wide",2=>"fa-trophy",3=>"fa-gem",_=>"fa-filter"},PrerequisiteNodeIds=[socialParent],Row=socialRow+index,Column=-2,Cost=cost,RequiredLevel=definition.RequiredLevel,IsPurchased=definition.IsUnlocked,IsAvailable=!definition.IsUnlocked&&socialParentPurchased&&playerLevel>=definition.RequiredLevel,CanAfford=balance>=cost,IsTerminal=index==socialDefinitions.Count-1});socialParent=definition.UpgradeKey;socialParentPurchased=definition.IsUnlocked;}
+
+        List<CaseOpeningUpgradeDefinitionObj> phaseSix=definitions.Where(item=>item.Category is "reward-endgame" or "tree-convergence" or "endgame-mastery").OrderBy(item=>item.SortOrder).ToList();
+        int phaseSixRow=nodes.Max(item=>item.Row)+3;
+        foreach(CaseOpeningUpgradeDefinitionObj definition in phaseSix)
+        {
+            string[] parents=definition.UpgradeKey switch
+            {
+                "reward-preview"=>["daily-quality-3"],"flexible-daily-choice"=>["reward-preview"],"streak-insurance"=>["flexible-daily-choice"],"bonus-daily-choice"=>["streak-insurance"],"case-variety"=>["bonus-daily-choice"],
+                "collector-convergence"=>["case-variety","battle-history-filters"],"automation-convergence"=>["batch-reveal","pause-automation-storage-low","contract-history-filters"],"reward-convergence"=>["collector-convergence","automation-convergence"],
+                "tycoon-mastery-1"=>["reward-convergence"],"tycoon-mastery-2"=>["tycoon-mastery-1"],_=>["tycoon-mastery-2"]
+            };
+            bool parentsPurchased=parents.All(parent=>parent=="daily-quality-3"?dailyLevels.GetValueOrDefault("quality")>=3:definitions.Any(item=>item.UpgradeKey.Equals(parent,StringComparison.OrdinalIgnoreCase)&&item.IsUnlocked));
+            int column=definition.Category.Equals("tree-convergence",StringComparison.OrdinalIgnoreCase)?0:definition.Category.Equals("reward-endgame",StringComparison.OrdinalIgnoreCase)?-1:1;
+            string icon=definition.Category.Equals("tree-convergence",StringComparison.OrdinalIgnoreCase)?"fa-code-merge":definition.Category.Equals("endgame-mastery",StringComparison.OrdinalIgnoreCase)?"fa-crown":definition.UpgradeKey switch{"reward-preview"=>"fa-eye","flexible-daily-choice"=>"fa-shuffle","streak-insurance"=>"fa-shield-heart","bonus-daily-choice"=>"fa-gift","case-variety"=>"fa-boxes-stacked",_=>"fa-sparkles"};
+            long cost=gbp?definition.CostGbpPence:definition.CostStars;
+            nodes.Add(new CaseOpeningSkillTreeNodeObj{NodeId=definition.UpgradeKey,UpgradeKey=definition.UpgradeKey,PurchaseKind="inventory",Family=definition.Category.Equals("reward-endgame",StringComparison.OrdinalIgnoreCase)?"Reward expansion":definition.Category.Equals("tree-convergence",StringComparison.OrdinalIgnoreCase)?"Major convergence":"Endgame mastery",Name=definition.Name,Description=definition.Description,Icon=icon,PrerequisiteNodeIds=parents.ToList(),Row=phaseSixRow++,Column=column,Cost=cost,RequiredLevel=definition.RequiredLevel,IsPurchased=definition.IsUnlocked,IsAvailable=!definition.IsUnlocked&&parentsPurchased&&playerLevel>=definition.RequiredLevel,CanAfford=balance>=cost,IsTerminal=definition.UpgradeKey is "case-variety" or "reward-convergence" or "tycoon-mastery-3"});
+        }
+
+        return new CaseOpeningSkillTreeObj
+        {
+            Enabled = enabled,
+            EconomyMode = settings.EconomyMode,
+            CurrencyCode = gbp ? "GBP" : "STAR",
+            Balance = balance,
+            Nodes = nodes
+        };
+    }
+
+    public async Task<CaseOpeningSkillTreeSettingsObj> SetCaseOpeningSkillTreeEnabled(bool enabled, CancellationToken cancellationToken = default)
+    {
+        await _data.SetCaseOpeningSkillTreeEnabled(enabled, cancellationToken);
+        return new CaseOpeningSkillTreeSettingsObj { Enabled = await _data.GetCaseOpeningSkillTreeEnabled(cancellationToken) };
     }
 
     public Task<List<CaseOpeningTierEconomySettingsObj>> GetTierEconomySettings(CancellationToken cancellationToken = default)
@@ -2326,9 +2936,11 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         CaseOpeningProgressObj result = CreateProgress(progress, settings, unlockedCaseKeys);
         CaseOpeningDailyDropDbModel daily = await _data.GetCaseOpeningDailyDrop(progress.UserId, cancellationToken);
         Dictionary<string, int> dailyUpgradeLevels = (await _data.GetCaseOpeningDailyDropUpgrades(progress.UserId, cancellationToken)).ToDictionary(item => item.UpgradeKey, item => item.Level, StringComparer.OrdinalIgnoreCase);
-        if (daily.IsCompleted && !daily.IsClaimed && string.IsNullOrWhiteSpace(daily.OfferJson))
+        HashSet<string> unlockedUpgrades=(await _data.GetCaseOpeningUpgradeDefinitions(progress.UserId,cancellationToken)).Where(item=>item.IsUnlocked).Select(item=>item.UpgradeKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool previewAvailable=unlockedUpgrades.Contains("reward-preview")&&daily.Xp>0;
+        if ((daily.IsCompleted||previewAvailable) && !daily.IsClaimed && string.IsNullOrWhiteSpace(daily.OfferJson))
         {
-            List<CaseOpeningDailyDropRewardObj> offer = await CreateDailyDropOffer(settings, unlockedCaseKeys ?? [], dailyUpgradeLevels, cancellationToken);
+            List<CaseOpeningDailyDropRewardObj> offer = await CreateDailyDropOffer(settings, unlockedCaseKeys ?? [], dailyUpgradeLevels, unlockedUpgrades, cancellationToken);
             daily = await _data.SetCaseOpeningDailyDropOffer(progress.UserId, JsonSerializer.Serialize(offer), cancellationToken);
         }
         result.DailyDrop = new CaseOpeningDailyDropObj
@@ -2338,6 +2950,8 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             RequiredXp = Math.Max(40, DailyDropRequiredXp - (dailyUpgradeLevels.GetValueOrDefault("focus") * 10)),
             IsCompleted = daily.IsCompleted,
             IsClaimed = daily.IsClaimed,
+            IsPreview = !daily.IsCompleted && previewAvailable,
+            ClaimChoiceCount = unlockedUpgrades.Contains("bonus-daily-choice") ? 3 : 2,
             Rewards = ParseDailyDropOffer(daily.OfferJson),
             Upgrades = DailyDropUpgradeDefinitions(settings, dailyUpgradeLevels)
         };
@@ -2675,7 +3289,7 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         return "Battle-Scarred";
     }
 
-    private async Task<List<CaseOpeningDailyDropRewardObj>> CreateDailyDropOffer(CaseOpeningGameSettingsObj settings, List<string> unlockedCaseKeys, IReadOnlyDictionary<string, int> levels, CancellationToken cancellationToken)
+    private async Task<List<CaseOpeningDailyDropRewardObj>> CreateDailyDropOffer(CaseOpeningGameSettingsObj settings, List<string> unlockedCaseKeys, IReadOnlyDictionary<string, int> levels, IReadOnlySet<string> unlockedUpgrades, CancellationToken cancellationToken)
     {
         List<CaseOpeningCaseObj> unlocked = [];
         foreach (string key in unlockedCaseKeys.Distinct(StringComparer.OrdinalIgnoreCase)) unlocked.Add(await _referenceData.GetCase(key, cancellationToken));
@@ -2700,6 +3314,18 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         ];
         if (skinReward is not null) result.Add(new() { RewardKey="skin", Kind="skin", Name=skinReward.Value.Item.Name, Description="Blue, purple or pink skin under £50.", CaseKey=skinReward.Value.Case.CaseKey, Item=skinReward.Value.Item, ImageUrl=skinReward.Value.Item.ImageUrl });
         else result.Add(new() { RewardKey="bonus-cases", Kind="cases", Name=$"5 × {caseReward.Name}", Description="Bonus case pack while no eligible skin is priced below £50.", CaseKey=caseReward.CaseKey, AmountMinor=5, ImageUrl=caseReward.ImageUrl });
+        List<CaseOpeningCaseObj> alternatives=paid.Where(item=>!item.CaseKey.Equals(caseReward.CaseKey,StringComparison.OrdinalIgnoreCase)).ToList();
+        if(unlockedUpgrades.Contains("flexible-daily-choice")&&alternatives.Count>0)
+        {
+            CaseOpeningCaseObj alternate=alternatives[RandomNumberGenerator.GetInt32(alternatives.Count)];
+            result.Add(new(){RewardKey="flexible-cases",Kind="cases",Name=$"{8+(levels.GetValueOrDefault("case-stash")*3)} × {alternate.Name}",Description="An alternate unlocked paid case pack.",CaseKey=alternate.CaseKey,AmountMinor=8+(levels.GetValueOrDefault("case-stash")*3),ImageUrl=alternate.ImageUrl});
+            alternatives.RemoveAll(item=>item.CaseKey.Equals(alternate.CaseKey,StringComparison.OrdinalIgnoreCase));
+        }
+        if(unlockedUpgrades.Contains("case-variety")&&alternatives.Count>0)
+        {
+            CaseOpeningCaseObj varied=alternatives[RandomNumberGenerator.GetInt32(alternatives.Count)];
+            result.Add(new(){RewardKey="variety-cases",Kind="cases",Name=$"6 × {varied.Name}",Description="A distinct case choice from another unlocked collection.",CaseKey=varied.CaseKey,AmountMinor=6,ImageUrl=varied.ImageUrl});
+        }
         return result;
     }
 

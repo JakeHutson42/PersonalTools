@@ -38,6 +38,7 @@ public interface ICaseBattleFuncs
     Task SetTimingSettings(CaseBattleTimingSettingsObj settings, CancellationToken cancellationToken = default);
     Task SetFeatureEnabled(bool enabled, CancellationToken cancellationToken = default);
     Task SetFreeForAll3Enabled(bool enabled, CancellationToken cancellationToken = default);
+    Task SetFreeForAll4Enabled(bool enabled, CancellationToken cancellationToken = default);
     Task SetBotEnabled(bool enabled, CancellationToken cancellationToken = default);
 }
 
@@ -57,7 +58,7 @@ public sealed class CaseBattleFuncs(
         List<Guid> invitedUserIds = NormaliseInvitedUsers(request);
         if (request.UseBot)
         {
-            if (request.Mode is not (CaseBattleModes.Duel or CaseBattleModes.FreeForAll3)) throw new InvalidOperationException("Battle Bot is unavailable for that battle mode.");
+            if (request.Mode is not (CaseBattleModes.Duel or CaseBattleModes.FreeForAll3 or CaseBattleModes.FreeForAll4)) throw new InvalidOperationException("Battle Bot is unavailable for that battle mode.");
             if (invitedUserIds.Count != 0) throw new InvalidOperationException("Choose Battle Bot or invited players, not both.");
             if (!(await data.GetBotStatus(cancellationToken)).Enabled) throw new InvalidOperationException("Battle Bot is not currently available.");
         }
@@ -219,6 +220,7 @@ public sealed class CaseBattleFuncs(
     }
     public Task SetFeatureEnabled(bool enabled, CancellationToken cancellationToken = default) => data.SetFeatureEnabled(enabled, cancellationToken);
     public Task SetFreeForAll3Enabled(bool enabled, CancellationToken cancellationToken = default) => data.SetFreeForAll3Enabled(enabled, cancellationToken);
+    public Task SetFreeForAll4Enabled(bool enabled, CancellationToken cancellationToken = default) => data.SetFreeForAll4Enabled(enabled, cancellationToken);
     public Task SetBotEnabled(bool enabled, CancellationToken cancellationToken = default) => data.SetBotEnabled(enabled, cancellationToken);
     public Task<List<CaseBattleInvitationObj>> GetPendingInvitations(Guid userId, CancellationToken cancellationToken = default) => data.GetPendingInvitations(userId, cancellationToken);
     public Task<List<CaseBattlePendingCreatedObj>> GetPendingCreated(Guid userId, CancellationToken cancellationToken = default) => data.GetPendingCreated(userId, cancellationToken);
@@ -325,6 +327,7 @@ public sealed class CaseBattleFuncs(
         if (CaseBattleModes.PlayerCount(mode ?? string.Empty) == 0) throw new InvalidOperationException("Choose a supported battle mode.");
         if (!CaseBattleModes.IsEnabled(mode ?? string.Empty)) throw new InvalidOperationException("That case battle mode is not available.");
         if (mode == CaseBattleModes.FreeForAll3 && !(await data.GetBotStatus(cancellationToken)).FreeForAll3Enabled) throw new InvalidOperationException("1v1v1 case battles are currently disabled.");
+        if (mode == CaseBattleModes.FreeForAll4 && !(await data.GetBotStatus(cancellationToken)).FreeForAll4Enabled) throw new InvalidOperationException("1v1v1v1 case battles are currently disabled.");
         int maximum = (await data.GetTimingSettings(cancellationToken)).MaxCasesPerBattle;
         if (caseCount < 1 || caseCount > maximum) throw new InvalidOperationException($"Choose between 1 and {maximum} cases.");
     }
