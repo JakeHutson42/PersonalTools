@@ -5,6 +5,7 @@ using System.Security.Claims;
 
 namespace PersonalTools.Pages.CaseOpening.Battles;
 
+[Microsoft.AspNetCore.Authorization.Authorize(Policy=PersonalTools.Security.AppAuthorizationPolicies.CaseTycoonAccess)]
 public sealed class LobbyModel(ICaseBattleFuncs battles) : PageModel
 {
     public Guid BattleId { get; private set; }

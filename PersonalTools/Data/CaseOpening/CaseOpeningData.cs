@@ -88,6 +88,8 @@ public interface ICaseOpeningData
     Task SetGameSettings(CaseOpeningGameSettingsObj settings, CancellationToken cancellationToken = default);
     Task<bool> GetCaseOpeningSkillTreeEnabled(CancellationToken cancellationToken = default);
     Task SetCaseOpeningSkillTreeEnabled(bool enabled, CancellationToken cancellationToken = default);
+    Task<bool> GetGuestAccessEnabled(CancellationToken cancellationToken = default);
+    Task SetGuestAccessEnabled(bool enabled, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningCaseSettingsObj>> GetCaseSettings(CancellationToken cancellationToken = default);
     Task<List<CaseOpeningTierEconomySettingsObj>> GetTierEconomySettings(CancellationToken cancellationToken = default);
     Task SetTierEconomySettings(int tier, int targetProfitBasisPoints, int priceRoundingPence, CancellationToken cancellationToken = default);
@@ -796,6 +798,22 @@ public sealed class CaseOpeningData : ICaseOpeningData
     {
         return _database.ExecuteSP(
             "sp_case_opening_skill_tree_settings_set",
+            Parameters(("p_enabled", enabled)),
+            cancellationToken);
+    }
+
+    public async Task<bool> GetGuestAccessEnabled(CancellationToken cancellationToken = default)
+    {
+        return await _database.GetDataSP(
+            "sp_case_tycoon_guest_access_get",
+            reader => reader.GetBoolean("Enabled"),
+            cancellationToken: cancellationToken);
+    }
+
+    public Task SetGuestAccessEnabled(bool enabled, CancellationToken cancellationToken = default)
+    {
+        return _database.ExecuteSP(
+            "sp_case_tycoon_guest_access_set",
             Parameters(("p_enabled", enabled)),
             cancellationToken);
     }

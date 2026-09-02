@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PersonalTools.Security;
 using Microsoft.AspNetCore.RateLimiting;
 using MySqlConnector;
 using PersonalTools.Classes;
@@ -10,7 +11,7 @@ using PersonalTools.Entities.CaseBattles;
 
 namespace PersonalTools.Controllers;
 
-[Authorize]
+[Authorize(Policy = AppAuthorizationPolicies.CaseTycoonAccess)]
 [ApiController]
 [Route("api/case-battles")]
 public sealed class CaseBattlesController(ICaseBattleFuncs battles, ILogger<CaseBattlesController> logger) : ControllerBase

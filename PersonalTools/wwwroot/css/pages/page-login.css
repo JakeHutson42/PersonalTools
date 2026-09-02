@@ -88,3 +88,8 @@
         transition: none;
     }
 }
+.login-case-tycoon { display:grid; gap:.6rem; margin-top:1.35rem; padding-top:1.2rem; border-top:1px solid var(--pt-line); text-align:center; }
+.login-case-tycoon > span { color:var(--pt-ink-soft); font-size:.68rem; font-weight:750; letter-spacing:.05em; text-transform:uppercase; }
+.login-case-tycoon-button { min-height:2.85rem; border:1px solid color-mix(in srgb,var(--case-gold,#e4ae39) 60%,var(--pt-line)); color:#271b05; background:linear-gradient(135deg,#ffd568,#dda02b); box-shadow:0 .55rem 1.3rem rgba(221,160,43,.2); font-weight:850; }
+.login-case-tycoon-button:hover,.login-case-tycoon-button:focus-visible { color:#1f1504; filter:brightness(1.06); transform:translateY(-1px); }
+.login-case-tycoon small { color:var(--pt-ink-soft); font-size:.65rem; }

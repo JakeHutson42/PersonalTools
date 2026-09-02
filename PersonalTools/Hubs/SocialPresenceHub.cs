@@ -7,7 +7,7 @@ using PersonalTools.Entities;
 
 namespace PersonalTools.Hubs;
 
-[Authorize]
+[Authorize(Policy = PersonalTools.Security.AppAuthorizationPolicies.CaseTycoonAccess)]
 public sealed class SocialPresenceHub(ISocialProfileData data) : Hub
 {
     private static readonly ConcurrentDictionary<Guid, int> Connections = new();

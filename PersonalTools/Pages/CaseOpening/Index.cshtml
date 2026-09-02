@@ -8,6 +8,7 @@
 @{
     ViewData["Title"] = "CS2 Case Simulator";
     bool canManageCaseOpening = User.IsUserAllowedHere(AppRole.Admin);
+    bool isCaseTycoonGuest = User.HasClaim(AppAuthorizationPolicies.AccountTypeClaim, AppAuthorizationPolicies.GuestAccount);
     string? currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 }
 
@@ -262,19 +263,6 @@
                             <div class="case-auto-buy-grid" id="caseAutoBuyRules"></div>
                         </div>
                     </div>
-                    <span class="d-none" id="caseAutomationSafeguardsHome"></span><div class="case-auto-sell-panel mt-3 d-none" id="caseAutomationSafeguardsPanel">
-                        <div class="mb-3"><p class="eyebrow mb-1">Automation safeguards</p><h3 class="h6 mb-1">Protected operating limits</h3><p class="small-muted mb-0">Only unlocked settings take effect. Values use the active game currency.</p></div>
-                        <div class="row g-3">
-                            <div class="col-6 col-lg-3" data-qol-setting="auto-buy-reserve"><label class="form-label small" for="caseAutoBuyReserve">Auto-Buy reserve</label><input class="form-control form-control-sm" id="caseAutoBuyReserve" type="number" min="0" step="1" value="0"></div>
-                            <div class="col-6 col-lg-3" data-qol-setting="auto-sell-price-floor"><label class="form-label small" for="caseAutoSellProtectAbove">Protect above</label><input class="form-control form-control-sm" id="caseAutoSellProtectAbove" type="number" min="0" step="1" value="0"></div>
-                            <div class="col-6 col-lg-3" data-qol-setting="auto-sell-duplicate-copies"><label class="form-label small" for="caseAutoSellDuplicates">Copies to keep</label><input class="form-control form-control-sm" id="caseAutoSellDuplicates" type="number" min="0" max="100" value="0"></div>
-                            <div class="col-6 col-lg-3" data-qol-setting="trade-up-reserve"><label class="form-label small" for="caseTradeUpReserve">Ingredients to keep</label><input class="form-control form-control-sm" id="caseTradeUpReserve" type="number" min="0" max="100" value="0"></div>
-                            <div class="col-12 col-lg-4" data-qol-setting="pause-automation-storage-low"><label class="form-label small" for="caseAutomationFreeSlots">Pause at free slots</label><input class="form-control form-control-sm" id="caseAutomationFreeSlots" type="number" min="0" max="10000" value="0"></div>
-                            <div class="col-12 col-lg-4" data-qol-setting="auto-buy-case-groups"><div class="form-check form-switch mt-lg-4"><input class="form-check-input pt-switch" id="caseFollowSelectedCase" type="checkbox"><label class="form-check-label small" for="caseFollowSelectedCase">Follow selected case</label></div></div>
-                            <div class="col-12 col-lg-4" data-qol-setting="auto-sell-wear-filters"><label class="form-label small" for="caseAutoSellWears">Allowed wears</label><select class="form-select form-select-sm" id="caseAutoSellWears" multiple size="3"><option>Factory New</option><option>Minimal Wear</option><option>Field-Tested</option><option>Well-Worn</option><option>Battle-Scarred</option></select></div>
-                        </div>
-                        <div class="d-flex justify-content-end mt-3"><button class="btn btn-warning btn-sm" id="saveCaseAutomationSafeguards" type="button">Save safeguards</button></div>
-                    </div>
                 </div>
                 <div class="col-12">
                     <div class="case-auto-sell-panel mt-3" id="caseTradeUpUpgradePanel">
@@ -390,9 +378,6 @@
                         <button class="btn" type="button" data-open-quantity="4" aria-pressed="false">4</button>
                         <button class="btn" type="button" data-open-quantity="5" aria-pressed="false">5</button>
                     </div>
-                    <button class="btn btn-outline-warning btn-sm case-instant-repeat d-none" id="caseInstantRepeat" type="button">
-                        <i class="fa-solid fa-rotate-right me-1" aria-hidden="true"></i><span>Open again</span>
-                    </button>
                 </div>
                 <p class="small-muted mt-2 mb-0 d-none" id="caseFreeAllowanceStatus" aria-live="polite"></p>
             </div>
@@ -942,6 +927,12 @@
                     <div class="case-profile-pane-heading"><div><p class="eyebrow mb-1">Squad</p><h3 class="h5 mb-1">Friends</h3><p class="small-muted mb-0">Find players by username, display name or account ID.</p></div><span class="case-profile-metric" id="caseSocialFriendCount">0 friends</span></div>
                     <label class="case-social-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input class="form-control" id="caseSocialSearch" type="search" maxlength="100" autocomplete="off" placeholder="Username, name or #account ID" aria-label="Find a player" /></label>
                     <div class="case-social-results d-none" id="caseSocialResults" aria-live="polite"></div>
+                    <section class="case-social-requests d-none" id="caseSocialRequestsSection">
+                        <button class="case-social-requests-toggle" id="caseSocialRequestsToggle" type="button" aria-expanded="false" aria-controls="caseSocialRequests">
+                            <span><i class="fa-solid fa-user-clock" aria-hidden="true"></i> Friend requests</span><span class="case-social-request-count" id="caseSocialRequestCount">0</span><i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                        </button>
+                        <div class="case-social-requests-body" id="caseSocialRequests" aria-live="polite"></div>
+                    </section>
                     <div class="case-social-list" id="caseSocialFriends" aria-live="polite"><div class="case-profile-collections-empty"><i class="fa-solid fa-user-group" aria-hidden="true"></i><span>Loading friends…</span></div></div>
                 </section>
                 <section class="tab-pane fade" id="caseProfileAchievementsPane" role="tabpanel" aria-labelledby="caseProfileAchievementsTab" tabindex="0">
@@ -1080,6 +1071,52 @@
     </div>
     <span class="visually-hidden" id="caseDestinationStatus" aria-live="polite"></span>
 </div>
+
+@if (User.Identity?.IsAuthenticated != true && Model.GuestAccessEnabled)
+{
+    <div class="modal fade case-guest-onboarding" id="caseGuestOnboarding" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="caseGuestOnboardingTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+            <div class="modal-body p-4 p-md-5">
+                <span class="case-guest-onboarding-icon"><i class="fa-solid fa-dice" aria-hidden="true"></i></span>
+                <p class="eyebrow mb-1">Welcome to Case Tycoon</p><h2 class="h3 mb-2" id="caseGuestOnboardingTitle">Choose your player name</h2>
+                <p class="small-muted mb-4">Your progress is saved securely to this browser. You can play the full simulator and join case battles without a Personal Tools login.</p>
+                <form id="caseGuestOnboardingForm" novalidate>
+                    <label class="form-label" for="caseGuestUsername">Username</label>
+                    <div class="input-group"><span class="input-group-text">@@</span><input class="form-control" id="caseGuestUsername" name="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9][A-Za-z0-9_-]*[A-Za-z0-9]" autocomplete="username" required autofocus /></div>
+                    <div class="form-text">3–24 letters, numbers, underscores or hyphens.</div>
+                    <div class="alert alert-danger d-none mt-3 mb-0" id="caseGuestOnboardingError" role="alert"></div>
+                    <button class="btn btn-warning w-100 mt-4" id="caseGuestOnboardingSubmit" type="submit"><i class="fa-solid fa-play me-2" aria-hidden="true"></i>Start playing</button>
+                </form>
+                <p class="case-guest-cookie-note mb-0 mt-3"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Keep this browser’s site data to retain access to your guest account.</p>
+                <a class="case-guest-sign-in" asp-page="/Login" asp-route-ReturnUrl="/CaseOpening">Already have an account? Sign in</a>
+            </div>
+        </div></div>
+    </div>
+}
+else if (User.Identity?.IsAuthenticated != true)
+{
+    <div class="modal fade case-guest-onboarding" id="caseGuestUnavailable" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="caseGuestUnavailableTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-body p-4 p-md-5 text-center">
+            <span class="case-guest-onboarding-icon mx-auto"><i class="fa-solid fa-lock" aria-hidden="true"></i></span>
+            <p class="eyebrow mb-1">Guest access paused</p><h2 class="h3 mb-2" id="caseGuestUnavailableTitle">Case Tycoon guest access is currently unavailable</h2>
+            <p class="small-muted mb-4">New and existing guest sessions are paused. No guest progress has been deleted.</p>
+            <a class="btn btn-warning w-100" asp-page="/Login" asp-route-ReturnUrl="/CaseOpening"><i class="fa-solid fa-right-to-bracket me-2" aria-hidden="true"></i>Sign in</a>
+        </div></div></div>
+    </div>
+}
+
+@if (isCaseTycoonGuest)
+{
+    <div class="modal fade case-fan-notice" id="caseFanNotice" tabindex="-1" data-bs-backdrop="static" aria-labelledby="caseFanNoticeTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-body p-4 p-md-5 text-center">
+            <span class="case-guest-onboarding-icon mx-auto"><i class="fa-solid fa-heart" aria-hidden="true"></i></span>
+            <p class="eyebrow mb-1">Made by a fan</p><h2 class="h3 mb-3" id="caseFanNoticeTitle">A quick note before you play</h2>
+            <p class="small-muted">Case Tycoon is an independent, non-commercial fan project made with love for Counter-Strike. It is not affiliated with, endorsed by, or sponsored by Valve Corporation.</p>
+            <p class="small-muted">Counter-Strike, associated names, item imagery and other game assets remain the property of Valve Corporation and their respective rights holders. Nothing here is sold, wagered or redeemable for money or real game items.</p>
+            <button class="btn btn-warning w-100 mt-2" id="dismissCaseFanNotice" type="button"><i class="fa-solid fa-check me-2" aria-hidden="true"></i>Understood — let’s play</button>
+        </div></div></div>
+    </div>
+}
 
 <div class="modal fade" id="caseSellConfirmModal" tabindex="-1" aria-labelledby="caseSellConfirmTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered"><div class="modal-content case-sell-confirm-modal"><div class="modal-header"><div><p class="eyebrow mb-1">Inventory sale</p><h2 class="modal-title h5" id="caseSellConfirmTitle">Confirm bulk sale</h2></div><button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><p class="mb-0" id="caseSellConfirmCopy"></p><small class="case-sell-confirm-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Protected items are never included.</small></div><div class="modal-footer"><button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Keep items</button><button class="btn btn-warning" id="confirmCaseInventorySale" type="button"><i class="fa-solid fa-star me-1"></i>Sell items</button></div></div></div>
@@ -1305,13 +1342,25 @@
         </div>
     </div>
 
+    <div class="modal fade" id="caseGuestAccessDangerModal" tabindex="-1" aria-labelledby="caseGuestAccessDangerTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+            <div class="modal-header"><div><p class="eyebrow mb-1">Protected setting</p><h2 class="modal-title fs-5" id="caseGuestAccessDangerTitle">Change guest access?</h2></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body">
+                <div class="alert alert-danger"><i class="fa-solid fa-triangle-exclamation me-2" aria-hidden="true"></i><span id="caseGuestAccessDangerCopy">This changes access for every browser-based guest account.</span></div>
+                <label class="form-label fw-semibold" for="caseGuestAccessDangerInput">Type <code>DANGER</code> to confirm</label>
+                <input class="form-control" id="caseGuestAccessDangerInput" type="text" autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="modal-footer"><button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger" id="caseGuestAccessDangerSave" type="button" disabled>Save guest access setting</button></div>
+        </div></div>
+    </div>
+
     <div class="modal fade" id="caseTweakModal" tabindex="-1" aria-labelledby="caseTweakTitle" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-            <div class="modal-content">
+        <div class="modal-dialog modal-fullscreen case-admin-modal-dialog">
+            <div class="modal-content case-admin-modal">
                 <div class="modal-header">
                     <div>
-                        <p class="eyebrow mb-1">Testing tools</p>
-                        <h2 class="modal-title fs-5" id="caseTweakTitle">Case-opening control centre</h2>
+                        <p class="eyebrow mb-1">Administration</p>
+                        <h2 class="modal-title fs-5" id="caseTweakTitle">Case Tycoon control centre</h2>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -1319,6 +1368,13 @@
                     <div class="alert alert-warning border-0 d-flex align-items-start gap-2 mb-3">
                         <i class="fa-solid fa-triangle-exclamation mt-1" aria-hidden="true"></i>
                         <span><strong>Your progress</strong> only changes your own account. <strong>Game settings</strong> and <strong>Case costs</strong> are shared and change the game for everyone.</span>
+                    </div>
+                    <div class="case-admin-search" role="search">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        <label class="visually-hidden" for="caseAdminSearch">Search administration settings</label>
+                        <input class="form-control" id="caseAdminSearch" type="search" placeholder="Search settings, cases, prices, battles…" autocomplete="off" />
+                        <span id="caseAdminSearchCount" aria-live="polite">All controls</span>
+                        <button class="btn btn-sm btn-outline-secondary" id="caseAdminSearchClear" type="button" hidden aria-label="Clear admin search"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
                     </div>
 
                     <div class="case-admin-workspace">
@@ -1439,6 +1495,7 @@
                             </div>
 
                             <div class="tab-pane fade" id="caseTweakSettingsPane" role="tabpanel" aria-labelledby="caseTweakSettingsTab">
+                                <div class="case-admin-pane-toolbar"><div><strong>Game-wide configuration</strong><span>Changes apply to every player.</span></div><button class="btn btn-warning btn-sm" type="submit" form="caseTweakSettingsForm"><i class="fa-solid fa-floppy-disk me-1" aria-hidden="true"></i>Save all settings</button></div>
                                 <form id="caseTweakSettingsForm">
                                     <div class="row g-3">
                                         <div class="col-12"><div class="case-tweak-setting-heading"><i class="fa-solid fa-coins" aria-hidden="true"></i><div><strong>Active economy</strong><span>Global mode for every account. Dormant balances are preserved when switching.</span></div></div></div>
@@ -1465,6 +1522,12 @@
                                         </div>
                                         <div class="col-12 col-md-4 d-flex align-items-end">
                                             <label class="case-shop-switch-row w-100 mb-0" data-switch-target="caseTweakSkillTreeEnabled"><span><strong>RPG upgrade tree</strong><small>Preview the new node-based upgrades page</small></span><span class="form-check form-switch m-0"><input class="form-check-input pt-switch" id="caseTweakSkillTreeEnabled" type="checkbox" role="switch" /></span></label>
+                                        </div>
+                                        <div class="col-12">
+                                            <div class="case-tweak-danger-zone mt-1 d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                                <div><h3 class="h6 mb-1">Browser guest access</h3><p class="small-muted mb-0" id="caseGuestAccessStatus">Loading current state…</p></div>
+                                                <button class="btn btn-outline-danger" id="caseGuestAccessChangeButton" type="button" disabled><i class="fa-solid fa-user-lock me-1" aria-hidden="true"></i><span>Change guest access</span></button>
+                                            </div>
                                         </div>
                                         <div class="col-6 col-md-4"><label class="form-label small fw-semibold" for="caseTweakFreeAllowanceQuantity">Allowance quantity</label><input class="form-control" id="caseTweakFreeAllowanceQuantity" type="number" min="1" step="1" /></div>
                                         <div class="col-6 col-md-4"><label class="form-label small fw-semibold" for="caseTweakFreeAllowanceHours">Replenish after (hours)</label><input class="form-control" id="caseTweakFreeAllowanceHours" type="number" min="1" step="1" /></div>
@@ -1682,10 +1745,10 @@
                                 <section class="case-admin-section case-battle-admin-section" aria-labelledby="caseTweakBattlesTitle">
                                     <div class="case-admin-section-title"><i class="fa-solid fa-trophy" aria-hidden="true"></i><div><strong id="caseTweakBattlesTitle">Case Battles control</strong><span>Publish the feature, manage the instant Battle Bot and recover interrupted rooms.</span></div></div>
                                     <div class="row g-3 align-items-stretch">
-                                        <div class="col-12 col-lg-4"><div class="case-admin-toggle-card h-100"><div><strong>Case Battles</strong><span>Allow players to create battles and Buy all required cases.</span></div><div class="form-check form-switch pt-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="caseTweakBattlesEnabled" disabled><label class="visually-hidden" for="caseTweakBattlesEnabled">Case Battles visible to players</label></div></div></div>
-                                        <div class="col-12 col-lg-4"><div class="case-admin-toggle-card h-100"><div><strong>1v1v1 battles</strong><span>Allow three-player free-for-all rooms with winner-takes-all settlement.</span></div><div class="form-check form-switch pt-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="caseTweakBattleFfa3Enabled" disabled><label class="visually-hidden" for="caseTweakBattleFfa3Enabled">1v1v1 battles visible to players</label></div></div></div>
-                                        <div class="col-12 col-lg-4"><div class="case-admin-toggle-card h-100"><div><strong>1v1v1v1 battles</strong><span>Allow four-player free-for-all rooms with winner-takes-all settlement.</span></div><div class="form-check form-switch pt-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="caseTweakBattleFfa4Enabled" disabled><label class="visually-hidden" for="caseTweakBattleFfa4Enabled">1v1v1v1 battles visible to players</label></div></div></div>
-                                        <div class="col-12 col-lg-4"><div class="case-admin-toggle-card h-100"><div><strong>Battle Bot</strong><span>Offer an auto-ready system opponent once Case Battles are live.</span></div><div class="form-check form-switch pt-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="caseTweakBattleBotEnabled" disabled><label class="visually-hidden" for="caseTweakBattleBotEnabled">Battle Bot visible to players</label></div></div></div>
+                                        <div class="col-12 col-md-6"><label class="case-admin-feature-toggle h-100" for="caseTweakBattlesEnabled"><input type="checkbox" role="switch" id="caseTweakBattlesEnabled" disabled><span class="case-admin-feature-copy"><strong>Case Battles</strong><small>Allow players to create battles and buy all required cases.</small></span><span class="case-admin-feature-state" aria-hidden="true"></span></label></div>
+                                        <div class="col-12 col-md-6"><label class="case-admin-feature-toggle h-100" for="caseTweakBattleFfa3Enabled"><input type="checkbox" role="switch" id="caseTweakBattleFfa3Enabled" disabled><span class="case-admin-feature-copy"><strong>1v1v1 battles</strong><small>Allow three-player free-for-all rooms with winner-takes-all settlement.</small></span><span class="case-admin-feature-state" aria-hidden="true"></span></label></div>
+                                        <div class="col-12 col-md-6"><label class="case-admin-feature-toggle h-100" for="caseTweakBattleFfa4Enabled"><input type="checkbox" role="switch" id="caseTweakBattleFfa4Enabled" disabled><span class="case-admin-feature-copy"><strong>1v1v1v1 battles</strong><small>Allow four-player free-for-all rooms with winner-takes-all settlement.</small></span><span class="case-admin-feature-state" aria-hidden="true"></span></label></div>
+                                        <div class="col-12 col-md-6"><label class="case-admin-feature-toggle h-100" for="caseTweakBattleBotEnabled"><input type="checkbox" role="switch" id="caseTweakBattleBotEnabled" disabled><span class="case-admin-feature-copy"><strong>Battle Bot</strong><small>Offer an auto-ready system opponent once Case Battles are live.</small></span><span class="case-admin-feature-state" aria-hidden="true"></span></label></div>
                                     </div>
                                 </section>
                                 <section class="case-admin-section case-battle-admin-section" aria-labelledby="caseTweakBattleBotStatsTitle">
@@ -1748,5 +1811,9 @@
 
 @section Scripts {
     <script src="~/js/pages/page-case-battle-transition.js" asp-append-version="true"></script>
-    <script src="~/js/pages/page-case-opening.js" asp-append-version="true"></script>
+    @if (User.Identity?.IsAuthenticated == true) {
+        @if (isCaseTycoonGuest) { <script src="~/js/pages/page-case-fan-notice.js" asp-append-version="true"></script> }
+        <script src="~/js/pages/page-case-opening.js" asp-append-version="true"></script>
+    }
+    else { <script src="~/js/pages/page-case-guest-onboarding.js" asp-append-version="true"></script> }
 }

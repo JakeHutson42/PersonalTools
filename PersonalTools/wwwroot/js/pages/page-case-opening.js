@@ -82,7 +82,6 @@
     let inventoryCapacity = null;
     let inventoryUpgrades = null;
     let inventoryUpgradesLoaded = false;
-    let openingPreferencesLoaded = false;
     let automationPreferences = null;
     let battleReactionShop = [];
     let autoBuySummary = null;
@@ -132,6 +131,74 @@
     const canUseMarketValuation = $('#caseTweakButton').length > 0;
     let priceSnapshotSummary = null;
     let gameSettingsCache = null;
+    let guestAccessEnabled = null;
+
+    function enhanceAdminWorkspace() {
+        const $settingsRow = $('#caseTweakSettingsForm > .row');
+        if ($settingsRow.length && !$settingsRow.data('grouped')) {
+            $settingsRow.data('grouped', true);
+            const children = $settingsRow.children().toArray();
+            const tones = ['gold', 'blue', 'violet', 'rose', 'cyan', 'green'];
+            let $group = null;
+            children.forEach(child => {
+                const $child = $(child);
+                if ($child.find('.case-tweak-setting-heading').length) {
+                    $group = $('<section>', { class: `case-admin-setting-group case-admin-tone-${tones[$settingsRow.children('.case-admin-setting-group').length % tones.length]}` })
+                        .append($('<div>', { class: 'row g-3' })).appendTo($settingsRow);
+                }
+                if (!$group) $group = $('<section>', { class: 'case-admin-setting-group case-admin-tone-gold' }).append($('<div>', { class: 'row g-3' })).appendTo($settingsRow);
+                $group.children('.row').append($child);
+            });
+        }
+
+        const labelTable = table => {
+            const labels = $(table).find('thead th').map((_, cell) => $(cell).text().trim()).get();
+            $(table).find('tbody tr').each(function () {
+                $(this).children('td').each(function (index) { if (!this.hasAttribute('data-label')) this.setAttribute('data-label', labels[index] || 'Value'); });
+            });
+        };
+        $('#caseTweakTabContent table').each((_, table) => labelTable(table));
+        const tabContent = document.getElementById('caseTweakTabContent');
+        if (tabContent && !tabContent.dataset.tableObserver) {
+            tabContent.dataset.tableObserver = 'true';
+            new MutationObserver(records => records.forEach(record => {
+                const table = record.target.closest?.('table');
+                if (table) labelTable(table);
+                record.addedNodes.forEach(node => { if (node.nodeType === 1) $(node).find('table').addBack('table').each((_, addedTable) => labelTable(addedTable)); });
+            })).observe(tabContent, { childList: true, subtree: true });
+        }
+    }
+    enhanceAdminWorkspace();
+
+    let adminSearchTimer = 0;
+    function searchAdminWorkspace() {
+        const query = String($('#caseAdminSearch').val() || '').trim().toLocaleLowerCase();
+        const $panes = $('#caseTweakTabContent > .tab-pane');
+        let matchingSections = 0;
+        let firstMatchingTab = null;
+        $panes.each(function () {
+            const $pane = $(this);
+            let $sections = $pane.find('.case-admin-setting-group');
+            if (!$sections.length) $sections = $pane.children('.case-admin-section,.case-tweak-target-account,.case-tweak-danger-zone,.case-market-lab');
+            if (!$sections.length) $sections = $pane.children();
+            let paneMatches = false;
+            $sections.each(function () {
+                const matches = !query || String($(this).text()).toLocaleLowerCase().includes(query);
+                $(this).toggleClass('case-admin-search-hidden', !matches);
+                if (matches) { paneMatches = true; matchingSections += query ? 1 : 0; }
+            });
+            const tabSelector = $pane.attr('aria-labelledby');
+            const $tab = tabSelector ? $(`#${tabSelector}`) : $();
+            $tab.closest('.nav-item').toggleClass('case-admin-search-hidden', Boolean(query) && !paneMatches);
+            if (query && paneMatches && !firstMatchingTab) firstMatchingTab = $tab.get(0);
+        });
+        $('#caseAdminSearchClear').prop('hidden', !query);
+        $('#caseAdminSearchCount').text(query ? `${matchingSections} matching section${matchingSections === 1 ? '' : 's'}` : 'All controls');
+        if (query && firstMatchingTab && !firstMatchingTab.classList.contains('active')) bootstrap.Tab.getOrCreateInstance(firstMatchingTab).show();
+    }
+    $('#caseAdminSearch').on('input', function () { window.clearTimeout(adminSearchTimer); adminSearchTimer = window.setTimeout(searchAdminWorkspace, 100); });
+    $('#caseAdminSearchClear').on('click', function () { $('#caseAdminSearch').val('').trigger('input').trigger('focus'); });
+    $('#caseTweakModal').on('hidden.bs.modal', function () { $('#caseAdminSearch').val(''); searchAdminWorkspace(); });
     let skillTreeSummary = null;
     let skillTreeLoaded = false;
     let skillTreeResizeObserver = null;
@@ -747,6 +814,13 @@
     }
 
     function openDailyDropModal() {
+        if (window.caseFanNoticeActive) {
+            if (!openDailyDropModal.deferred) {
+                openDailyDropModal.deferred = true;
+                window.addEventListener('casetycoon:fan-notice-dismissed', () => { openDailyDropModal.deferred = false; openDailyDropModal(); }, { once: true });
+            }
+            return;
+        }
         const rewards = caseProgress?.dailyDrop?.rewards || [];
         if (rewards.length < 4) return;
         const daily = caseProgress?.dailyDrop || {};
@@ -2924,7 +2998,15 @@
 
         $('#caseSkillTreeBalance').text(skillTreeCurrency(skillTreeSummary.balance, skillTreeSummary.currencyCode));
         const $tree = $('#caseSkillTree').empty().append($('<svg>', { class: 'case-skill-tree-lines', 'aria-hidden': 'true', focusable: 'false' }));
-        (skillTreeSummary.nodes || []).forEach(function (node) {
+        const occupiedCells = new Set();
+        const renderedRows = new Map();
+        (skillTreeSummary.nodes || []).forEach(function (node, mobileIndex) {
+            const column = Math.max(-2, Math.min(2, Number(node.column || 0))) + 3;
+            const parentFloor = Math.max(0, ...(node.prerequisiteNodeIds || []).map(id => renderedRows.get(String(id)) || 0));
+            let row = Math.max(1, Number(node.row || 1), parentFloor + 1);
+            while (occupiedCells.has(`${row}:${column}`)) row++;
+            occupiedCells.add(`${row}:${column}`);
+            renderedRows.set(String(node.nodeId), row);
             const state = node.isPurchased
                 ? node.isTerminal ? 'is-complete' : 'is-purchased'
                 : node.isAvailable ? node.canAfford ? 'is-available' : 'is-unaffordable'
@@ -2954,7 +3036,7 @@
                 'data-skill-node-id': node.nodeId,
                 'data-upgrade-key': disabled ? '' : node.upgradeKey,
                 'data-purchase-kind': disabled ? '' : node.purchaseKind,
-                style: `--skill-row:${Math.max(1, Number(node.row || 1))};--skill-column:${Math.max(-2, Math.min(2, Number(node.column || 0))) + 3}`
+                style: `--skill-row:${row};--skill-column:${column};--skill-mobile-row:${mobileIndex + 1}`
             }).append(
                 $('<span>', { class: 'case-skill-tree-node-ring', 'aria-hidden': 'true' }).append($('<i>', { class: `fa-solid ${node.icon || 'fa-sparkles'}` })),
                 $('<span>', { class: 'case-skill-tree-node-name', text: node.name }),
@@ -3122,14 +3204,10 @@
         renderTradeUpUpgradePanel();
         if (tradeUpRecipesLoaded) renderTradeUpRecipesPanel();
         positionSkillTreeAutomationControls();
-        applyOpeningQualityOfLife();
-        if (!automationPreferences && (inventoryUpgrades?.availableUpgrades || []).some(item => item.isUnlocked && ['inventory-qol','automation-qol','trade-up-qol'].includes(String(item.category||'').toLowerCase()))) loadAutomationPreferences();
         const socialUnlocked = (inventoryUpgrades?.availableUpgrades || []).some(item => item.isUnlocked && String(item.category||'').toLowerCase() === 'social-qol');
         if (!automationPreferences && socialUnlocked) loadAutomationPreferences();
         else if (socialUnlocked) renderSocialPreferences(automationPreferences);
-        const historyUnlocked = openingUpgradeUnlocked('contract-history-filters');
-        $('#caseTradeUpHistoryPanel').toggleClass('d-none', !historyUnlocked);
-        if (historyUnlocked && activeDestination === 'tradeups' && !tradeUpHistoryLoaded) loadTradeUpHistory();
+        $('#caseTradeUpHistoryPanel').addClass('d-none');
     }
 
     function openingUpgradeUnlocked(upgradeKey) {
@@ -3138,34 +3216,9 @@
             && upgrade.isUnlocked === true);
     }
 
-    function applyOpeningQualityOfLife() {
-        $page.toggleClass('has-streamlined-results', openingUpgradeUnlocked('streamlined-results'));
-        if (!openingUpgradeUnlocked('instant-repeat')) $('#caseInstantRepeat').addClass('d-none');
-        if (openingUpgradeUnlocked('remember-opening-quantity') && !openingPreferencesLoaded) {
-            openingPreferencesLoaded = true;
-            request('/api/case-opening/opening-preferences', 'GET', { showLoader: false })
-                .done(function (preferences) {
-                    preferredOpenQuantity = Math.max(1, Math.min(5, Number(preferences?.lastOpenQuantity || 1)));
-                    renderOpenQuantity();
-                })
-                .fail(function () { openingPreferencesLoaded = false; });
-        }
-    }
-
     function renderAutomationPreferences(preferences) {
         automationPreferences = preferences || {};
-        const keys = ['auto-buy-reserve','auto-sell-price-floor','auto-sell-duplicate-copies','trade-up-reserve','pause-automation-storage-low','auto-buy-case-groups','auto-sell-wear-filters'];
-        let visible = false;
-        keys.forEach(key => { const unlocked=openingUpgradeUnlocked(key); $(`[data-qol-setting="${key}"]`).toggleClass('d-none',!unlocked); visible ||= unlocked; });
-        $('#caseAutomationSafeguardsPanel').toggleClass('d-none',!visible);
-        $('#caseHistoryWearWrap').toggleClass('d-none',!(skillTreeSummary?.enabled === true && openingUpgradeUnlocked('inventory-filters')));
-        $('#caseAutoBuyReserve').val(Number(automationPreferences.autoBuyReserveMinor||0));
-        $('#caseAutoSellProtectAbove').val(Number(automationPreferences.autoSellProtectAboveMinor||0));
-        $('#caseAutoSellDuplicates').val(Number(automationPreferences.autoSellDuplicateCopies||0));
-        $('#caseTradeUpReserve').val(Number(automationPreferences.tradeUpReserve||0));
-        $('#caseAutomationFreeSlots').val(Number(automationPreferences.pauseAutomationFreeSlots||0));
-        $('#caseFollowSelectedCase').prop('checked',automationPreferences.followSelectedCase===true);
-        const wears=String(automationPreferences.autoSellWears||'').split(','); $('#caseAutoSellWears option').prop('selected',function(){return wears.includes(this.value);});
+        $('#caseHistoryWearWrap').addClass('d-none');
         positionSkillTreeAutomationControls();
         renderSocialPreferences(automationPreferences);
     }
@@ -3195,7 +3248,6 @@
 
     function loadAutomationPreferences() { return request('/api/case-opening/opening-preferences','GET',{showLoader:false}).done(renderAutomationPreferences); }
 
-    function automationPreferencePayload() { return { lastOpenQuantity:Number(automationPreferences?.lastOpenQuantity||1),autoBuyReserveMinor:Math.max(0,Number($('#caseAutoBuyReserve').val())||0),followSelectedCase:$('#caseFollowSelectedCase').prop('checked'),selectedCaseKey:caseKey,autoSellProtectAboveMinor:Math.max(0,Number($('#caseAutoSellProtectAbove').val())||0),autoSellDuplicateCopies:Math.max(0,Number($('#caseAutoSellDuplicates').val())||0),autoSellWears:($('#caseAutoSellWears').val()||[]).join(','),tradeUpReserve:Math.max(0,Number($('#caseTradeUpReserve').val())||0),pauseAutomationFreeSlots:Math.max(0,Number($('#caseAutomationFreeSlots').val())||0) }; }
 
     function loadAutoBuyRules(options) {
         autoBuyRulesLoaded = true;
@@ -4080,9 +4132,6 @@
         queuePostOpeningAutomation();
         statisticsRequestedAfterOpening = results[0]?.caseKey || caseKey;
         $('#chooseCaseButton, #caseSelectorGrid input').prop('disabled', false);
-        $('#caseInstantRepeat')
-            .toggleClass('d-none', !openingUpgradeUnlocked('instant-repeat') || Number(caseData?.ownedQuantity || 0) < selectedOpenQuantity)
-            .find('span').text(selectedOpenQuantity === 1 ? 'Open again' : `Repeat ×${selectedOpenQuantity}`);
 
         window.clearTimeout(stockStateTimer);
         const completedCaseKey = caseKey;
@@ -4134,7 +4183,7 @@
 
     function showMultiResults(results, rareRevealComplete) {
         const rareResults = results.filter(result => isGoldItem(result.winner));
-        if (!openingUpgradeUnlocked('batch-reveal') && !rareRevealComplete && rareResults.length) {
+        if (!rareRevealComplete && rareResults.length) {
             showRareSpecialSequence(rareResults, () => showMultiResults(results, true));
             return;
         }
@@ -4446,7 +4495,6 @@
             if (!inventoryCapacityLoaded) requests.push(loadInventoryCapacity(quietOptions));
             if (!inventoryUpgradesLoaded) requests.push(loadInventoryUpgrades(quietOptions));
             if (!tradeUpRecipesLoaded) requests.push(loadTradeUpRecipes(quietOptions));
-            if (inventoryUpgradesLoaded && openingUpgradeUnlocked('contract-history-filters') && !tradeUpHistoryLoaded) requests.push(loadTradeUpHistory());
         }
 
         if (requests.length === 0) return $.Deferred().resolve().promise();
@@ -4729,7 +4777,6 @@
 
     $open.on('click', function () {
         if (opening || !caseData) return;
-        $('#caseInstantRepeat').addClass('d-none');
         cancelPostOpeningRefresh();
         // Restore the normal opening stage before asking the server for the next roll.
         $('.case-machine').removeClass('is-multi-results');
@@ -4797,18 +4844,6 @@
         preferredOpenQuantity = quantity;
         selectedOpenQuantity = quantity;
         renderOpenQuantity();
-        if (openingUpgradeUnlocked('remember-opening-quantity')) {
-            request('/api/case-opening/opening-preferences/quantity', 'PUT', {
-                data: JSON.stringify({ quantity }),
-                contentType: 'application/json; charset=utf-8',
-                showLoader: false
-            }).fail(response => showError(response, 'The opening quantity preference could not be saved.'));
-        }
-    });
-
-    $('#caseInstantRepeat').on('click', function () {
-        if (opening || !openingUpgradeUnlocked('instant-repeat')) return;
-        $open.trigger('click');
     });
 
     $('#caseSkipAnimation').on('change', function () {
@@ -6168,6 +6203,15 @@
 
     function loadSpecialVariants() { return request('/api/case-opening/settings/special-variants', 'GET', { showLoader: false }).done(renderSpecialVariants); }
 
+    function renderGuestAccessSetting(settings) {
+        guestAccessEnabled = settings?.enabled === true;
+        $('#caseGuestAccessStatus').text(guestAccessEnabled
+            ? 'Enabled — anonymous visitors and existing guest accounts can play.'
+            : 'Disabled — guest sessions are paused; registered accounts are unaffected.');
+        $('#caseGuestAccessChangeButton').prop('disabled', false).toggleClass('btn-outline-danger', guestAccessEnabled).toggleClass('btn-outline-success', !guestAccessEnabled)
+            .find('span').text(guestAccessEnabled ? 'Disable guest access' : 'Enable guest access');
+    }
+
     $('#caseTweakModal').on('show.bs.modal', function () {
         loadCaseTweakUsers().done(loadCaseTweakProfile);
         request('/api/case-opening/settings', 'GET', { showLoader: false })
@@ -6176,6 +6220,9 @@
         request('/api/case-opening/skill-tree', 'GET', { showLoader: false })
             .done(function (summary) { $('#caseTweakSkillTreeEnabled').prop('checked', summary?.enabled === true); })
             .fail(response => window.personalToolsToast?.error(response.responseJSON?.message || 'Upgrade-tree setting could not be loaded.'));
+        request('/api/case-opening/settings/guest-access', 'GET', { showLoader: false })
+            .done(renderGuestAccessSetting)
+            .fail(response => window.personalToolsToast?.error(response.responseJSON?.message || 'Guest-access setting could not be loaded.'));
         request('/api/case-opening/settings/xp-by-rarity', 'GET', { showLoader: false })
             .done(function (items) {
                 const names = { 'mil-spec': 'Mil-Spec', restricted: 'Restricted', classified: 'Classified', covert: 'Covert', 'rare-special': 'Rare Special (Gold)', 'high-grade': 'High Grade', remarkable: 'Remarkable', exotic: 'Exotic' };
@@ -6683,8 +6730,20 @@
     }
     function socialPlayerRow(player, removable) {
         const avatar = socialAvatarImages[player.avatar] ? `<img src="${socialAvatarImages[player.avatar]}" alt="">` : socialEscape(player.avatar || '😎');
-        const action = removable ? `<button class="btn btn-sm btn-outline-danger" type="button" data-social-remove="${socialEscape(player.userId)}" aria-label="Remove ${socialEscape(player.displayName)}"><i class="fa-solid fa-user-minus" aria-hidden="true"></i></button>` : `<button class="btn btn-sm ${player.isFriend ? 'btn-outline-danger' : 'btn-warning'}" type="button" data-social-${player.isFriend ? 'remove' : 'add'}="${socialEscape(player.userId)}">${player.isFriend ? 'Remove' : 'Add'}</button>`;
+        const action = removable
+            ? `<button class="btn btn-sm btn-outline-danger" type="button" data-social-remove="${socialEscape(player.userId)}" aria-label="Remove ${socialEscape(player.displayName)}"><i class="fa-solid fa-user-minus" aria-hidden="true"></i></button>`
+            : player.isFriend
+                ? `<button class="btn btn-sm btn-outline-danger" type="button" data-social-remove="${socialEscape(player.userId)}">Remove</button>`
+                : player.hasOutgoingFriendRequest
+                    ? '<button class="btn btn-sm btn-outline-secondary" type="button" disabled><i class="fa-solid fa-clock me-1" aria-hidden="true"></i>Pending</button>'
+                    : player.hasIncomingFriendRequest
+                        ? '<button class="btn btn-sm btn-outline-secondary" type="button" disabled>Review below</button>'
+                        : `<button class="btn btn-sm btn-warning" type="button" data-social-add="${socialEscape(player.userId)}">Add</button>`;
         return `<article class="case-social-player" data-social-user-id="${socialEscape(player.userId)}" data-last-seen-utc="${socialEscape(player.lastSeenUtc || '')}"><span class="case-social-player-avatar" aria-hidden="true">${avatar}<i class="case-social-presence-dot ${player.isOnline ? 'is-online' : ''}"></i></span><span class="case-social-player-copy"><strong>${socialEscape(player.displayName)}</strong><small class="case-social-handle">@${socialEscape(player.username)} · #${Number(player.accountId)}</small><small class="case-social-presence-copy">${socialLastSeen(player)}</small></span>${action}</article>`;
+    }
+    function socialRequestRow(player) {
+        const avatar = socialAvatarImages[player.avatar] ? `<img src="${socialAvatarImages[player.avatar]}" alt="">` : socialEscape(player.avatar || '😎');
+        return `<article class="case-social-player case-social-request" data-social-user-id="${socialEscape(player.userId)}"><span class="case-social-player-avatar" aria-hidden="true">${avatar}</span><span class="case-social-player-copy"><strong>${socialEscape(player.displayName)}</strong><small>@${socialEscape(player.username)} · #${Number(player.accountId)}</small><small>Wants to add you as a friend</small></span><span class="case-social-request-actions"><button class="btn btn-sm btn-warning" type="button" data-social-accept="${socialEscape(player.userId)}"><i class="fa-solid fa-check" aria-hidden="true"></i><span>Accept</span></button><button class="btn btn-sm btn-outline-danger" type="button" data-social-deny="${socialEscape(player.userId)}"><i class="fa-solid fa-xmark" aria-hidden="true"></i><span>Deny</span></button></span></article>`;
     }
     function refreshSocialTimes() {
         $('.case-social-player').each(function () {
@@ -6724,6 +6783,11 @@
         $identity.find('h3').text(profile.displayName); $identity.find('div > span').text(`@${profile.username} · Account #${profile.accountId}`);
         $('#caseSocialFriendCount').text(`${summary.friends.length} friend${summary.friends.length === 1 ? '' : 's'}`);
         $('#caseSocialFriends').html(summary.friends.length ? summary.friends.map(item => socialPlayerRow(item, true)).join('') : '<div class="case-profile-collections-empty"><i class="fa-solid fa-user-plus" aria-hidden="true"></i><span>Find a player above to build your friends list.</span></div>');
+        const pending = summary.pendingFriendRequests || [], $requestSection = $('#caseSocialRequestsSection'), expanded = $('#caseSocialRequestsToggle').attr('aria-expanded') === 'true';
+        $('#caseSocialRequestCount').text(pending.length);
+        $('#caseSocialRequests').html(pending.map(socialRequestRow).join('')).toggle(expanded && pending.length > 0);
+        $requestSection.toggleClass('d-none', pending.length === 0);
+        if (!pending.length) $('#caseSocialRequestsToggle').attr('aria-expanded','false');
         applySocialCount($('.case-user-scope button.active').data('user-scope') || 'global');
         connectSocialPresence(); refreshSocialTimes();
     }
@@ -6739,9 +6803,59 @@
         if (query.length < 2) { $results.addClass('d-none').empty(); return; }
         socialSearchTimer = setTimeout(() => request(`/api/social/search?query=${encodeURIComponent(query)}`,'GET',{showLoader:false,showToast:false}).done(items => $results.toggleClass('d-none',!items.length).html(items.length ? items.map(item => socialPlayerRow(item,false)).join('') : '')).fail(() => $results.removeClass('d-none').html('<p class="small-muted mb-0">Search is unavailable.</p>')),300);
     });
+
+    $('#caseGuestAccessChangeButton').on('click', function () {
+        if (guestAccessEnabled === null) return;
+        $('#caseGuestAccessDangerInput').val('');
+        $('#caseGuestAccessDangerSave').prop('disabled', true).toggleClass('btn-danger', guestAccessEnabled).toggleClass('btn-success', !guestAccessEnabled);
+        $('#caseGuestAccessDangerCopy').text(guestAccessEnabled
+            ? 'Disabling pauses all browser-based guest sessions and blocks new guest accounts. It does not delete progress.'
+            : 'Enabling allows anonymous visitors to create browser-based accounts and restores existing guest sessions.');
+        const tweakModal = bootstrap.Modal.getInstance(document.getElementById('caseTweakModal'));
+        const dangerModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('caseGuestAccessDangerModal'));
+        document.getElementById('caseTweakModal').addEventListener('hidden.bs.modal', () => dangerModal.show(), { once: true });
+        tweakModal?.hide();
+    });
+
+    $('#caseGuestAccessDangerInput').on('input', function () {
+        $('#caseGuestAccessDangerSave').prop('disabled', String($(this).val()).trim() !== 'DANGER');
+    });
+
+    $('#caseGuestAccessDangerSave').on('click', function () {
+        if (String($('#caseGuestAccessDangerInput').val()).trim() !== 'DANGER' || guestAccessEnabled === null) return;
+        const $button = $(this).prop('disabled', true);
+        request('/api/case-opening/settings/guest-access', 'PUT', {
+            data: JSON.stringify({ enabled: !guestAccessEnabled, confirmation: 'DANGER' }),
+            contentType: 'application/json; charset=utf-8',
+            showLoader: false
+        }).done(function (settings) {
+            renderGuestAccessSetting(settings);
+            bootstrap.Modal.getInstance(document.getElementById('caseGuestAccessDangerModal'))?.hide();
+            window.personalToolsToast?.success(settings?.enabled ? 'Guest access enabled.' : 'Guest access paused. Guest progress was preserved.');
+        }).fail(response => {
+            $button.prop('disabled', false);
+            window.personalToolsToast?.error(response.responseJSON?.message || 'Guest access could not be changed.');
+        });
+    });
+
+    $('#caseGuestAccessDangerModal').on('hidden.bs.modal', function () {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('caseTweakModal')).show();
+    });
     $('#caseProfileSocialPane').on('click','[data-social-add],[data-social-remove]',function(){
         const $button=$(this).prop('disabled',true), add=$button.is('[data-social-add]'), id=$button.data(add?'social-add':'social-remove');
         request(`/api/social/friends/${encodeURIComponent(id)}`,add?'POST':'DELETE',{showLoader:false}).done(() => { $('#caseSocialSearch').val(''); $('#caseSocialResults').addClass('d-none').empty(); loadSocial(true); }).fail(response => { window.personalToolsToast?.error(response.responseJSON?.message || 'Friend list could not be updated.'); $button.prop('disabled',false); });
+    });
+    $('#caseSocialRequestsToggle').on('click', function () {
+        const $button=$(this), opening=$button.attr('aria-expanded')!=='true';
+        $button.attr('aria-expanded',String(opening));
+        $('#caseSocialRequests').stop(true,true)[opening?'slideDown':'slideUp'](220);
+    });
+    $('#caseProfileSocialPane').on('click','[data-social-accept],[data-social-deny]',function(){
+        const $button=$(this).prop('disabled',true), accept=$button.is('[data-social-accept]'), id=$button.data(accept?'social-accept':'social-deny'), $row=$button.closest('.case-social-request');
+        $row.find('button').prop('disabled',true);
+        request(`/api/social/friend-requests/${encodeURIComponent(id)}${accept?'/accept':''}`,accept?'POST':'DELETE',{showLoader:false})
+            .done(()=>$row.slideUp(220,()=>loadSocial(true)))
+            .fail(response=>{window.personalToolsToast?.error(response.responseJSON?.message||'Friend request could not be updated.');$row.find('button').prop('disabled',false);});
     });
     loadSocial(false);
     setInterval(refreshSocialTimes,30000);
@@ -6813,14 +6927,6 @@
 
     $('#caseTradeUpHistorySearch').on('input', renderTradeUpHistory);
     $('#caseTradeUpHistoryInput, #caseTradeUpHistoryOutput').on('change', renderTradeUpHistory);
-
-    $('#saveCaseAutomationSafeguards').on('click', function () {
-        const $button=$(this).prop('disabled',true);
-        request('/api/case-opening/automation-preferences','PUT',{data:JSON.stringify(automationPreferencePayload()),contentType:'application/json; charset=utf-8',showLoader:false})
-            .done(function(result){renderAutomationPreferences(result);window.personalToolsToast?.success('Automation safeguards saved.');})
-            .fail(response=>showError(response,'Automation safeguards could not be saved.'))
-            .always(()=>$button.prop('disabled',false));
-    });
 
     $('#saveCaseSocialLoadout').on('click', function () {
         const $button = $(this).prop('disabled', true);

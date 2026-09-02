@@ -10,6 +10,8 @@ public sealed class SocialProfileObj
     public bool IsOnline { get; set; }
     public DateTime? LastSeenUtc { get; set; }
     public bool IsFriend { get; set; }
+    public bool HasOutgoingFriendRequest { get; set; }
+    public bool HasIncomingFriendRequest { get; set; }
 }
 
 public sealed record SocialPresenceObj(Guid UserId, bool IsOnline, DateTime LastSeenUtc);
@@ -18,6 +20,7 @@ public sealed class SocialSummaryObj
 {
     public SocialProfileObj Profile { get; set; } = new();
     public List<SocialProfileObj> Friends { get; set; } = [];
+    public List<SocialProfileObj> PendingFriendRequests { get; set; } = [];
     public int GlobalOnlineCount { get; set; }
     public int FriendsOnlineCount { get; set; }
 }

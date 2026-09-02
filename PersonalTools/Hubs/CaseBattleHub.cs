@@ -5,7 +5,7 @@ using PersonalTools.Classes.CaseOpening;
 using System.Security.Claims;
 namespace PersonalTools.Hubs;
 
-[Authorize]
+[Authorize(Policy = PersonalTools.Security.AppAuthorizationPolicies.CaseTycoonAccess)]
 public sealed class CaseBattleHub(ICaseBattleFuncs battles, ICaseOpeningFuncs caseOpening) : Hub
 {
     public const string EventChanged = "BattleChanged";

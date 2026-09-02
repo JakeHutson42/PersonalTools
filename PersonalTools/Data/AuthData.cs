@@ -14,6 +14,7 @@ public interface IAuthData
     Task RecordSuccessfulLogin(Guid userId);
     Task ResetLoginLockout(Guid userId);
     Task<Guid> CreateManagedUser(Guid userId, string email, string displayName, string passwordHash, AppRole role, bool isActive);
+    Task<Guid> CreateGuestUser(Guid userId, string email, string displayName, string passwordHash, string username);
     Task UpdateManagedUser(Guid userId, string email, string displayName, string? passwordHash, AppRole role, bool isActive);
     Task CreateSession(Guid sessionId, Guid userId, string tokenHash, DateTime expiresUtc, string? userAgent);
     Task<bool> IsSessionValid(Guid sessionId, Guid userId);
@@ -62,6 +63,11 @@ public sealed class AuthData : IAuthData
         await _database.ExecuteSP("sp_auth_user_create", Parameters(("p_user_id", userId.ToString("D")), ("p_email", email), ("p_display_name", displayName), ("p_password_hash", passwordHash), ("p_role", (byte)role), ("p_is_active", isActive)));
         return userId;
     }
+    public async Task<Guid> CreateGuestUser(Guid userId, string email, string displayName, string passwordHash, string username)
+    {
+        await _database.ExecuteSP("sp_auth_guest_create", Parameters(("p_user_id", userId.ToString("D")), ("p_email", email), ("p_display_name", displayName), ("p_password_hash", passwordHash), ("p_username", username)));
+        return userId;
+    }
     public Task UpdateManagedUser(Guid userId, string email, string displayName, string? passwordHash, AppRole role, bool isActive) =>
         _database.ExecuteSP("sp_auth_user_update", Parameters(("p_user_id", userId.ToString("D")), ("p_email", email), ("p_display_name", displayName), ("p_password_hash", passwordHash ?? string.Empty), ("p_role", (byte)role), ("p_is_active", isActive)));
     public async Task CreateSession(Guid sessionId, Guid userId, string tokenHash, DateTime expiresUtc, string? userAgent) => await _database.ExecuteSP("sp_auth_session_create", Parameters(("p_session_id", sessionId.ToString("D")), ("p_user_id", userId.ToString("D")), ("p_token_hash", tokenHash), ("p_expires_utc", expiresUtc), ("p_user_agent", userAgent ?? string.Empty)));
@@ -85,6 +91,7 @@ public sealed class AuthData : IAuthData
         SteamId = reader.IsDBNull(reader.GetOrdinal("SteamId")) ? null : reader.GetString("SteamId"),
         Role = (AppRole)reader.GetByte("Role"),
         FailedLoginAttempts = reader.GetInt32("FailedLoginAttempts"),
+        IsGuest = reader.GetBoolean("IsGuest"),
         LockoutUntilUtc = UtcDateTimeOrNull(reader, "LockoutUntilUtc"),
         LastFailedLoginUtc = UtcDateTimeOrNull(reader, "LastFailedLoginUtc"),
     };

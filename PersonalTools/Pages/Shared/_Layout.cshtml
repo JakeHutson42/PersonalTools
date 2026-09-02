@@ -4,7 +4,9 @@
 @using PersonalTools.Security
 @inject IAppSettingsFuncs AppSettings
 @{
-    bool showNavigation = User.Identity?.IsAuthenticated == true;
+    bool isAuthenticated = User.Identity?.IsAuthenticated == true;
+    bool isCaseTycoonGuest = isAuthenticated && User.HasClaim(AppAuthorizationPolicies.AccountTypeClaim, AppAuthorizationPolicies.GuestAccount);
+    bool showNavigation = isAuthenticated && !isCaseTycoonGuest;
     bool canManageSettings = User.IsUserAllowedHere(AppRole.Admin);
     string currentPath = Context.Request.Path.Value ?? "/";
     bool isCaseTycoonPage = currentPath.StartsWith("/CaseOpening", StringComparison.OrdinalIgnoreCase);
@@ -55,6 +57,7 @@
         <link rel="apple-touch-icon" sizes="180x180" href="~/icons/apple-touch-icon.png" />
         <link rel="manifest" href="~/manifest.webmanifest" />
     }
+    <script src="~/js/cookie-consent.js" asp-append-version="true"></script>
     <script src="~/js/appearance-storage.js" asp-append-version="true"></script>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" />
@@ -63,13 +66,14 @@
     <link rel="stylesheet" href="~/lib/viewerjs/viewer.min.css" />
     <link rel="stylesheet" href="~/lib/video.js/video-js.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/cookie-consent.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/pwa.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/sortable.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/mediaextractor.css" />
     @await RenderSectionAsync("Head", required: false)
     <link rel="stylesheet" href="~/css/themes.css" asp-append-version="true" />
 </head>
-<body class="@(showNavigation ? "has-app-sidebar" : "auth-shell")@(isCaseTycoonPage ? " case-tycoon-page" : string.Empty)" data-display-name="@(User.Identity?.Name ?? string.Empty)" data-user-id="@(showNavigation ? User.FindFirstValue(ClaimTypes.NameIdentifier) : string.Empty)">
+<body class="@(showNavigation ? "has-app-sidebar" : isCaseTycoonGuest ? "case-guest-shell" : "auth-shell")@(isCaseTycoonPage ? " case-tycoon-page" : string.Empty)" data-display-name="@(User.Identity?.Name ?? string.Empty)" data-user-id="@(isAuthenticated ? User.FindFirstValue(ClaimTypes.NameIdentifier) : string.Empty)">
     @if (showNavigation)
     {
         <div class="d-none" aria-hidden="true">@Html.AntiForgeryToken()</div>
@@ -261,10 +265,25 @@
         <footer class="app-footer">
             <div class="container px-3 px-lg-4 d-flex flex-wrap justify-content-between gap-2">
                 <span>&copy; @DateTime.Now.Year Personal Tools</span>
-                <span class="d-flex gap-3"><a asp-page="/Privacy">Privacy</a><a asp-page="/Cookies">Cookies</a></span>
+                <span class="d-flex gap-3"><a asp-page="/Privacy">Privacy</a><a asp-page="/Cookies">Cookies</a><button class="app-footer-cookie-button" type="button" data-open-cookie-preferences>Cookie choices</button></span>
             </div>
         </footer>
     </div>
+
+    <aside class="cookie-consent" id="cookieConsent" role="dialog" aria-modal="false" aria-labelledby="cookieConsentTitle" aria-describedby="cookieConsentDescription" hidden>
+        <div class="cookie-consent-copy">
+            <span class="cookie-consent-icon" aria-hidden="true"><i class="fa-solid fa-cookie-bite"></i></span>
+            <div>
+                <h2 id="cookieConsentTitle">Your privacy choices</h2>
+                <p id="cookieConsentDescription">Necessary storage keeps accounts and security working. With your permission, optional browser storage remembers appearance and interface preferences. We do not use advertising or analytics trackers. <a asp-page="/Cookies">Cookie details</a></p>
+            </div>
+        </div>
+        <div class="cookie-consent-actions">
+            <button class="btn btn-warning" type="button" data-cookie-choice="all">Accept all</button>
+            <button class="btn btn-outline-light" type="button" data-cookie-choice="necessary">Necessary only</button>
+            <button class="btn btn-outline-light" type="button" data-cookie-choice="denied">Deny optional</button>
+        </div>
+    </aside>
 
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>

@@ -9,7 +9,7 @@ using PersonalTools.Security;
 
 namespace PersonalTools.Controllers;
 
-[Authorize]
+[Authorize(Policy = AppAuthorizationPolicies.CaseTycoonAccess)]
 [ApiController]
 [Route("api/case-opening")]
 public sealed class CaseOpeningController : ControllerBase
@@ -358,21 +358,30 @@ public sealed class CaseOpeningController : ControllerBase
         return Execute(() => _caseOpening.GetCaseSettings(cancellationToken), "load case settings", "all");
     }
 
-    [HttpGet("trade-up-history")]
-    public Task<ActionResult<List<CaseOpeningTradeUpHistoryObj>>> GetTradeUpHistory(CancellationToken cancellationToken)
-        => Execute(() => _caseOpening.GetCaseOpeningTradeUpHistory(UserId, cancellationToken), "load Trade Up history", "all");
+    [HttpGet("settings/guest-access")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseTycoonGuestAccessSettingsObj>> GetGuestAccessSettings(CancellationToken cancellationToken)
+        => Execute(() => _caseOpening.GetGuestAccessSettings(cancellationToken), "load guest access setting", "all");
+
+    [HttpPut("settings/guest-access")]
+    [Authorize(Policy = AppAuthorizationPolicies.AdminOnly)]
+    public Task<ActionResult<CaseTycoonGuestAccessSettingsObj>> SetGuestAccessSettings(
+        [FromBody] CaseTycoonGuestAccessChangeRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || !string.Equals(request.Confirmation.Trim(), "DANGER", StringComparison.Ordinal))
+            return Task.FromResult<ActionResult<CaseTycoonGuestAccessSettingsObj>>(BadRequest(new ApiResponse(false, "Type DANGER exactly to change guest access.")));
+        return Execute(async () =>
+        {
+            CaseTycoonGuestAccessSettingsObj result = await _caseOpening.SetGuestAccessEnabled(request.Enabled, cancellationToken);
+            _logger.LogWarning("Administrator {UserId} set Case Tycoon guest access to {Enabled}.", UserId, result.Enabled);
+            return result;
+        }, "update guest access setting", "all");
+    }
 
     [HttpGet("opening-preferences")]
     public Task<ActionResult<CaseOpeningUserPreferencesObj>> GetOpeningPreferences(CancellationToken cancellationToken)
         => Execute(() => _caseOpening.GetCaseOpeningUserPreferences(UserId, cancellationToken), "load opening preferences", "all");
-
-    [HttpPut("opening-preferences/quantity")]
-    public Task<ActionResult<CaseOpeningUserPreferencesObj>> SetOpeningQuantity([FromBody] CaseOpeningQuantityPreferenceRequest request, CancellationToken cancellationToken)
-        => Execute(() => _caseOpening.SetCaseOpeningLastQuantity(UserId, request?.Quantity ?? 1, cancellationToken), "save opening quantity", "quantity");
-
-    [HttpPut("automation-preferences")]
-    public Task<ActionResult<CaseOpeningUserPreferencesObj>> SetAutomationPreferences([FromBody] CaseOpeningUserPreferencesObj request, CancellationToken cancellationToken)
-        => Execute(() => _caseOpening.SetCaseOpeningAutomationPreferences(UserId, request ?? new(), cancellationToken), "save automation safeguards", "all");
 
     [HttpPut("social-preferences")]
     public Task<ActionResult<CaseOpeningUserPreferencesObj>> SetSocialPreferences([FromBody] CaseOpeningUserPreferencesObj request, CancellationToken cancellationToken)

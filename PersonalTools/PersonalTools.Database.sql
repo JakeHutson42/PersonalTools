@@ -1128,6 +1128,18 @@ CREATE PROCEDURE sp_case_opening_reset_dev(IN p_user_id CHAR(36))
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
     START TRANSACTION;
+    DELETE FROM CaseOpeningBattles
+    WHERE CreatorUserId=p_user_id
+       OR EXISTS(SELECT 1 FROM CaseOpeningBattleParticipants participant WHERE participant.BattleId=CaseOpeningBattles.BattleId AND participant.UserId=p_user_id)
+       OR EXISTS(SELECT 1 FROM CaseOpeningBattleInvitations invitation WHERE invitation.BattleId=CaseOpeningBattles.BattleId AND invitation.InvitedUserId=p_user_id);
+    DELETE FROM CaseOpeningBattleOverflow WHERE UserId=p_user_id;
+    DELETE FROM CaseBattleReactionUnlocks WHERE UserId=p_user_id;
+    DELETE FROM CaseOpeningDailyDropUpgrades WHERE UserId=p_user_id;
+    DELETE FROM CaseOpeningDailyDrops WHERE UserId=p_user_id;
+    DELETE FROM CaseOpeningDevDropRarities WHERE UserId=p_user_id;
+    DELETE FROM CaseOpeningUserUpgradeUnlocks WHERE UserId=p_user_id;
+    DELETE FROM CaseOpeningUserPreferences WHERE UserId=p_user_id;
+    DELETE FROM AppSettings WHERE UserId=p_user_id AND SettingKey='CaseProfileEmoji';
     DELETE FROM CaseOpeningUserAchievements WHERE UserId=p_user_id;
     DELETE FROM CaseOpeningCompletedRarities WHERE UserId=p_user_id;
     DELETE FROM CaseOpeningCompletedCollections WHERE UserId=p_user_id;

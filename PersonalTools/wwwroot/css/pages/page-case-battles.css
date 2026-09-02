@@ -410,7 +410,7 @@ body:has(.case-battle-game-page) .app-content-shell { margin-left:0 !important; 
     .case-battle-lobby-track-panel .case-battle-case-track { display:grid; grid-template-columns:repeat(auto-fit,minmax(5.25rem,1fr)); align-items:stretch; }
     .case-battle-lobby-track-panel .case-battle-case-track span { grid-template-columns:1.2rem minmax(0,1fr); width:100%; padding:.35rem; }
     .case-battle-lobby-track-panel .case-battle-case-track img { width:100%; max-width:4.5rem; justify-self:center; }
-    .case-battle-lobby-command-bar { position:fixed; z-index:1035; right:.75rem; bottom:max(.5rem,env(safe-area-inset-bottom)); left:.75rem; margin:0; padding:.5rem; border-color:color-mix(in srgb,var(--case-gold,#e4ae39) 32%,var(--pt-line)); background:color-mix(in srgb,var(--pt-surface) 94%,transparent); box-shadow:0 -.65rem 1.8rem rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.08); backdrop-filter:blur(.75rem); }
+    .case-battle-lobby-command-bar { position:fixed; z-index:1055; right:.75rem; bottom:max(.5rem,env(safe-area-inset-bottom)); left:.75rem; margin:0; padding:.5rem; border-color:color-mix(in srgb,var(--case-gold,#e4ae39) 32%,var(--pt-line)); background:color-mix(in srgb,var(--pt-surface) 94%,transparent); box-shadow:0 -.65rem 1.8rem rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.08); backdrop-filter:blur(.75rem); }
     .case-battle-lobby-command-bar .case-battle-actions { grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
     .case-battle-lobby-action { min-height:3.35rem; padding:.35rem .45rem; }
 }

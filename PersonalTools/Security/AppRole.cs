@@ -15,6 +15,11 @@ public enum AppRole : byte
 public static class AppAuthorizationPolicies
 {
     public const string AdminOnly = "PersonalTools.AdminOnly";
+    public const string RegisteredUser = "PersonalTools.RegisteredUser";
+    public const string CaseTycoonAccess = "PersonalTools.CaseTycoonAccess";
+    public const string AccountTypeClaim = "account_type";
+    public const string RegisteredAccount = "registered";
+    public const string GuestAccount = "case_tycoon_guest";
 }
 
 public static class ClaimsPrincipalRoleExtensions

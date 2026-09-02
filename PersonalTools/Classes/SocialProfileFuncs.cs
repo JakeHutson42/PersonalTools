@@ -8,6 +8,8 @@ public interface ISocialProfileFuncs
     Task<SocialSummaryObj> GetSummary(Guid userId, CancellationToken cancellationToken = default);
     Task<List<SocialProfileObj>> Search(Guid userId, string query, CancellationToken cancellationToken = default);
     Task AddFriend(Guid userId, Guid friendUserId, CancellationToken cancellationToken = default);
+    Task AcceptFriendRequest(Guid userId, Guid requesterUserId, CancellationToken cancellationToken = default);
+    Task DenyFriendRequest(Guid userId, Guid requesterUserId, CancellationToken cancellationToken = default);
     Task RemoveFriend(Guid userId, Guid friendUserId, CancellationToken cancellationToken = default);
 }
 
@@ -17,8 +19,9 @@ public sealed class SocialProfileFuncs(ISocialProfileData data) : ISocialProfile
     {
         SocialProfileObj profile = await data.GetProfile(userId, userId, cancellationToken) ?? throw new InvalidOperationException("Your profile could not be found.");
         List<SocialProfileObj> friends = await data.GetFriends(userId, cancellationToken);
+        List<SocialProfileObj> pendingRequests = await data.GetPendingFriendRequests(userId, cancellationToken);
         (int global, int friendCount) = await data.GetOnlineCounts(userId, cancellationToken);
-        return new() { Profile = profile, Friends = friends, GlobalOnlineCount = global, FriendsOnlineCount = friendCount };
+        return new() { Profile = profile, Friends = friends, PendingFriendRequests = pendingRequests, GlobalOnlineCount = global, FriendsOnlineCount = friendCount };
     }
     public Task<List<SocialProfileObj>> Search(Guid userId, string query, CancellationToken cancellationToken = default)
     {
@@ -32,4 +35,6 @@ public sealed class SocialProfileFuncs(ISocialProfileData data) : ISocialProfile
         return data.AddFriend(userId, friendUserId, cancellationToken);
     }
     public Task RemoveFriend(Guid userId, Guid friendUserId, CancellationToken cancellationToken = default) => data.RemoveFriend(userId, friendUserId, cancellationToken);
+    public Task AcceptFriendRequest(Guid userId, Guid requesterUserId, CancellationToken cancellationToken = default) => data.AcceptFriendRequest(userId, requesterUserId, cancellationToken);
+    public Task DenyFriendRequest(Guid userId, Guid requesterUserId, CancellationToken cancellationToken = default) => data.DenyFriendRequest(userId, requesterUserId, cancellationToken);
 }

@@ -6,7 +6,7 @@ using PersonalTools.Entities;
 
 namespace PersonalTools.Controllers;
 
-[Authorize]
+[Authorize(Policy = PersonalTools.Security.AppAuthorizationPolicies.CaseTycoonAccess)]
 [ApiController]
 [Route("api/live-winners")]
 public sealed class LiveWinnersController : ControllerBase

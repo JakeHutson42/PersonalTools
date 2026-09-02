@@ -46,8 +46,6 @@ public interface ICaseOpeningFuncs
     Task<CaseOpeningInventoryUpgradeObj> GetCaseOpeningInventoryUpgrades(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningInventoryUpgradeObj> UnlockCaseOpeningInventoryUpgrade(Guid userId, string upgradeKey, CancellationToken cancellationToken = default);
     Task<CaseOpeningUserPreferencesObj> GetCaseOpeningUserPreferences(Guid userId, CancellationToken cancellationToken = default);
-    Task<CaseOpeningUserPreferencesObj> SetCaseOpeningLastQuantity(Guid userId, int quantity, CancellationToken cancellationToken = default);
-    Task<CaseOpeningUserPreferencesObj> SetCaseOpeningAutomationPreferences(Guid userId, CaseOpeningUserPreferencesObj preferences, CancellationToken cancellationToken = default);
     Task<CaseOpeningUserPreferencesObj> SetCaseOpeningSocialPreferences(Guid userId, CaseOpeningUserPreferencesObj preferences, CancellationToken cancellationToken = default);
     Task<CaseBattleReactionShopObj> GetCaseBattleReactionShop(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseBattleReactionShopObj> PurchaseCaseBattleReaction(Guid userId, string reactionKey, CancellationToken cancellationToken = default);
@@ -59,7 +57,6 @@ public interface ICaseOpeningFuncs
     Task<List<CaseOpeningCasePurchaseResultObj>> EvaluateCaseOpeningAutoBuyRules(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningTradeUpResultObj> CreateCaseOpeningTradeUp(Guid userId, List<Guid> openingIds, CancellationToken cancellationToken = default);
     Task<CaseOpeningTradeUpRecipeSummaryObj> GetCaseOpeningTradeUpRecipes(Guid userId, CancellationToken cancellationToken = default);
-    Task<List<CaseOpeningTradeUpHistoryObj>> GetCaseOpeningTradeUpHistory(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningTradeUpRecipeSummaryObj> CreateCaseOpeningTradeUpRecipe(Guid userId, CaseOpeningTradeUpRecipeRequestObj request, CancellationToken cancellationToken = default);
     Task<CaseOpeningTradeUpRecipeSummaryObj> SetCaseOpeningTradeUpRecipeActive(Guid userId, Guid recipeId, bool isActive, CancellationToken cancellationToken = default);
     Task<CaseOpeningTradeUpRecipeSummaryObj> DeleteCaseOpeningTradeUpRecipe(Guid userId, Guid recipeId, CancellationToken cancellationToken = default);
@@ -75,6 +72,8 @@ public interface ICaseOpeningFuncs
     Task<CaseOpeningGameSettingsObj> SetGameSettings(CaseOpeningGameSettingsObj settings, CancellationToken cancellationToken = default);
     Task<CaseOpeningSkillTreeObj> GetCaseOpeningSkillTree(Guid userId, CancellationToken cancellationToken = default);
     Task<CaseOpeningSkillTreeSettingsObj> SetCaseOpeningSkillTreeEnabled(bool enabled, CancellationToken cancellationToken = default);
+    Task<CaseTycoonGuestAccessSettingsObj> GetGuestAccessSettings(CancellationToken cancellationToken = default);
+    Task<CaseTycoonGuestAccessSettingsObj> SetGuestAccessEnabled(bool enabled, CancellationToken cancellationToken = default);
     Task<List<CaseOpeningCaseSettingsObj>> GetCaseSettings(CancellationToken cancellationToken = default);
     Task<List<CaseOpeningTierEconomySettingsObj>> GetTierEconomySettings(CancellationToken cancellationToken = default);
     Task<List<CaseOpeningTierEconomySettingsObj>> SetTierEconomySettings(int tier, CaseOpeningTierEconomySettingsObj settings, CancellationToken cancellationToken = default);
@@ -1011,42 +1010,6 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
                 throw new InvalidOperationException($"Unlock {finalBulkSale.Name} before advancing into automation.");
             }
         }
-        if (skillTreeEnabled && definition.Category.Equals("opening-qol", StringComparison.OrdinalIgnoreCase))
-        {
-            string? prerequisiteKey = definition.UpgradeKey.ToLowerInvariant() switch
-            {
-                "remember-opening-quantity" => "instant-repeat",
-                "streamlined-results" => "remember-opening-quantity",
-                "batch-reveal" => "streamlined-results",
-                _ => null
-            };
-            if (progress.OpenSpeedLevel < Math.Max(1, settings.MaximumOpenSpeedLevel))
-                throw new InvalidOperationException("Master the Opening Speed branch before advancing opening workflow upgrades.");
-            if (prerequisiteKey is not null && !definitions.Any(item => item.UpgradeKey.Equals(prerequisiteKey, StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
-                throw new InvalidOperationException("Unlock the previous opening workflow upgrade first.");
-        }
-        if (skillTreeEnabled && definition.Category is "inventory-qol" or "automation-qol" or "trade-up-qol")
-        {
-            string? predecessor = definition.UpgradeKey.ToLowerInvariant() switch
-            {
-                "auto-buy-case-groups" => "auto-buy-reserve",
-                "auto-sell-duplicate-copies" => "auto-sell-price-floor",
-                "auto-sell-wear-filters" => "auto-sell-duplicate-copies",
-                _ => null
-            };
-            if (predecessor is not null && !definitions.Any(item => item.UpgradeKey.Equals(predecessor, StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
-                throw new InvalidOperationException("Unlock the previous automation safeguard first.");
-            if (definition.UpgradeKey.Equals("auto-buy-reserve", StringComparison.OrdinalIgnoreCase) && !definitions.Any(item => item.UpgradeKey.Equals("auto-buy-unlock", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked)) throw new InvalidOperationException("Unlock Auto-Buy before adding its reserve.");
-            if (definition.UpgradeKey.Equals("auto-sell-price-floor", StringComparison.OrdinalIgnoreCase) && !definitions.Where(item => item.Category.Equals("auto-sell", StringComparison.OrdinalIgnoreCase)).All(item => item.IsUnlocked)) throw new InvalidOperationException("Master Auto-Sell rarity control before adding price protection.");
-            if (definition.UpgradeKey.Equals("pause-automation-storage-low", StringComparison.OrdinalIgnoreCase) && !new[] { "auto-buy-case-groups", "auto-sell-wear-filters", "trade-up-reserve" }.All(key => definitions.Any(item => item.UpgradeKey.Equals(key, StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))) throw new InvalidOperationException("Complete the Auto-Buy, Auto-Sell and Trade-Up safeguard branches first.");
-            if (definition.UpgradeKey.Equals("inventory-filters", StringComparison.OrdinalIgnoreCase) && !definitions.Any(item => item.UpgradeKey.Equals("inventory-slots-1000", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
-                throw new InvalidOperationException("Unlock the Armory Extension before adding advanced inventory filters.");
-            if (definition.Category.Equals("trade-up-qol", StringComparison.OrdinalIgnoreCase) && !definitions.Any(item => item.UpgradeKey.Equals("trade-up-unlock", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
-                throw new InvalidOperationException("Unlock Auto Trade-Up before adding its reserve.");
-        }
-        if (skillTreeEnabled && definition.Category.Equals("trade-up-advanced", StringComparison.OrdinalIgnoreCase)
-            && !definitions.Any(item => item.UpgradeKey.Equals("trade-up-reserve", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
-            throw new InvalidOperationException("Unlock Trade-Up Reserve before advancing contract records.");
         if (skillTreeEnabled && definition.Category.Equals("social-qol",StringComparison.OrdinalIgnoreCase))
         {
             string? previous=definition.UpgradeKey switch { "saved-reaction-layout"=>"reaction-wheel-slots","victory-emote-slot"=>"saved-reaction-layout","profile-showcase-slot"=>"victory-emote-slot","battle-history-filters"=>"profile-showcase-slot",_=>null };
@@ -1061,7 +1024,7 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         }
         if (skillTreeEnabled && definition.Category.Equals("tree-convergence",StringComparison.OrdinalIgnoreCase))
         {
-            string[] required=definition.UpgradeKey switch { "collector-convergence"=>["case-variety","battle-history-filters"],"automation-convergence"=>["batch-reveal","pause-automation-storage-low","contract-history-filters"],_=>["collector-convergence","automation-convergence"] };
+            string[] required=definition.UpgradeKey switch { "collector-convergence"=>["case-variety","battle-history-filters"],"automation-convergence"=>["auto-buy-slots-10","auto-sell-mil-spec","trade-up-unlock"],_=>["collector-convergence","automation-convergence"] };
             if(!required.All(key=>definitions.Any(item=>item.UpgradeKey.Equals(key,StringComparison.OrdinalIgnoreCase)&&item.IsUnlocked))) throw new InvalidOperationException("Complete every branch feeding this convergence node first.");
         }
         if (skillTreeEnabled && definition.Category.Equals("endgame-mastery",StringComparison.OrdinalIgnoreCase))
@@ -1078,44 +1041,6 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
 
     public Task<CaseOpeningUserPreferencesObj> GetCaseOpeningUserPreferences(Guid userId, CancellationToken cancellationToken = default)
         => _data.GetCaseOpeningUserPreferences(userId, cancellationToken);
-
-    public async Task<CaseOpeningUserPreferencesObj> SetCaseOpeningLastQuantity(Guid userId, int quantity, CancellationToken cancellationToken = default)
-    {
-        if (quantity is < 1 or > 5) throw new InvalidOperationException("Choose an opening quantity from 1 to 5.");
-        List<CaseOpeningUpgradeDefinitionObj> definitions = await _data.GetCaseOpeningUpgradeDefinitions(userId, cancellationToken);
-        if (!definitions.Any(item => item.UpgradeKey.Equals("remember-opening-quantity", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
-            throw new InvalidOperationException("Unlock Remember Opening Quantity before saving this preference.");
-        CaseOpeningProgressDbModel progress = await _data.GetCaseOpeningProgress(userId, cancellationToken);
-        if (quantity > 1 + progress.MultiOpenLevel)
-            throw new InvalidOperationException("That opening quantity has not been unlocked yet.");
-        return await _data.SetCaseOpeningLastQuantity(userId, quantity, cancellationToken);
-    }
-
-    public async Task<CaseOpeningUserPreferencesObj> SetCaseOpeningAutomationPreferences(Guid userId, CaseOpeningUserPreferencesObj preferences, CancellationToken cancellationToken = default)
-    {
-        preferences ??= new();
-        if (preferences.AutoBuyReserveMinor < 0 || preferences.AutoSellProtectAboveMinor < 0 || preferences.AutoSellDuplicateCopies is < 0 or > 100 || preferences.TradeUpReserve is < 0 or > 100 || preferences.PauseAutomationFreeSlots is < 0 or > 10000)
-            throw new InvalidOperationException("One or more automation safeguards are outside their allowed range.");
-        string[] allowedWears = ["Factory New","Minimal Wear","Field-Tested","Well-Worn","Battle-Scarred"];
-        List<string> wears = preferences.AutoSellWears.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (wears.Any(wear => !allowedWears.Contains(wear, StringComparer.OrdinalIgnoreCase))) throw new InvalidOperationException("Choose valid exterior wear filters.");
-        preferences.AutoSellWears = string.Join(',', wears);
-        if (!string.IsNullOrWhiteSpace(preferences.SelectedCaseKey))
-        {
-            ValidateCaseKey(preferences.SelectedCaseKey);
-            if (!(await _data.GetCaseOpeningUnlockedCases(userId, cancellationToken)).Contains(preferences.SelectedCaseKey, StringComparer.OrdinalIgnoreCase))
-                throw new InvalidOperationException("The selected Auto-Buy case is not unlocked.");
-        }
-        HashSet<string> unlocked = (await _data.GetCaseOpeningUpgradeDefinitions(userId, cancellationToken)).Where(item => item.IsUnlocked).Select(item => item.UpgradeKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (!unlocked.Contains("auto-buy-reserve")) preferences.AutoBuyReserveMinor = 0;
-        if (!unlocked.Contains("auto-buy-case-groups")) { preferences.FollowSelectedCase = false; preferences.SelectedCaseKey = null; }
-        if (!unlocked.Contains("auto-sell-price-floor")) preferences.AutoSellProtectAboveMinor = 0;
-        if (!unlocked.Contains("auto-sell-duplicate-copies")) preferences.AutoSellDuplicateCopies = 0;
-        if (!unlocked.Contains("auto-sell-wear-filters")) preferences.AutoSellWears = string.Empty;
-        if (!unlocked.Contains("trade-up-reserve")) preferences.TradeUpReserve = 0;
-        if (!unlocked.Contains("pause-automation-storage-low")) preferences.PauseAutomationFreeSlots = 0;
-        return await _data.SetCaseOpeningAutomationPreferences(userId, preferences, cancellationToken);
-    }
 
     public async Task<CaseOpeningUserPreferencesObj> SetCaseOpeningSocialPreferences(Guid userId, CaseOpeningUserPreferencesObj preferences, CancellationToken cancellationToken = default)
     {
@@ -2196,14 +2121,6 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         await _data.SetInventoryUpgradeSettings(upgradeKey, StarsFromPence(costGbpPence), costGbpPence, requiredLevel, cancellationToken);
     }
 
-    public async Task<List<CaseOpeningTradeUpHistoryObj>> GetCaseOpeningTradeUpHistory(Guid userId, CancellationToken cancellationToken = default)
-    {
-        List<CaseOpeningUpgradeDefinitionObj> definitions = await _data.GetCaseOpeningUpgradeDefinitions(userId, cancellationToken);
-        if (!definitions.Any(item => item.UpgradeKey.Equals("contract-history-filters", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked))
-            throw new InvalidOperationException("Unlock Contract History Filters before browsing completed contracts.");
-        return await _data.GetCaseOpeningTradeUpHistory(userId, cancellationToken);
-    }
-
     public async Task<CaseOpeningSkillTreeObj> GetCaseOpeningSkillTree(Guid userId, CancellationToken cancellationToken = default)
     {
         bool enabled = await _data.GetCaseOpeningSkillTreeEnabled(cancellationToken);
@@ -2426,53 +2343,6 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             });
         }
 
-        List<CaseOpeningUpgradeDefinitionObj> openingQualityOfLife = definitions
-            .Where(item => item.Category.Equals("opening-qol", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(item => item.SortOrder)
-            .ToList();
-        string openingWorkflowParent = $"open-speed-{maximumLevel}";
-        bool openingWorkflowParentPurchased = progress.OpenSpeedLevel >= maximumLevel;
-        int openingWorkflowRow = nodes.Count == 0 ? maximumLevel + 1 : nodes.Max(item => item.Row) + 2;
-        string[] openingWorkflowIcons = ["fa-rotate-right", "fa-sliders", "fa-compress", "fa-layer-group"];
-        for (int index = 0; index < openingQualityOfLife.Count; index++)
-        {
-            CaseOpeningUpgradeDefinitionObj definition = openingQualityOfLife[index];
-            long cost = gbp ? definition.CostGbpPence : definition.CostStars;
-            nodes.Add(new CaseOpeningSkillTreeNodeObj
-            {
-                NodeId = definition.UpgradeKey, UpgradeKey = definition.UpgradeKey, PurchaseKind = "inventory", Family = "Opening workflow",
-                Name = definition.Name, Description = definition.Description, Icon = openingWorkflowIcons[Math.Min(index, openingWorkflowIcons.Length - 1)],
-                PrerequisiteNodeIds = [openingWorkflowParent], Row = openingWorkflowRow + index, Column = 0,
-                Cost = cost, RequiredLevel = definition.RequiredLevel, IsPurchased = definition.IsUnlocked,
-                IsAvailable = !definition.IsUnlocked && openingWorkflowParentPurchased && playerLevel >= definition.RequiredLevel,
-                CanAfford = balance >= cost, IsTerminal = index == openingQualityOfLife.Count - 1
-            });
-            openingWorkflowParent = definition.UpgradeKey;
-            openingWorkflowParentPurchased = definition.IsUnlocked;
-        }
-
-        List<CaseOpeningUpgradeDefinitionObj> phaseFiveB = definitions.Where(item => item.Category is "inventory-qol" or "automation-qol" or "trade-up-qol").OrderBy(item => item.SortOrder).ToList();
-        int phaseFiveBRow = nodes.Max(item => item.Row) + 2;
-        int automationOffset = 0;
-        foreach (CaseOpeningUpgradeDefinitionObj definition in phaseFiveB)
-        {
-            bool tradeBranch = definition.Category.Equals("trade-up-qol", StringComparison.OrdinalIgnoreCase);
-            bool inventoryBranch = definition.Category.Equals("inventory-qol", StringComparison.OrdinalIgnoreCase);
-            string[] parents = definition.UpgradeKey switch { "inventory-filters"=>[storageParent],"auto-buy-reserve"=>[autoBuyDefinitions.LastOrDefault()?.UpgradeKey ?? automationRoot],"auto-buy-case-groups"=>["auto-buy-reserve"],"auto-sell-price-floor"=>[autoSellDefinitions.LastOrDefault()?.UpgradeKey ?? automationRoot],"auto-sell-duplicate-copies"=>["auto-sell-price-floor"],"auto-sell-wear-filters"=>["auto-sell-duplicate-copies"],"trade-up-reserve"=>["trade-up-unlock"],"pause-automation-storage-low"=>["auto-buy-case-groups","auto-sell-wear-filters","trade-up-reserve"],_=>[automationRoot] };
-            bool parentPurchased = parents.All(parent => nodes.Any(node => node.NodeId.Equals(parent,StringComparison.OrdinalIgnoreCase) && node.IsPurchased));
-            long cost = gbp ? definition.CostGbpPence : definition.CostStars;
-            int column = definition.UpgradeKey.StartsWith("auto-buy",StringComparison.OrdinalIgnoreCase)?-1:definition.UpgradeKey.StartsWith("auto-sell",StringComparison.OrdinalIgnoreCase)?1:tradeBranch?2:inventoryBranch?-2:0;
-            nodes.Add(new CaseOpeningSkillTreeNodeObj { NodeId=definition.UpgradeKey,UpgradeKey=definition.UpgradeKey,PurchaseKind="inventory",Family=tradeBranch?"Trade-Up safeguard":inventoryBranch?"Inventory tools":"Automation safeguards",Name=definition.Name,Description=definition.Description,Icon=tradeBranch?"fa-shield":inventoryBranch?"fa-filter":"fa-gears",PrerequisiteNodeIds=parents.ToList(),Row=phaseFiveBRow+automationOffset,Column=column,Cost=cost,RequiredLevel=definition.RequiredLevel,IsPurchased=definition.IsUnlocked,IsAvailable=!definition.IsUnlocked&&parentPurchased&&playerLevel>=definition.RequiredLevel,CanAfford=balance>=cost,IsTerminal=definition.UpgradeKey is "trade-up-reserve" or "inventory-filters" or "pause-automation-storage-low" });
-            automationOffset++;
-        }
-        CaseOpeningUpgradeDefinitionObj? contractHistory = definitions.FirstOrDefault(item => item.UpgradeKey.Equals("contract-history-filters", StringComparison.OrdinalIgnoreCase));
-        if (contractHistory is not null)
-        {
-            long cost = gbp ? contractHistory.CostGbpPence : contractHistory.CostStars;
-            bool parentPurchased = definitions.Any(item => item.UpgradeKey.Equals("trade-up-reserve", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked);
-            nodes.Add(new CaseOpeningSkillTreeNodeObj { NodeId=contractHistory.UpgradeKey,UpgradeKey=contractHistory.UpgradeKey,PurchaseKind="inventory",Family="Contract records",Name=contractHistory.Name,Description=contractHistory.Description,Icon="fa-clock-rotate-left",PrerequisiteNodeIds=["trade-up-reserve"],Row=nodes.Max(item=>item.Row)+2,Column=2,Cost=cost,RequiredLevel=contractHistory.RequiredLevel,IsPurchased=contractHistory.IsUnlocked,IsAvailable=!contractHistory.IsUnlocked&&parentPurchased&&playerLevel>=contractHistory.RequiredLevel,CanAfford=balance>=cost,IsTerminal=true });
-        }
-
         Dictionary<string, int> dailyLevels = (await _data.GetCaseOpeningDailyDropUpgrades(userId, cancellationToken))
             .ToDictionary(item => item.UpgradeKey, item => item.Level, StringComparer.OrdinalIgnoreCase);
         (string Key, string Name, string Family, string Icon)[] dailyBranches =
@@ -2548,7 +2418,7 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             string[] parents=definition.UpgradeKey switch
             {
                 "reward-preview"=>["daily-quality-3"],"flexible-daily-choice"=>["reward-preview"],"streak-insurance"=>["flexible-daily-choice"],"bonus-daily-choice"=>["streak-insurance"],"case-variety"=>["bonus-daily-choice"],
-                "collector-convergence"=>["case-variety","battle-history-filters"],"automation-convergence"=>["batch-reveal","pause-automation-storage-low","contract-history-filters"],"reward-convergence"=>["collector-convergence","automation-convergence"],
+                "collector-convergence"=>["case-variety","battle-history-filters"],"automation-convergence"=>["auto-buy-slots-10","auto-sell-mil-spec","trade-up-unlock"],"reward-convergence"=>["collector-convergence","automation-convergence"],
                 "tycoon-mastery-1"=>["reward-convergence"],"tycoon-mastery-2"=>["tycoon-mastery-1"],_=>["tycoon-mastery-2"]
             };
             bool parentsPurchased=parents.All(parent=>parent=="daily-quality-3"?dailyLevels.GetValueOrDefault("quality")>=3:definitions.Any(item=>item.UpgradeKey.Equals(parent,StringComparison.OrdinalIgnoreCase)&&item.IsUnlocked));
@@ -2572,6 +2442,15 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
     {
         await _data.SetCaseOpeningSkillTreeEnabled(enabled, cancellationToken);
         return new CaseOpeningSkillTreeSettingsObj { Enabled = await _data.GetCaseOpeningSkillTreeEnabled(cancellationToken) };
+    }
+
+    public async Task<CaseTycoonGuestAccessSettingsObj> GetGuestAccessSettings(CancellationToken cancellationToken = default)
+        => new() { Enabled = await _data.GetGuestAccessEnabled(cancellationToken) };
+
+    public async Task<CaseTycoonGuestAccessSettingsObj> SetGuestAccessEnabled(bool enabled, CancellationToken cancellationToken = default)
+    {
+        await _data.SetGuestAccessEnabled(enabled, cancellationToken);
+        return new CaseTycoonGuestAccessSettingsObj { Enabled = await _data.GetGuestAccessEnabled(cancellationToken) };
     }
 
     public Task<List<CaseOpeningTierEconomySettingsObj>> GetTierEconomySettings(CancellationToken cancellationToken = default)

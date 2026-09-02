@@ -12,6 +12,7 @@ public sealed class AppUser
     public string? SteamId { get; init; }
     public AppRole Role { get; init; } = AppRole.User;
     public int FailedLoginAttempts { get; init; }
+    public bool IsGuest { get; init; }
     public DateTime? LockoutUntilUtc { get; init; }
     public DateTime? LastFailedLoginUtc { get; init; }
 }
@@ -31,6 +32,7 @@ public sealed class AppUserDbModel
     public string? SteamId { get; set; }
     public AppRole Role { get; set; } = AppRole.User;
     public int FailedLoginAttempts { get; set; }
+    public bool IsGuest { get; set; }
     public DateTime? LockoutUntilUtc { get; set; }
     public DateTime? LastFailedLoginUtc { get; set; }
 }

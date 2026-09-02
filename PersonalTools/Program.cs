@@ -64,6 +64,7 @@ builder.Services.AddRateLimiter(options =>
 {
     const string loginPolicy = "login";
     const string caseBattleWritePolicy = "case-battles-write";
+    const string guestRegistrationPolicy = "guest-registration";
 
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.AddPolicy(loginPolicy, context =>
@@ -86,6 +87,8 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
                 AutoReplenishment = true,
             }));
+    options.AddPolicy(guestRegistrationPolicy, context =>
+        RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit=5,Window=TimeSpan.FromHours(1),QueueLimit=0,AutoReplenishment=true }));
     options.OnRejected = async (context, cancellationToken) =>
     {
         if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retryAfter))
@@ -143,6 +146,28 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.ExpireTimeSpan = TimeSpan.FromDays(14);
         options.SlidingExpiration = false;
         options.LoginPath = "/Login";
+        options.Events.OnRedirectToLogin = context =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/hubs"))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return Task.CompletedTask;
+            }
+
+            context.Response.Redirect(context.RedirectUri);
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/hubs"))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return Task.CompletedTask;
+            }
+
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
         options.Events.OnValidatePrincipal = async context =>
         {
             string? userId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -166,11 +191,18 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
                 return;
             }
 
-            ClaimsIdentity? identity = context.Principal?.Identity as ClaimsIdentity;
-            if (identity is null || string.Equals(identity.FindFirst(ClaimTypes.Role)?.Value, user.Role.ToString(), StringComparison.Ordinal))
+            if (user.IsGuest)
             {
-                return;
+                ICaseOpeningData caseOpeningData = context.HttpContext.RequestServices.GetRequiredService<ICaseOpeningData>();
+                if (!await caseOpeningData.GetGuestAccessEnabled(context.HttpContext.RequestAborted))
+                {
+                    context.RejectPrincipal();
+                    return;
+                }
             }
+
+            ClaimsIdentity? identity = context.Principal?.Identity as ClaimsIdentity;
+            if (identity is null) return;
 
             Claim? roleClaim = identity.FindFirst(ClaimTypes.Role);
             if (roleClaim is not null)
@@ -179,16 +211,26 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             }
 
             identity.AddClaim(new Claim(ClaimTypes.Role, user.Role.ToString()));
+            Claim? accountTypeClaim = identity.FindFirst(AppAuthorizationPolicies.AccountTypeClaim);
+            string accountType = user.IsGuest ? AppAuthorizationPolicies.GuestAccount : AppAuthorizationPolicies.RegisteredAccount;
+            if (accountTypeClaim is not null) identity.RemoveClaim(accountTypeClaim);
+            identity.AddClaim(new Claim(AppAuthorizationPolicies.AccountTypeClaim, accountType));
             context.ReplacePrincipal(new ClaimsPrincipal(identity));
             context.ShouldRenew = true;
         };
     });
 builder.Services.AddAuthorization(options =>
 {
-    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
+    Microsoft.AspNetCore.Authorization.AuthorizationPolicy registeredUserPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser().RequireClaim(AppAuthorizationPolicies.AccountTypeClaim, AppAuthorizationPolicies.RegisteredAccount)
         .Build();
-    options.AddPolicy(AppAuthorizationPolicies.AdminOnly, policy => policy.RequireRole(AppRole.Admin.ToString()));
+    // Both explicit [Authorize] and endpoints without an attribute remain registered-only.
+    // Guest access is opt-in through the narrowly scoped CaseTycoonAccess policy.
+    options.DefaultPolicy = registeredUserPolicy;
+    options.FallbackPolicy = registeredUserPolicy;
+    options.AddPolicy(AppAuthorizationPolicies.RegisteredUser, policy => policy.RequireAuthenticatedUser().RequireClaim(AppAuthorizationPolicies.AccountTypeClaim, AppAuthorizationPolicies.RegisteredAccount));
+    options.AddPolicy(AppAuthorizationPolicies.CaseTycoonAccess, policy => policy.RequireAuthenticatedUser().RequireClaim(AppAuthorizationPolicies.AccountTypeClaim, AppAuthorizationPolicies.RegisteredAccount, AppAuthorizationPolicies.GuestAccount));
+    options.AddPolicy(AppAuthorizationPolicies.AdminOnly, policy => policy.RequireAuthenticatedUser().RequireClaim(AppAuthorizationPolicies.AccountTypeClaim, AppAuthorizationPolicies.RegisteredAccount).RequireRole(AppRole.Admin.ToString()));
 });
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -339,6 +381,7 @@ app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<CaseTycoonAdminAuditMiddleware>();
 
 app.MapRazorPages();
 app.MapControllers();

@@ -59,6 +59,7 @@ public sealed class AuthController : ControllerBase
                 new(ClaimTypes.Name, user.DisplayName),
                 new(ClaimTypes.Email, user.Email),
                 new(ClaimTypes.Role, user.Role.ToString()),
+                new(AppAuthorizationPolicies.AccountTypeClaim, AppAuthorizationPolicies.RegisteredAccount),
                 new("session_id", session.SessionId.ToString("D")),
             ];
             AuthenticationProperties properties = new()

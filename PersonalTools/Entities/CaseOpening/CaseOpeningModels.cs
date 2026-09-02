@@ -620,6 +620,17 @@ public sealed class CaseOpeningSkillTreeSettingsObj
     public bool Enabled { get; set; }
 }
 
+public sealed class CaseTycoonGuestAccessSettingsObj
+{
+    public bool Enabled { get; set; }
+}
+
+public sealed class CaseTycoonGuestAccessChangeRequest
+{
+    public bool Enabled { get; set; }
+    public string Confirmation { get; set; } = string.Empty;
+}
+
 public sealed class CaseOpeningSkillTreeNodeObj
 {
     public string NodeId { get; set; } = string.Empty;

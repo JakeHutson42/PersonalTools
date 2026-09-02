@@ -10,6 +10,7 @@ public interface IAuthFuncs
 {
     Task<AuthenticationResult> Authenticate(string email, string password);
     Task<AuthSession> CreateSession(Guid userId, bool rememberMe, string? userAgent);
+    Task<(AppUser User, AuthSession Session)> CreateGuest(string username, string? userAgent);
     Task<bool> IsSessionValid(Guid sessionId, Guid userId);
     Task DeleteSession(Guid sessionId);
     Task LinkSteam(Guid userId, string steamId);
@@ -68,6 +69,25 @@ public sealed class AuthFuncs : IAuthFuncs
         return new AuthenticationResult { User = user };
     }
     public async Task<AuthSession> CreateSession(Guid userId, bool rememberMe, string? userAgent) { Guid id = Guid.NewGuid(); string token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)); DateTime expiry = DateTime.UtcNow.AddDays(rememberMe ? 14 : 1); await _data.CreateSession(id, userId, Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token))), expiry, userAgent); return new AuthSession { SessionId = id, UserId = userId, ExpiresUtc = expiry }; }
+    public async Task<(AppUser User, AuthSession Session)> CreateGuest(string username, string? userAgent)
+    {
+        string normalized = username.Trim().ToLowerInvariant();
+        if (normalized.Length is < 3 or > 24 || !System.Text.RegularExpressions.Regex.IsMatch(normalized, "^[a-z0-9][a-z0-9_-]*[a-z0-9]$"))
+            throw new InvalidOperationException("Use 3–24 letters, numbers, underscores or hyphens, beginning and ending with a letter or number.");
+        string[] reserved = ["admin","administrator","moderator","support","system","staff","official","personaltools","case-tycoon","casetycoon"];
+        if (reserved.Any(value => normalized.Equals(value, StringComparison.OrdinalIgnoreCase))) throw new InvalidOperationException("That username is reserved.");
+        Guid userId = Guid.NewGuid();
+        string syntheticEmail = $"guest-{userId:N}@guest.invalid";
+        string passwordHash = Convert.ToHexString(RandomNumberGenerator.GetBytes(64));
+        try { await _data.CreateGuestUser(userId, syntheticEmail, normalized, passwordHash, normalized); }
+        catch (MySqlConnector.MySqlException exception) when (exception.Number == 1062) { throw new InvalidOperationException("That username is already taken."); }
+        AppUser user = await GetUser(userId) ?? throw new InvalidOperationException("The guest account could not be created.");
+        Guid sessionId = Guid.NewGuid();
+        string token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        DateTime expiry = DateTime.UtcNow.AddDays(180);
+        await _data.CreateSession(sessionId, userId, Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token))), expiry, userAgent);
+        return (user, new AuthSession { SessionId=sessionId,UserId=userId,ExpiresUtc=expiry });
+    }
     public Task<bool> IsSessionValid(Guid sessionId, Guid userId) => _data.IsSessionValid(sessionId, userId);
     public Task DeleteSession(Guid sessionId) => _data.DeleteSession(sessionId);
     public Task LinkSteam(Guid userId, string steamId) => _data.SetSteamId(userId, steamId);
