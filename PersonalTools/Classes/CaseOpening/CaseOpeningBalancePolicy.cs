@@ -9,14 +9,7 @@ namespace PersonalTools.Classes.CaseOpening;
 public static class CaseOpeningBalancePolicy
 {
     private const decimal PencePerGbp = 100m;
-    public static CaseOpeningBalanceRecommendation RecommendCasePrices(
-        decimal expectedMarketValueGbp,
-        int tier,
-        int skinSaleRateBasisPoints,
-        int targetProfitBasisPoints,
-        int globalReturnMultiplierBasisPoints,
-        int priceRoundingPence,
-        bool isStarterCase)
+    public static CaseOpeningBalanceRecommendation RecommendCasePrices(decimal expectedMarketValueGbp, int tier, int skinSaleRateBasisPoints, int targetProfitBasisPoints, int globalReturnMultiplierBasisPoints, int priceRoundingPence, bool isStarterCase)
     {
         int resolvedTier = Math.Clamp(tier, 1, 10);
         decimal expectedSaleValuePence = decimal.Round(expectedMarketValueGbp * PencePerGbp * Math.Clamp(skinSaleRateBasisPoints, 0, 10_000) / 10_000m, 2, MidpointRounding.AwayFromZero);
