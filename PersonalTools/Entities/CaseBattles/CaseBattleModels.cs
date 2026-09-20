@@ -18,7 +18,7 @@ public static class CaseBattleModes
 
     // Only modes with a complete server execution and settlement path belong here. Runtime
     // feature flags still decide whether an implemented mode is available to players.
-    public static bool IsEnabled(string mode) => mode is Duel or FreeForAll3 or FreeForAll4;
+    public static bool IsEnabled(string mode) => mode is Duel or FreeForAll3 or FreeForAll4 or Teams2v2;
 }
 
 public sealed class CaseBattleFeatureOptions
@@ -26,7 +26,7 @@ public sealed class CaseBattleFeatureOptions
     public bool Enabled { get; init; }
 }
 
-public sealed class CaseBattleCreateRequestObj { public string Mode { get; set; } = string.Empty; public Guid? InvitedUserId { get; set; } public List<Guid> InvitedUserIds { get; set; } = []; public bool UseBot { get; set; } public List<string> CaseKeys { get; set; } = []; }
+public sealed class CaseBattleCreateRequestObj { public string Mode { get; set; } = string.Empty; public Guid? InvitedUserId { get; set; } public List<Guid> InvitedUserIds { get; set; } = []; public List<Guid> BotUserIds { get; set; } = []; public bool UseBot { get; set; } public List<string> CaseKeys { get; set; } = []; }
 public sealed class CaseBattleInviteRequestObj { public List<Guid> InvitedUserIds { get; set; } = []; }
 public sealed class CaseBattleBotStatusObj { public bool CaseBattlesEnabled { get; set; } public bool FreeForAll3Enabled { get; set; } public bool FreeForAll4Enabled { get; set; } public bool Enabled { get; set; } public int BattlesAttempted { get; set; } public int BattlesWon { get; set; } public int SkinsDiscarded { get; set; } public decimal ValueDiscarded { get; set; } }
 public sealed class CaseBattleTimingSettingsObj
@@ -76,6 +76,7 @@ public sealed class CaseBattleParticipantObj
     public int Team { get; set; }
     public bool IsReady { get; set; }
     public decimal TotalValue { get; set; }
+    public decimal AwardedValue { get; set; }
     public int OverflowReservedSlots { get; set; }
 }
 

@@ -5,14 +5,34 @@
     ViewData["Title"] = "Case battle";
 }
 @section Head { <link rel="stylesheet" href="~/css/pages/page-case-opening.css" asp-append-version="true" /><link rel="stylesheet" href="~/css/pages/page-case-battles.css" asp-append-version="true" /> }
+@if (Model.BattleId is null)
+{
+<main class="container px-3 px-lg-4 case-opening-page case-battle-game-page case-battles-page case-battle-hub" data-case-battle-hub>
+    @Html.AntiForgeryToken()
+    <header class="case-battle-page-hero"><div class="case-battle-page-hero-icon"><i class="fa-solid fa-trophy" aria-hidden="true"></i></div><div class="case-battle-page-hero-copy"><p class="eyebrow mb-1">Case Tycoon</p><h1>Battle hub</h1><p>Manage active rooms, answer challenges and review your recent battles.</p></div><div class="case-battle-page-hero-meta"><a class="btn btn-outline-secondary" asp-page="/CaseOpening/Index" data-case-battle-transition-link><i class="fa-solid fa-arrow-left me-1" aria-hidden="true"></i>Simulator</a><a class="btn btn-warning" asp-page="/CaseOpening/Battles/Create" data-case-battle-transition-link><i class="fa-solid fa-plus me-1" aria-hidden="true"></i>Create battle</a></div></header>
+    <section class="case-battle-hub-active d-none" id="caseBattleHubActive" aria-live="polite"></section>
+    <div class="row g-3 mt-1">
+        <section class="col-lg-6"><div class="card case-battle-room h-100"><div class="card-body"><div class="case-battle-section-heading"><div><p class="eyebrow mb-1">Incoming</p><h2 class="h5 mb-0">Challenges for you</h2></div><span class="case-battle-hub-count" id="caseBattleHubIncomingCount">0</span></div><div class="case-battle-hub-list" id="caseBattleHubIncoming"><p class="case-battle-empty">Loading invitations…</p></div></div></div></section>
+        <section class="col-lg-6"><div class="card case-battle-room h-100"><div class="card-body"><div class="case-battle-section-heading"><div><p class="eyebrow mb-1">Outgoing</p><h2 class="h5 mb-0">Waiting for players</h2></div><span class="case-battle-hub-count" id="caseBattleHubOutgoingCount">0</span></div><div class="case-battle-hub-list" id="caseBattleHubOutgoing"><p class="case-battle-empty">Loading invitations…</p></div></div></div></section>
+    </div>
+    <section class="card case-battle-room mt-3"><div class="card-body"><div class="case-battle-section-heading"><div><p class="eyebrow mb-1">Battle record</p><h2 class="h5 mb-0">Recent results</h2></div><a class="btn btn-sm btn-outline-warning" asp-page="/CaseOpening/Battles/Create" data-case-battle-transition-link>New challenge</a></div><div class="case-battle-hub-history" id="caseBattleHubHistory" aria-live="polite"><p class="case-battle-empty">Loading battle history…</p></div></div></section>
+</main>
+}
+else
+{
 <main class="container px-3 px-lg-4 case-opening-page case-battle-game-page case-battles-page" data-case-battles-page data-case-battle-id="@Model.BattleId">
     @Html.AntiForgeryToken()
     <header class="case-battle-compact-bar">
-        <a class="btn btn-outline-secondary case-stage-tool case-battle-back-button" asp-page="/CaseOpening/Index" data-case-battle-transition-link aria-label="Back to Case Tycoon"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i><span>Case Tycoon</span></a>
         <div class="case-battle-scoreboard" id="caseBattleScoreboard" aria-live="polite"></div>
-        <div class="dropdown"><button class="btn btn-outline-secondary case-stage-tool case-battle-back-button" id="caseBattleSoundMenuButton" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"><i class="fa-solid fa-volume-high" id="caseBattleSoundButtonIcon" aria-hidden="true"></i><span id="caseBattleSoundButtonText">Sound</span></button><div class="dropdown-menu dropdown-menu-end case-sound-menu p-0" aria-labelledby="caseBattleSoundMenuButton"><div class="case-sound-deck"><div class="case-sound-deck-head"><div><p class="eyebrow mb-1">Battle audio</p><p class="fw-semibold mb-0">Where Are You · liquid D&amp;B</p><small id="caseBattleSoundStatus">Loading arena track</small></div><button class="case-sound-power" id="caseBattleSoundEnabled" type="button" aria-pressed="true"><i class="fa-solid fa-volume-high" aria-hidden="true"></i><span>On</span></button></div><div class="case-sound-volume-block"><div class="case-sound-volume-head"><label for="caseBattleSoundVolumeMeter">Music volume</label><output id="caseBattleSoundVolumeValue">35%</output></div><div class="case-sound-meter" id="caseBattleSoundVolumeMeter" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="35"><span></span></div></div><p class="case-battle-audio-note mb-0"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> Starts automatically and fades after the battle. If autoplay is blocked, your first interaction starts it.</p></div></div></div>
         <span class="visually-hidden" id="caseBattleStatus">Restoring your battle…</span>
     </header>
+    <div class="case-battle-floating-controls pt-1" aria-label="Battle controls">
+        <a class="btn case-battle-floating-control case-battle-back-button" href="/CaseOpening/Battles" data-case-battle-back data-case-battle-transition-link aria-label="Back to Battle Hub"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i><span class="visually-hidden">Battle hub</span></a>
+        <div class="dropdown">
+            <button class="btn case-battle-floating-control case-battle-sound-button" id="caseBattleSoundMenuButton" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Battle sound settings" title="Sound settings"><i class="fa-solid fa-volume-high" id="caseBattleSoundButtonIcon" aria-hidden="true"></i><span class="visually-hidden" id="caseBattleSoundButtonText">Sound</span></button>
+            <div class="dropdown-menu dropdown-menu-end case-sound-menu p-0" aria-labelledby="caseBattleSoundMenuButton"><div class="case-sound-deck"><div class="case-sound-deck-head"><div><p class="eyebrow mb-1">Battle audio</p><p class="fw-semibold mb-0">Where Are You · liquid D&amp;B</p><small id="caseBattleSoundStatus">Loading arena track</small></div><button class="case-sound-power" id="caseBattleSoundEnabled" type="button" aria-pressed="true"><i class="fa-solid fa-volume-high" aria-hidden="true"></i><span>On</span></button></div><div class="case-sound-volume-block"><div class="case-sound-volume-head"><label for="caseBattleSoundVolumeMeter">Music volume</label><output id="caseBattleSoundVolumeValue">35%</output></div><div class="case-sound-meter" id="caseBattleSoundVolumeMeter" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="35"><span></span></div></div><p class="case-battle-audio-note mb-0"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> Starts automatically and fades after the battle. If autoplay is blocked, your first interaction starts it.</p></div></div>
+        </div>
+    </div>
     <section class="case-battle-room card" aria-labelledby="caseBattleTitle"><div class="card-body">
         <div class="case-battle-track-reel" aria-label="Current case track"><div class="case-battle-track-viewport"><i class="case-battle-track-marker" aria-hidden="true"></i><div class="case-battle-case-track" id="caseBattleCaseTrack"></div></div></div>
         <section class="case-battle-arena" id="caseBattleArena" aria-live="polite" aria-label="Case battle opening animation"></section>
@@ -33,9 +53,10 @@
 <div class="case-battle-effect-stage" id="caseBattleEffectStage" aria-hidden="true"></div>
 <div class="case-battle-winner-backdrop d-none" id="caseBattleWinnerBackdrop" aria-hidden="true"></div>
 <section class="case-battle-showcase case-battle-winner-overlay d-none" id="caseBattleShowcase" role="dialog" aria-modal="true" aria-live="polite" aria-label="Battle winner reveal" tabindex="-1"></section>
+}
 <partial name="_CaseBattleTransition" />
 @section Scripts {
     <script src="~/js/pages/page-case-battle-transition.js" asp-append-version="true"></script>
-    <script src="~/js/pages/page-case-battle-audio.js" asp-append-version="true"></script>
-    <script src="~/js/pages/page-case-battles.js" asp-append-version="true"></script>
+    @if (Model.BattleId is null) { <script src="~/js/pages/page-case-battle-hub.js" asp-append-version="true"></script> }
+    else { <script src="~/js/pages/page-case-battle-audio.js" asp-append-version="true"></script><script src="~/js/pages/page-case-battles.js" asp-append-version="true"></script> }
 }

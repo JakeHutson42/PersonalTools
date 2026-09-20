@@ -999,20 +999,9 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
         {
             throw new InvalidOperationException("Unlock the Armory Extension before advancing Bulk Selling.");
         }
-        if (skillTreeEnabled && definition.UpgradeKey is "auto-buy-unlock" or "auto-sell-covert" or "trade-up-unlock")
-        {
-            CaseOpeningUpgradeDefinitionObj? finalBulkSale = definitions
-                .Where(item => item.Category.Equals("bulk-sale", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(item => item.SortOrder)
-                .LastOrDefault();
-            if (finalBulkSale is not null && !finalBulkSale.IsUnlocked)
-            {
-                throw new InvalidOperationException($"Unlock {finalBulkSale.Name} before advancing into automation.");
-            }
-        }
         if (skillTreeEnabled && definition.Category.Equals("social-qol",StringComparison.OrdinalIgnoreCase))
         {
-            string? previous=definition.UpgradeKey switch { "saved-reaction-layout"=>"reaction-wheel-slots","victory-emote-slot"=>"saved-reaction-layout","profile-showcase-slot"=>"victory-emote-slot","battle-history-filters"=>"profile-showcase-slot",_=>null };
+            string? previous=definition.UpgradeKey switch { "victory-emote-slot"=>"reaction-wheel-slots","profile-showcase-slot"=>"victory-emote-slot",_=>null };
             if(previous is not null&&!definitions.Any(item=>item.UpgradeKey.Equals(previous,StringComparison.OrdinalIgnoreCase)&&item.IsUnlocked)) throw new InvalidOperationException("Unlock the previous social progression node first.");
             if(previous is null&&(await _data.GetCaseOpeningDailyDropUpgrades(userId,cancellationToken)).FirstOrDefault(item=>item.UpgradeKey.Equals("quality",StringComparison.OrdinalIgnoreCase))?.Level<3) throw new InvalidOperationException("Master Higher Stakes III before advancing social tools.");
         }
@@ -2206,9 +2195,8 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             });
         }
 
-        string storageParent = definitions.Any(item => item.UpgradeKey.Equals("inventory-slots-1000", StringComparison.OrdinalIgnoreCase))
-            ? "inventory-slots-1000" : openingBranchNode;
-        bool storageParentPurchased = definitions.Any(item => item.UpgradeKey.Equals("inventory-slots-1000", StringComparison.OrdinalIgnoreCase) && item.IsUnlocked);
+        string storageParent = openingBranchNode;
+        bool storageParentPurchased = progress.OpenSpeedLevel >= Math.Min(2, maximumLevel);
         for (int level = 1; level <= settings.MaximumStorageContainers; level++)
         {
             bool purchased = capacity.StorageContainerCount >= level;
@@ -2249,8 +2237,8 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
             });
         }
 
-        string automationRoot = bulkDefinitions.LastOrDefault()?.UpgradeKey ?? storageParent;
-        bool automationRootPurchased = bulkDefinitions.LastOrDefault()?.IsUnlocked ?? storageParentPurchased;
+        string automationRoot = openingBranchNode;
+        bool automationRootPurchased = progress.OpenSpeedLevel >= Math.Min(2, maximumLevel);
         List<CaseOpeningUpgradeDefinitionObj> autoBuyDefinitions = definitions
             .Where(item => item.Category.Equals("automation", StringComparison.OrdinalIgnoreCase))
             .OrderBy(item => item.SortOrder)
@@ -2407,7 +2395,8 @@ public sealed class CaseOpeningFuncs : ICaseOpeningFuncs
                 IsAvailable = !owned && dailyLevels.GetValueOrDefault("quality") >= 3, CanAfford = balance >= cost, IsTerminal = true
             });
         }
-        List<CaseOpeningUpgradeDefinitionObj> socialDefinitions=definitions.Where(item=>item.Category.Equals("social-qol",StringComparison.OrdinalIgnoreCase)).OrderBy(item=>item.SortOrder).ToList();
+        string[] retainedSocialUpgradeKeys = ["reaction-wheel-slots", "victory-emote-slot", "profile-showcase-slot"];
+        List<CaseOpeningUpgradeDefinitionObj> socialDefinitions=definitions.Where(item=>item.Category.Equals("social-qol",StringComparison.OrdinalIgnoreCase)&&retainedSocialUpgradeKeys.Contains(item.UpgradeKey,StringComparer.OrdinalIgnoreCase)).OrderBy(item=>item.SortOrder).ToList();
         string socialParent="daily-quality-3"; bool socialParentPurchased=dailyLevels.GetValueOrDefault("quality")>=3; int socialRow=nodes.Max(item=>item.Row)+2;
         for(int index=0;index<socialDefinitions.Count;index++) { CaseOpeningUpgradeDefinitionObj definition=socialDefinitions[index]; long cost=gbp?definition.CostGbpPence:definition.CostStars; nodes.Add(new CaseOpeningSkillTreeNodeObj{NodeId=definition.UpgradeKey,UpgradeKey=definition.UpgradeKey,PurchaseKind="inventory",Family="Optional cosmetic · Social tools",Name=definition.Name,Description=definition.Description+" Cosmetic only; it provides no competitive advantage.",Icon=index switch{0=>"fa-grip",1=>"fa-arrow-down-short-wide",2=>"fa-trophy",3=>"fa-gem",_=>"fa-filter"},PrerequisiteNodeIds=[socialParent],Row=socialRow+index,Column=-2,Cost=cost,RequiredLevel=definition.RequiredLevel,IsPurchased=definition.IsUnlocked,IsAvailable=!definition.IsUnlocked&&socialParentPurchased&&playerLevel>=definition.RequiredLevel,CanAfford=balance>=cost,IsTerminal=index==socialDefinitions.Count-1});socialParent=definition.UpgradeKey;socialParentPurchased=definition.IsUnlocked;}
 

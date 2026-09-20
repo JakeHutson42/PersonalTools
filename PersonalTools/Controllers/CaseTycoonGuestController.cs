@@ -30,7 +30,10 @@ public sealed class CaseTycoonGuestController(IAuthFuncs auth, ICaseOpeningFuncs
                 new(ClaimTypes.Role,user.Role.ToString()),new(AppAuthorizationPolicies.AccountTypeClaim,AppAuthorizationPolicies.GuestAccount),
                 new("session_id",session.SessionId.ToString("D"))
             ];
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,new ClaimsPrincipal(new ClaimsIdentity(claims,CookieAuthenticationDefaults.AuthenticationScheme)),new AuthenticationProperties { IsPersistent=true,ExpiresUtc=session.ExpiresUtc,AllowRefresh=false });
+            ClaimsPrincipal principal = new(new ClaimsIdentity(claims,CookieAuthenticationDefaults.AuthenticationScheme));
+            AuthenticationProperties properties = new() { IsPersistent=true,ExpiresUtc=session.ExpiresUtc,AllowRefresh=false };
+            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,principal,properties);
+            await HttpContext.SignInAsync(AppAuthorizationPolicies.GuestResumeAuthenticationScheme,principal,properties);
             await caseOpening.RecordCaseOpeningLogin(user.UserId);
             Response.Headers.CacheControl="no-store";
             return Ok(new ApiResponse(true,"Your Case Tycoon account is ready."));

@@ -1,6 +1,6 @@
 -- Case Tycoon social profiles. AccountId is the friendly public identifier; UserId remains the internal identity.
 ALTER TABLE Users ADD COLUMN IF NOT EXISTS AccountId BIGINT UNSIGNED NULL;
-ALTER TABLE Users ADD COLUMN IF NOT EXISTS Username VARCHAR(32) NULL COLLATE utf8mb4_unicode_ci;
+ALTER TABLE Users ADD COLUMN IF NOT EXISTS Username VARCHAR(32) COLLATE utf8mb4_unicode_ci NULL;
 
 SET @next_account_id := 10000000;
 UPDATE Users SET AccountId = (@next_account_id := @next_account_id + 1) WHERE AccountId IS NULL ORDER BY CreatedUtc, UserId;

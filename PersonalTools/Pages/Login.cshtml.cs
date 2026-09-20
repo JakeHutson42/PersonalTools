@@ -13,9 +13,11 @@ public class LoginModel : PageModel
     [BindProperty(SupportsGet = true)] public string? ReturnUrl { get; set; }
     public IActionResult OnGet()
     {
-        if (User.Identity?.IsAuthenticated != true) return Page();
-        return User.HasClaim(AppAuthorizationPolicies.AccountTypeClaim, AppAuthorizationPolicies.GuestAccount)
-            ? RedirectToPage("/CaseOpening/Index")
-            : LocalRedirect("/");
+        // A remembered Case Tycoon guest is allowed to replace the active identity with a full
+        // account. The separate protected guest ticket remains available for the next sign-out.
+        if (User.Identity?.IsAuthenticated != true ||
+            User.HasClaim(AppAuthorizationPolicies.AccountTypeClaim, AppAuthorizationPolicies.GuestAccount))
+            return Page();
+        return LocalRedirect("/");
     }
 }

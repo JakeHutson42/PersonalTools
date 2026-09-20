@@ -172,7 +172,7 @@
         window.location.reload();
     });
 
-    navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+    navigator.serviceWorker.register('/service-worker.js', { scope: '/', updateViaCache: 'none' })
         .then(registration => {
             if (registration.waiting && navigator.serviceWorker.controller) showUpdatePrompt(registration.waiting);
             registration.addEventListener('updatefound', () => {

@@ -632,6 +632,180 @@
     transform: translate(-50%,-50%);
 }
 
+.case-loader-stage {
+    position: absolute;
+    z-index: 3;
+    top: 50%;
+    left: 50%;
+    display: grid;
+    justify-items: center;
+    gap: 1.15rem;
+    width: min(28rem,calc(100vw - 2rem));
+    opacity: 0;
+    transform: translate(-50%,-50%) scale(.96);
+    transition: opacity .2s ease,transform .3s ease;
+}
+
+.case-destination-transition.is-loading .case-loader-stage {
+    opacity: 1;
+    transform: translate(-50%,-50%) scale(1);
+}
+
+.case-destination-transition.is-loading .case-destination-transition-glow {
+    opacity: .7;
+    transform: translate(-50%,-50%) scale(1);
+}
+
+.case-loader-ring {
+    position: relative;
+    display: grid;
+    width: clamp(14rem,42vw,19rem);
+    aspect-ratio: 1;
+    place-items: center;
+    filter: drop-shadow(0 1.4rem 2.4rem rgba(0,0,0,.58));
+}
+
+.case-loader-ring > svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    transform: rotate(-90deg);
+}
+
+.case-loader-ring circle {
+    fill: none;
+    stroke-width: 7;
+}
+
+.case-loader-ring-track {
+    stroke: rgba(244,196,90,.16);
+}
+
+.case-loader-ring-value {
+    stroke: #f2bd45;
+    stroke-dasharray: 100;
+    stroke-dashoffset: var(--loader-progress-offset,100);
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 .32rem rgba(250,196,73,.9));
+    transition: stroke-dashoffset .42s cubic-bezier(.2,.75,.25,1);
+}
+
+.case-loader-weapon-case {
+    position: relative;
+    width: 10.8rem;
+    height: 7.65rem;
+    border: .22rem solid #3d2c0e;
+    border-radius: .34rem;
+    background: linear-gradient(90deg,rgba(255,255,255,.08),transparent 9% 91%,rgba(0,0,0,.2)),linear-gradient(#c58e28 0 17%,#9b6d1c 18% 21%,#ba8320 22% 100%);
+    box-shadow: inset 0 0 0 .16rem #e0ad43,inset 0 -.85rem 1.2rem rgba(46,28,5,.34),0 .9rem 1.4rem rgba(0,0,0,.5);
+}
+
+.case-loader-case-handle {
+    position: absolute;
+    bottom: calc(100% + .18rem);
+    left: 50%;
+    width: 3.8rem;
+    height: 1.15rem;
+    border: .28rem solid #c8922c;
+    border-bottom: 0;
+    border-radius: .48rem .48rem 0 0;
+    box-shadow: inset 0 .12rem #f1c465;
+    transform: translateX(-50%);
+}
+
+.case-loader-case-lid {
+    position: absolute;
+    top: 1.12rem;
+    right: .35rem;
+    left: .35rem;
+    height: .2rem;
+    background: #5c3f11;
+    box-shadow: 0 .16rem rgba(238,185,72,.42);
+}
+
+.case-loader-case-label {
+    position: absolute;
+    inset: 2rem 2rem 1.15rem;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    color: #171105;
+    border: 1px solid rgba(56,37,7,.58);
+    background: rgba(244,188,65,.5);
+    box-shadow: inset 0 0 0 .12rem rgba(255,223,137,.2);
+    line-height: 1;
+}
+
+.case-loader-case-label small,.case-loader-case-label b {
+    font-size: .57rem;
+    font-weight: 950;
+    letter-spacing: .22em;
+}
+
+.case-loader-case-label svg {
+    width: 4.7rem;
+    height: 1.45rem;
+    margin: .12rem 0;
+}
+
+.case-loader-case-label path {
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: square;
+    stroke-linejoin: bevel;
+    stroke-width: 3.5;
+}
+
+.case-loader-case-latch {
+    position: absolute;
+    top: 1.02rem;
+    width: 1.18rem;
+    height: .72rem;
+    border: .14rem solid #3c2a0b;
+    border-radius: .1rem;
+    background: linear-gradient(#f0c45e,#9d6d1b);
+}
+
+.case-loader-case-latch.is-left { left: 1rem; }
+.case-loader-case-latch.is-right { right: 1rem; }
+
+.case-loader-case-rivet {
+    position: absolute;
+    width: .34rem;
+    height: .34rem;
+    border: 1px solid #51370c;
+    border-radius: 50%;
+    background: #efc35f;
+    box-shadow: inset -.08rem -.08rem rgba(65,42,7,.35);
+}
+
+.case-loader-case-rivet.is-one { top: .46rem; left: .48rem; }
+.case-loader-case-rivet.is-two { top: .46rem; right: .48rem; }
+.case-loader-case-rivet.is-three { right: .48rem; bottom: .46rem; }
+.case-loader-case-rivet.is-four { bottom: .46rem; left: .48rem; }
+
+.case-loader-copy {
+    display: grid;
+    gap: .3rem;
+    color: #fff5d8;
+    text-align: center;
+    text-shadow: 0 2px .7rem #000;
+}
+
+.case-loader-copy strong {
+    font-size: .84rem;
+    font-weight: 900;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+}
+
+.case-loader-copy > span {
+    color: #d5c7a7;
+    font-size: .78rem;
+}
+
 .case-destination-transition.is-closing .case-destination-transition-glow {
     animation: case-destination-glow .65s ease-out both;
 }
@@ -692,74 +866,6 @@
         width: 170vmax;
         height: 170vmax;
         opacity: 1;
-    }
-}
-
-.case-destination-loader {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: .8rem;
-    min-height: 7rem;
-    margin-bottom: 1rem;
-    padding: 1rem;
-    border: 1px solid color-mix(in srgb,var(--case-gold) 28%,var(--pt-line));
-    border-radius: var(--pt-card-radius);
-    background: radial-gradient(ellipse at center,color-mix(in srgb,var(--case-gold) 13%,var(--pt-surface)),var(--pt-surface) 65%);
-}
-
-.case-destination-loader-case {
-    position: relative;
-    display: block;
-    flex: 0 0 auto;
-    width: 4.8rem;
-    height: 3.35rem;
-    border: 1px solid #f2c45a;
-    border-radius: .18rem;
-    background: linear-gradient(135deg,#5b4012 0 12%,#d49c2e 13% 20%,#735018 21% 78%,#e0a737 79% 88%,#51370d 89%);
-    box-shadow: 0 .65rem 1.4rem rgba(0,0,0,.35),inset 0 0 0 .12rem #37280d;
-    animation: case-destination-loader-case 1.05s ease-in-out infinite;
-}
-
-    .case-destination-loader-case i {
-        position: absolute;
-        top: -.58rem;
-        left: 50%;
-        width: 1.75rem;
-        height: .58rem;
-        border: 2px solid #f5cc68;
-        border-bottom: 0;
-        border-radius: .35rem .35rem 0 0;
-        transform: translateX(-50%);
-    }
-
-    .case-destination-loader-case b {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: .58rem;
-        height: .58rem;
-        border: 1px solid #e7b54b;
-        background: #161005;
-        box-shadow: 0 0 .4rem rgba(250,201,91,.7);
-        transform: translate(-50%,-50%);
-    }
-
-.case-destination-loader-copy {
-    color: var(--pt-ink-soft);
-    font-size: .78rem;
-    font-weight: 700;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-}
-
-@keyframes case-destination-loader-case {
-    0%,100% {
-        transform: translateX(-.35rem) rotate(-2deg);
-    }
-
-    50% {
-        transform: translateX(.35rem) rotate(2deg);
     }
 }
 
@@ -826,9 +932,7 @@
 
 :root[data-app-theme="tactical"] .case-bottom-nav-shell,
 :root[data-app-theme="tactical"] .case-bottom-nav-indicator,
-:root[data-app-theme="tactical"] .case-bottom-nav-link,
-:root[data-app-theme="tactical"] .case-destination-loader,
-:root[data-app-theme="tactical"] .case-destination-loader span {
+:root[data-app-theme="tactical"] .case-bottom-nav-link {
     border-radius: 0;
 }
 
@@ -895,19 +999,19 @@
         height: 1.35rem;
     }
 
-    .case-destination-loader {
-        min-height: 6rem;
-    }
 }
 
 @media (prefers-reduced-motion:reduce) {
     .case-bottom-nav,
-    .case-bottom-nav-link,
-    .case-destination-loader-case {
+    .case-bottom-nav-link {
         animation: none;
     }
 
     .case-destination-transition {
+        transition: none;
+    }
+
+    .case-loader-stage,.case-loader-ring-value {
         transition: none;
     }
 }
@@ -2210,10 +2314,11 @@ body:has(.case-opening-page) .form-switch .form-check-label {
     position: static;
     z-index: 5;
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: .7rem;
+    gap: .75rem;
+    margin-top: .9rem;
 }
 
 .case-open-action-frame {
@@ -3768,12 +3873,13 @@ body:has(.case-opening-page) .form-switch .form-check-label {
 
 .case-machine {
     display: grid;
-    grid-template-rows: auto 5.65rem auto;
+    /* The button and quantity selector share a row; allow their full combined height. */
+    grid-template-rows: auto auto auto;
     align-items: start;
 }
 
 .case-open-controls {
-    align-self: end;
+    align-self: start;
     min-height: 3.25rem;
 }
 
@@ -4029,6 +4135,13 @@ body:has(.case-opening-page) .form-switch .form-check-label {
         padding: .65rem;
     }
 
+    .case-reel-item.is-winning-result img {
+        height: 116px;
+        padding-top: .35rem;
+        padding-bottom: .25rem;
+        transform: translateY(-.18rem);
+    }
+
     .case-reel-item span {
         padding: 0 .6rem .65rem;
         font-size: .78rem;
@@ -4067,6 +4180,40 @@ body:has(.case-opening-page) .form-switch .form-check-label {
 
     .case-reel-item > span:not(.case-stattrak-badge) {
         order: 2;
+    }
+
+    .case-reel-item > .case-reel-winning-copy {
+        display: grid;
+        gap: .08rem;
+        padding: 0 .55rem .45rem;
+        overflow: visible;
+        white-space: normal;
+    }
+
+    .case-reel-winning-copy strong,
+    .case-reel-winning-copy small,
+    .case-reel-winning-copy b {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .case-reel-winning-copy strong {
+        color: var(--pt-ink);
+        font-size: .76rem;
+        line-height: 1.15;
+    }
+
+    .case-reel-winning-copy small {
+        color: var(--pt-ink-soft);
+        font-size: .64rem;
+        font-weight: 600;
+    }
+
+    .case-reel-winning-copy b {
+        color: var(--pt-ink);
+        font-size: .72rem;
+        line-height: 1.15;
     }
 
     .case-reel-item > .case-stattrak-badge {
@@ -6486,7 +6633,7 @@ button.case-bot-unit:not(:disabled):hover {
     }
 
     .case-machine {
-        grid-template-rows: auto 5.15rem auto;
+        grid-template-rows: auto auto auto;
     }
 
     .case-open-controls {
@@ -6610,6 +6757,10 @@ button.case-bot-unit:not(:disabled):hover {
 
     .case-reel-item img {
         height: 108px;
+    }
+
+    .case-reel-item.is-winning-result img {
+        height: 100px;
     }
 
     .case-reel-idle img {
@@ -9536,10 +9687,6 @@ body:has(.case-player-profile.show) {
        interactive content underneath them. */
     .case-tab-start {
         margin-top: 2.9rem;
-    }
-
-    .case-destination-loader.case-tab-start + .case-tab-start {
-        margin-top: 0;
     }
 
     .case-hud-quick-controls {

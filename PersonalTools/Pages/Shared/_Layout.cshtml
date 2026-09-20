@@ -57,7 +57,7 @@
         <link rel="apple-touch-icon" sizes="180x180" href="~/icons/apple-touch-icon.png" />
         <link rel="manifest" href="~/manifest.webmanifest" />
     }
-    <script src="~/js/cookie-consent.js" asp-append-version="true"></script>
+    <script src="~/js/app-preferences.js" asp-append-version="true"></script>
     <script src="~/js/appearance-storage.js" asp-append-version="true"></script>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" />
@@ -73,7 +73,7 @@
     @await RenderSectionAsync("Head", required: false)
     <link rel="stylesheet" href="~/css/themes.css" asp-append-version="true" />
 </head>
-<body class="@(showNavigation ? "has-app-sidebar" : isCaseTycoonGuest ? "case-guest-shell" : "auth-shell")@(isCaseTycoonPage ? " case-tycoon-page" : string.Empty)" data-display-name="@(User.Identity?.Name ?? string.Empty)" data-user-id="@(isAuthenticated ? User.FindFirstValue(ClaimTypes.NameIdentifier) : string.Empty)">
+<body class="@(showNavigation ? "has-app-sidebar" : isCaseTycoonGuest && isCaseTycoonPage ? "case-guest-shell" : "auth-shell")@(isCaseTycoonPage ? " case-tycoon-page" : string.Empty)" data-display-name="@(User.Identity?.Name ?? string.Empty)" data-user-id="@(isAuthenticated ? User.FindFirstValue(ClaimTypes.NameIdentifier) : string.Empty)">
     @if (showNavigation)
     {
         <div class="d-none" aria-hidden="true">@Html.AntiForgeryToken()</div>

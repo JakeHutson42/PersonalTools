@@ -55,7 +55,7 @@
             </span>
             @if (CaseBattleOptions.Value.Enabled)
             {
-                <a class="case-hud-battles" asp-page="/CaseOpening/Battles/Create" data-case-battle-transition-link aria-label="Open Case Battles"><i class="fa-solid fa-trophy" aria-hidden="true"></i><span>Battles</span></a>
+                <a class="case-hud-battles" asp-page="/CaseOpening/Battles/Index" data-case-battle-transition-link aria-label="Open Case Battles"><i class="fa-solid fa-trophy" aria-hidden="true"></i><span>Battles</span></a>
             }
             @if (canManageCaseOpening)
             {
@@ -141,31 +141,10 @@
                 </div>
             </div>
             <section class="case-skill-tree-shell d-none" id="caseSkillTreeShell" aria-labelledby="caseSkillTreeTitle">
-                <div class="case-skill-tree-intro">
-                    <div>
-                        <p class="eyebrow mb-1">Workshop progression</p>
-                        <h3 class="h5 mb-1" id="caseSkillTreeTitle">Opening mastery</h3>
-                        <p class="small-muted mb-0">Advance through connected upgrades to build a faster opening workflow.</p>
-                    </div>
-                    <span class="case-skill-tree-balance"><small>Available</small><strong id="caseSkillTreeBalance">0</strong></span>
-                </div>
-                <div class="case-skill-tree-legend" aria-label="Upgrade node states">
-                    <span><i class="is-locked"></i>Locked</span>
-                    <span><i class="is-available"></i>Available</span>
-                    <span><i class="is-purchased"></i>Purchased</span>
-                    <span><i class="is-complete"></i>Mastered</span>
-                </div>
+                <div class="case-skill-tree-intro"><div><p class="eyebrow mb-1">Workshop progression</p><h3 class="h5 mb-1" id="caseSkillTreeTitle">Opening mastery</h3><p class="small-muted mb-0">Advance through connected upgrades to build a faster opening workflow.</p></div><span class="case-skill-tree-balance"><small>Available</small><strong id="caseSkillTreeBalance">0</strong></span></div>
+                <div class="case-skill-tree-legend" aria-label="Upgrade node states"><span><i class="is-locked"></i>Locked</span><span><i class="is-available"></i>Available</span><span><i class="is-purchased"></i>Purchased</span><span><i class="is-complete"></i>Mastered</span></div>
                 <div class="case-skill-tree" id="caseSkillTree" role="tree" aria-label="Case Tycoon upgrade tree"></div>
-                <section class="case-skill-tree-automation d-none" id="caseSkillTreeAutomationControls" aria-labelledby="caseSkillTreeAutomationTitle">
-                    <div class="case-skill-tree-automation-heading">
-                        <div>
-                            <p class="eyebrow mb-1">Unlocked controls</p>
-                            <h4 class="h6 mb-1" id="caseSkillTreeAutomationTitle">Automation command deck</h4>
-                            <p class="small-muted mb-0">Configure the automation abilities you have unlocked above.</p>
-                        </div>
-                    </div>
-                    <div class="case-skill-tree-automation-grid" id="caseSkillTreeAutomationHost"></div>
-                </section>
+                <section class="case-skill-tree-automation d-none" id="caseSkillTreeAutomationControls" aria-labelledby="caseSkillTreeAutomationTitle"><div class="case-skill-tree-automation-heading"><div><p class="eyebrow mb-1">Unlocked controls</p><h4 class="h6 mb-1" id="caseSkillTreeAutomationTitle">Automation command deck</h4><p class="small-muted mb-0">Configure the automation abilities you have unlocked above.</p></div></div><div class="case-skill-tree-automation-grid" id="caseSkillTreeAutomationHost"></div></section>
                 <p class="visually-hidden" id="caseSkillTreeStatus" aria-live="polite"></p>
             </section>
             <div class="row g-3" id="caseLegacyUpgradeStoreContent">
@@ -194,19 +173,11 @@
                     </section>
                 </div>
                 <div class="col-12">
-                    <div class="case-upgrade-section-heading mt-2 mb-3"><span class="case-shop-icon"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span><div><p class="eyebrow mb-1">Permanent capacity</p><h3 class="h5 mb-1">Workshop shelving</h3><p class="small-muted mb-0">Cases and skins both use one inventory slot. Add permanent shelving as your collection and case stock grow.</p></div></div>
-                    <div class="row g-3" id="caseCapacityUpgradeGrid"></div>
-                    <p class="case-upgrade-card-metric mt-2 mb-0" id="caseCapacityUpgradeStatus">0 bonus slots unlocked</p>
-                </div>
-                <div class="col-12">
                     <div class="case-upgrade-section-heading mt-2 mb-3"><span class="case-shop-icon"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i></span><div><p class="eyebrow mb-1">Open faster</p><h3 class="h5 mb-1">Opening controls</h3><p class="small-muted mb-0">Make repeat openings quicker and expand the number of cases opened together.</p></div></div>
                     <div class="row g-2" id="caseShopUpgradeGrid"></div>
                 </div>
-                <div class="col-12">
-                    <div class="case-upgrade-section-heading mt-2 mb-3"><span class="case-shop-icon"><i class="fa-solid fa-comment-dots" aria-hidden="true"></i></span><div><p class="eyebrow mb-1">Battle expression</p><h3 class="h5 mb-1">Reactions &amp; stickers</h3><p class="small-muted mb-0">Unlock new emojis and picture reactions to send during live case battles.</p></div></div>
-                    <div class="row g-2 case-reaction-upgrade-grid" id="caseBattleReactionUpgradeGrid"><div class="col-12"><p class="small-muted mb-0">Loading battle reactions…</p></div></div>
-                </div>
-                <div class="col-12">
+                <span class="d-none" id="caseBotUpgradePanelHome"></span>
+                <div class="col-12" id="caseBotUpgradePanel">
                     <div class="case-upgrade-section-heading mt-2 mb-3"><span class="case-shop-icon"><i class="fa-solid fa-robot" aria-hidden="true"></i></span><div><p class="eyebrow mb-1">Background opening</p><h3 class="h5 mb-1">Bot workshop</h3><p class="small-muted mb-0">Add server bays, then fill them with opening bots.</p></div></div>
                     <div class="row g-2">
                         <div class="col-12 col-md-6"><article class="case-shop-row"><div><h3 class="h6 mb-1">Bot server</h3><p class="small-muted mb-0">Adds four bot bays to your workshop.</p></div><div class="case-upgrade-card-action"><span class="case-upgrade-card-metric" id="caseUpgradeServerOwnership">0 servers</span><button class="btn btn-outline-warning btn-sm js-shop-buy-server" type="button">Buy server</button></div></article></div>
@@ -221,16 +192,8 @@
                         <div>
                             <p class="eyebrow mb-1">Automate your inventory</p>
                             <h3 class="h5 mb-1">Selling, restocking and trade-ups</h3>
-                            <p class="small-muted mb-0">Start with quicker manual selling, then automate the routines that keep your inventory moving.</p>
+                            <p class="small-muted mb-0">Automate the routines that keep your inventory moving.</p>
                         </div>
-                    </div>
-                    <div class="row g-3" id="caseInventoryUpgradeGrid"></div>
-                    <div class="case-auto-sell-panel mt-3" id="caseBulkSellPanel">
-                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                            <div><p class="eyebrow mb-1">Inventory throughput</p><h3 class="h6 mb-1">Bulk selling</h3><p class="small-muted mb-0" id="caseBulkSellUpgradeDescription">Sell up to 100 items at once. Raise the limit as your inventory grows.</p></div>
-                            <button class="btn btn-outline-warning btn-sm js-unlock-inventory-upgrade d-none" type="button" id="caseBulkSellUpgradeButton"></button>
-                        </div>
-                        <span class="case-upgrade-card-metric mt-3" id="caseBulkSellStatus">Current limit: 100 items</span>
                     </div>
                     <span class="d-none" id="caseAutoSellPanelHome"></span>
                     <div class="case-auto-sell-panel mt-3" id="caseAutoSellPanel">
@@ -342,15 +305,7 @@
                     </div>
                 </div>
 
-                <div class="case-result-slot" aria-live="polite">
-                    <div class="case-result d-none" id="caseResult">
-                        <p class="eyebrow mb-1">Unboxed</p>
-                        <h3 class="h4 mb-1" id="caseResultName"></h3>
-                        <p class="small-muted mb-0" id="caseResultMeta"></p>
-                    </div>
-                </div>
-
-                <div class="case-open-controls mt-4">
+                <div class="case-open-controls">
                     <div class="case-open-action-frame">
                         <div class="dropup case-open-utility case-open-utility-sound">
                             <button class="case-open-utility-button" id="caseSoundMenuButton" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Case opening sound settings" title="Sound settings"><i class="fa-solid fa-volume-high" id="caseSoundButtonIcon" aria-hidden="true"></i><span class="visually-hidden" id="caseSoundButtonText">Sound</span></button>
@@ -448,24 +403,6 @@
                                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
                                     <span class="small fw-semibold" id="caseSpeedUpgradeLabel">1x speed</span>
                                     <button class="btn btn-outline-warning btn-sm" id="unlockOpenSpeed" type="button" data-upgrade-key="open-speed">Upgrade</button>
-                                </div>
-                            </div>
-                        </article>
-                    </div>
-                    <div class="col-12 col-lg-4">
-                        <article class="case-upgrade-card h-100" id="caseSkipUpgrade">
-                            <span class="case-upgrade-icon"><i class="fa-solid fa-forward-step" aria-hidden="true"></i></span>
-                            <div class="case-upgrade-copy">
-                                <div class="d-flex align-items-center justify-content-between gap-2">
-                                    <h3 class="h6 mb-1">Skip animation</h3>
-                                </div>
-                                <p class="small-muted mb-3">Reveal the selected item straight away with a short result animation, without waiting for the reel. Granted automatically at the final Faster opening level.</p>
-                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                                    <div class="form-check form-switch m-0">
-                                        <input class="form-check-input pt-switch" id="caseSkipAnimation" type="checkbox" role="switch" disabled />
-                                        <label class="form-check-label small fw-semibold" for="caseSkipAnimation" id="caseSkipAnimationLabel">Locked</label>
-                                    </div>
-                                    <button class="btn btn-outline-warning btn-sm" id="unlockSkipAnimation" type="button" disabled>Unlock</button>
                                 </div>
                             </div>
                         </article>
@@ -1068,6 +1005,17 @@
         <span class="case-destination-transition-glow"></span>
         <span class="case-destination-transition-case"><i></i><b></b></span>
         <span class="case-destination-transition-void"></span>
+        <div class="case-loader-stage" role="status" aria-live="polite" aria-atomic="true">
+            <div class="case-loader-ring" aria-hidden="true">
+                <svg viewBox="0 0 120 120"><circle class="case-loader-ring-track" cx="60" cy="60" r="53"></circle><circle class="case-loader-ring-value" cx="60" cy="60" r="53" pathLength="100"></circle></svg>
+                <div class="case-loader-weapon-case">
+                    <span class="case-loader-case-handle"></span><span class="case-loader-case-lid"></span><span class="case-loader-case-rivet is-one"></span><span class="case-loader-case-rivet is-two"></span><span class="case-loader-case-rivet is-three"></span><span class="case-loader-case-rivet is-four"></span>
+                    <span class="case-loader-case-label"><small>WEAPON</small><svg viewBox="0 0 100 30"><path d="M7 18h39l8-7h18l4 4h17v5H75l-5 5H51l-7-4H7zM20 21l-8 7H4l6-10m49 7 6 4h10l-5-5" /></svg><b>CASE</b></span>
+                    <span class="case-loader-case-latch is-left"></span><span class="case-loader-case-latch is-right"></span>
+                </div>
+            </div>
+            <span class="case-loader-copy"><strong data-loader-title>Loading Case Tycoon</strong><span data-loader-message>Preparing your next operation&hellip;</span></span>
+        </div>
     </div>
     <span class="visually-hidden" id="caseDestinationStatus" aria-live="polite"></span>
 </div>

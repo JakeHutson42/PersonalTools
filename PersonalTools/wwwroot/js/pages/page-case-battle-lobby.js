@@ -32,7 +32,8 @@
             const stateClass = isReady ? 'ready' : state === 'pending' ? 'pending' : state === 'open' ? 'open' : 'waiting';
             const stateLabel = isReady ? 'Ready' : state === 'pending' ? 'Invite sent' : state === 'open' ? 'Connecting' : 'Not ready';
             const stateIcon = isReady ? 'fa-circle-check' : state === 'pending' ? 'fa-paper-plane' : state === 'open' ? 'fa-satellite-dish' : 'fa-circle-notch';
-            return '<article class="case-battle-player is-' + stateClass + '" style="--seat-index:' + index + '"><span class="case-battle-player-connection" aria-hidden="true"><i></i><i></i><i></i></span><span class="case-battle-player-avatar" aria-hidden="true">' + profileAvatar(player, initial) + '</span><span class="case-battle-player-identity"><small>Seat ' + (player.seat || index + 1) + '</small><strong>' + escape(player.displayName) + '</strong></span><b>' + (player.userId ? money(player.totalValue) : '—') + '</b><span class="case-battle-ready-state"><i class="fa-solid ' + stateIcon + '" aria-hidden="true"></i>' + stateLabel + '</span></article>';
+            const teamLabel = detail.mode === 'teams-2v2' && detail.status !== 'waiting' && player.team ? ' · Team ' + player.team : '';
+            return '<article class="case-battle-player is-' + stateClass + '" style="--seat-index:' + index + '"><span class="case-battle-player-connection" aria-hidden="true"><i></i><i></i><i></i></span><span class="case-battle-player-avatar" aria-hidden="true">' + profileAvatar(player, initial) + '</span><span class="case-battle-player-identity"><small>Seat ' + (player.seat || index + 1) + teamLabel + '</small><strong>' + escape(player.displayName) + '</strong></span><b>' + (player.userId ? money(player.totalValue) : '—') + '</b><span class="case-battle-ready-state"><i class="fa-solid ' + stateIcon + '" aria-hidden="true"></i>' + stateLabel + '</span></article>';
         }).join('');
     }
     function render() {

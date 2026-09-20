@@ -15,6 +15,7 @@ public interface ICaseBattleData
     Task Start(Guid battleId, CancellationToken cancellationToken = default);
     Task StageRolls(Guid battleId, List<CaseBattleServerRollObj> rolls, CancellationToken cancellationToken = default);
     Task Settle(Guid battleId, CancellationToken cancellationToken = default);
+    Task SettleTeams2v2(Guid battleId, CancellationToken cancellationToken = default);
     Task Cancel(Guid battleId, Guid userId, CancellationToken cancellationToken = default);
     Task Leave(Guid battleId, Guid userId, CancellationToken cancellationToken = default);
     Task<List<CaseBattleRollPlanObj>> GetExecutionPlan(Guid battleId, Guid userId, CancellationToken cancellationToken = default);
@@ -38,7 +39,7 @@ public interface ICaseBattleData
     Task SetFreeForAll3Enabled(bool enabled, CancellationToken cancellationToken = default);
     Task SetFreeForAll4Enabled(bool enabled, CancellationToken cancellationToken = default);
     Task SetBotEnabled(bool enabled, CancellationToken cancellationToken = default);
-    Task JoinBot(Guid battleId, CancellationToken cancellationToken = default);
+    Task JoinBot(Guid battleId, Guid botUserId, CancellationToken cancellationToken = default);
 }
 
 public sealed class CaseBattleData(IMariaDbDataAccess database) : ICaseBattleData
@@ -67,6 +68,7 @@ public sealed class CaseBattleData(IMariaDbDataAccess database) : ICaseBattleDat
             ProfileAvatar = reader.HasColumn("ProfileAvatar") && !reader.IsDBNull(reader.GetOrdinal("ProfileAvatar")) ? reader.GetString("ProfileAvatar") : string.Empty,
             Seat = reader.GetInt32("Seat"),
             Team = reader.GetInt32("Team"), IsReady = reader.GetBoolean("IsReady"), TotalValue = reader.GetDecimal("TotalValue"),
+            AwardedValue = reader.HasColumn("AwardedValue") ? reader.GetDecimal("AwardedValue") : 0,
             OverflowReservedSlots = reader.GetInt32("OverflowReservedSlots")
         }, Parameters(("p_battle_id", battleId), ("p_user_id", userId)), cancellationToken);
         detail.Invitations = await GetInvitationStates(battleId, userId, cancellationToken);
@@ -89,6 +91,8 @@ public sealed class CaseBattleData(IMariaDbDataAccess database) : ICaseBattleDat
         database.ExecuteSP("sp_case_battles_rolls_stage", Parameters(("p_battle_id", battleId), ("p_rolls", JsonSerializer.Serialize(rolls, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))), cancellationToken);
     public Task Settle(Guid battleId, CancellationToken cancellationToken = default) =>
         database.ExecuteSP("sp_case_battles_settle_staged", Parameters(("p_battle_id", battleId)), cancellationToken);
+    public Task SettleTeams2v2(Guid battleId, CancellationToken cancellationToken = default) =>
+        database.ExecuteSP("sp_case_battles_settle_teams_2v2", Parameters(("p_battle_id", battleId)), cancellationToken);
     public Task Cancel(Guid battleId, Guid userId, CancellationToken cancellationToken = default) =>
         database.ExecuteSP("sp_case_battles_cancel", Parameters(("p_battle_id", battleId), ("p_user_id", userId)), cancellationToken);
     public Task Leave(Guid battleId, Guid userId, CancellationToken cancellationToken = default) =>
@@ -133,7 +137,7 @@ public sealed class CaseBattleData(IMariaDbDataAccess database) : ICaseBattleDat
     public Task SetFreeForAll3Enabled(bool enabled, CancellationToken cancellationToken = default) => database.ExecuteSP("sp_case_battles_ffa3_enabled_set", Parameters(("p_enabled", enabled)), cancellationToken);
     public Task SetFreeForAll4Enabled(bool enabled, CancellationToken cancellationToken = default) => database.ExecuteSP("sp_case_battles_ffa4_enabled_set", Parameters(("p_enabled", enabled)), cancellationToken);
     public Task SetBotEnabled(bool enabled, CancellationToken cancellationToken = default) => database.ExecuteSP("sp_case_battles_bot_enabled_set", Parameters(("p_enabled", enabled)), cancellationToken);
-    public Task JoinBot(Guid battleId, CancellationToken cancellationToken = default) => database.ExecuteSP("sp_case_battles_bot_join", Parameters(("p_battle_id", battleId)), cancellationToken);
+    public Task JoinBot(Guid battleId, Guid botUserId, CancellationToken cancellationToken = default) => database.ExecuteSP("sp_case_battles_bot_join", Parameters(("p_battle_id", battleId), ("p_bot_user_id", botUserId)), cancellationToken);
 
     private static CaseBattleSummaryObj ReadSummary(MySqlDataReader reader) => new()
     {

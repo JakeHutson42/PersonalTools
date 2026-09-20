@@ -4,6 +4,7 @@ using PersonalTools.Classes.Dashboard;
 using PersonalTools.Classes.MediaExtractor;
 using PersonalTools.Classes.Notes;
 using PersonalTools.Classes.Skins;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
@@ -31,6 +32,7 @@ using Microsoft.AspNetCore.Http.Features;
 using PersonalTools.Classes.CaseOpening;
 using PersonalTools.Data.CaseOpening;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Caching.Memory;
 using System.Threading.RateLimiting;
 using PersonalTools.Hubs;
 using PersonalTools.Classes.CaseBattles;
@@ -91,6 +93,22 @@ builder.Services.AddRateLimiter(options =>
         RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit=5,Window=TimeSpan.FromHours(1),QueueLimit=0,AutoReplenishment=true }));
     options.OnRejected = async (context, cancellationToken) =>
     {
+        string source = context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        string path = SecurityEventLoggingMiddleware.SafeValue(context.HttpContext.Request.Path.Value, 300);
+        IMemoryCache securityCache = context.HttpContext.RequestServices.GetRequiredService<IMemoryCache>();
+        if (SecurityEventLoggingMiddleware.ShouldLog(securityCache, SecurityEventIds.RateLimitRejected, source, path))
+        {
+            ILogger securityLogger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("PersonalTools.Security.RateLimiting");
+            securityLogger.LogWarning(
+                SecurityEventIds.RateLimitRejected,
+                "Rate limit rejected {Method} {Path} from {RemoteIp}; user {UserId}; name {UserName}.",
+                context.HttpContext.Request.Method,
+                path,
+                source,
+                context.HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous",
+                SecurityEventLoggingMiddleware.SafeValue(context.HttpContext.User.Identity?.Name, 100, "anonymous"));
+        }
         if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retryAfter))
         {
             context.HttpContext.Response.Headers.RetryAfter = Math.Ceiling(retryAfter.TotalSeconds).ToString();
@@ -99,7 +117,7 @@ builder.Services.AddRateLimiter(options =>
         await context.HttpContext.Response.WriteAsJsonAsync(new
         {
             success = false,
-            message = "Too many sign-in requests. Wait a moment before trying again.",
+            message = "Too many requests. Wait a moment before trying again.",
             displayName = string.Empty,
         }, cancellationToken);
     };
@@ -165,6 +183,28 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
                 return Task.CompletedTask;
             }
 
+            if (context.HttpContext.User.HasClaim(AppAuthorizationPolicies.AccountTypeClaim, AppAuthorizationPolicies.GuestAccount))
+            {
+                string source = context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                string path = SecurityEventLoggingMiddleware.SafeValue(context.Request.Path.Value, 300);
+                IMemoryCache securityCache = context.HttpContext.RequestServices.GetRequiredService<IMemoryCache>();
+                if (SecurityEventLoggingMiddleware.ShouldLog(securityCache, SecurityEventIds.GuestBoundaryRejected, source, path))
+                {
+                    ILogger securityLogger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("PersonalTools.Security.Authorization");
+                    securityLogger.LogWarning(
+                        SecurityEventIds.GuestBoundaryRejected,
+                        "Case Tycoon guest {UserId}; name {UserName}; attempted registered-only page {Path} from {RemoteIp}.",
+                        context.HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown",
+                        SecurityEventLoggingMiddleware.SafeValue(context.HttpContext.User.Identity?.Name, 100, "unknown"),
+                        path,
+                        source);
+                }
+                string returnUrl = context.Request.PathBase + context.Request.Path + context.Request.QueryString;
+                context.Response.Redirect($"/Login?ReturnUrl={Uri.EscapeDataString(returnUrl)}");
+                return Task.CompletedTask;
+            }
+
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return Task.CompletedTask;
         };
@@ -177,6 +217,15 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
                 !Guid.TryParse(sessionId, out Guid parsedSessionId) ||
                 !await auth.IsSessionValid(parsedSessionId, id))
             {
+                ILogger securityLogger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("PersonalTools.Security.Authentication");
+                securityLogger.LogWarning(
+                    SecurityEventIds.InvalidAuthenticationTicket,
+                    "Authentication ticket rejected from {RemoteIp}; valid user claim {HasUserId}; valid session claim {HasSessionId}; name {UserName}.",
+                    context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    Guid.TryParse(userId, out _),
+                    Guid.TryParse(sessionId, out _),
+                    SecurityEventLoggingMiddleware.SafeValue(context.Principal?.Identity?.Name, 100, "unknown"));
                 context.RejectPrincipal();
                 return;
             }
@@ -218,6 +267,20 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             context.ReplacePrincipal(new ClaimsPrincipal(identity));
             context.ShouldRenew = true;
         };
+    })
+    .AddCookie(AppAuthorizationPolicies.GuestResumeAuthenticationScheme, options =>
+    {
+        // This protected ticket is never selected as the application's active authentication
+        // scheme. It only remembers a validated Case Tycoon guest while a registered account is
+        // temporarily active in the same browser.
+        options.Cookie.Name = AppAuthorizationPolicies.GuestResumeCookieName;
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
+        options.ExpireTimeSpan = TimeSpan.FromDays(180);
+        options.SlidingExpiration = false;
     });
 builder.Services.AddAuthorization(options =>
 {
@@ -376,10 +439,35 @@ app.UseMiddleware<ContentSecurityPolicyMiddleware>();
 
 app.UseRouting();
 
-// Endpoint rate limiting runs after route selection so only the anonymous login endpoint uses
-// the strict policy. Authenticated application requests are unaffected.
-app.UseRateLimiter();
 app.UseAuthentication();
+app.Use(async (context, next) =>
+{
+    // Upgrade existing guest sessions to the separate resume cookie without creating a new
+    // account or exposing the session identifier to JavaScript/local storage.
+    if (context.User.HasClaim(AppAuthorizationPolicies.AccountTypeClaim, AppAuthorizationPolicies.GuestAccount))
+    {
+        Microsoft.AspNetCore.Authentication.AuthenticateResult rememberedGuest =
+            await context.AuthenticateAsync(AppAuthorizationPolicies.GuestResumeAuthenticationScheme);
+        if (!rememberedGuest.Succeeded)
+        {
+            await context.SignInAsync(
+                AppAuthorizationPolicies.GuestResumeAuthenticationScheme,
+                context.User,
+                new AuthenticationProperties
+                {
+                    IsPersistent = true,
+                    ExpiresUtc = DateTimeOffset.UtcNow.AddDays(180),
+                    AllowRefresh = false
+                });
+        }
+    }
+
+    await next();
+});
+// Rate limiting runs after authentication so user-scoped policies and security logs can use the
+// validated account ID/name; anonymous login and guest registration remain partitioned by IP.
+app.UseRateLimiter();
+app.UseMiddleware<SecurityEventLoggingMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<CaseTycoonAdminAuditMiddleware>();
 

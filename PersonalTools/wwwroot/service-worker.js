@@ -1,6 +1,6 @@
 'use strict';
 
-const staticCacheName = 'personal-tools-static-v4';
+const staticCacheName = 'personal-tools-static-v7';
 const caseImageCacheName = 'personal-tools-case-images-v1';
 const maximumCaseImages = 250;
 let caseImageWritesSinceTrim = 0;
@@ -26,13 +26,18 @@ const precacheUrls = [
 const staticPathPrefixes = ['/css/', '/js/', '/images/', '/lib/', '/icons/'];
 
 function staticCacheKey(url) {
-    return new Request(`${url.origin}${url.pathname}`, { method: 'GET' });
+    // Keep deployment hashes: an older script is not a valid fallback for a new version.
+    return new Request(url.href, { method: 'GET' });
 }
 
 function isSafeStaticRequest(request, url) {
     return url.origin === self.location.origin
         && request.method === 'GET'
         && !request.headers.has('range')
+        // Consent must load through the browser, independently of offline-cache failures.
+        // Match the pathname so deployment version query strings cannot bypass this rule.
+        && url.pathname !== '/js/cookie-consent.js'
+        && url.pathname !== '/js/app-preferences.js'
         && staticPathPrefixes.some(prefix => url.pathname.startsWith(prefix));
 }
 
@@ -107,19 +112,21 @@ self.addEventListener('fetch', event => {
     if (!isSafeStaticRequest(request, url)) return;
 
     event.respondWith((async () => {
-        const cache = await caches.open(staticCacheName);
+        // Cache storage can be unavailable or full. It must never discard a valid download.
+        const cache = await caches.open(staticCacheName).catch(() => null);
         const cacheKey = staticCacheKey(url);
+        let response;
         try {
             // HTTP caching keeps this inexpensive online while still making a newly versioned
             // asset available immediately. The private application shell never enters this path.
-            const response = await fetch(request);
-            const contentType = response.headers.get('content-type') || '';
-            if (response.ok && response.type === 'basic' && !response.redirected && !contentType.includes('text/html')) {
-                await cache.put(cacheKey, response.clone());
-            }
-            return response;
+            response = await fetch(request);
         } catch {
-            return (await cache.match(cacheKey)) || Response.error();
+            return (cache && await cache.match(cacheKey).catch(() => null)) || Response.error();
         }
+        const contentType = response.headers.get('content-type') || '';
+        if (cache && response.ok && response.type === 'basic' && !response.redirected && !contentType.includes('text/html')) {
+            event.waitUntil(cache.put(cacheKey, response.clone()).catch(() => {}));
+        }
+        return response;
     })());
 });

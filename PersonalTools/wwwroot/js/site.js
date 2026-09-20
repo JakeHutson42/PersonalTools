@@ -161,11 +161,21 @@
         const message = overlay?.querySelector('[data-loader-message]');
         const lockTargets = '.app-mobile-header, .app-sidebar, .app-content-shell';
         const showDelayMs = usesGameLoader ? 0 : 140;
-        const minimumVisibleMs = usesGameLoader ? 650 : 420;
+        const minimumVisibleMs = usesGameLoader ? 0 : 420;
         let activeRequests = 0;
         let shownAt = 0;
         let showTimer = null;
         let hideTimer = null;
+        let completedRequests = 0;
+        let totalRequests = 0;
+
+        function updateProgress() {
+            if (!usesGameLoader || !overlay) return;
+            const progress = totalRequests > 0 ? completedRequests / totalRequests : 0;
+            const clampedProgress = Math.min(1, Math.max(0, progress));
+            overlay.style.setProperty('--loader-progress', String(clampedProgress));
+            overlay.style.setProperty('--loader-progress-offset', String(100 - (clampedProgress * 100)));
+        }
 
         function setCopy(options = {}) {
             if (title) title.textContent = options.title || 'Working on it';
@@ -191,8 +201,7 @@
             if (!overlay || activeRequests < 1) return;
             shownAt = Date.now();
             if (usesGameLoader) {
-                overlay.classList.add('is-active');
-                window.requestAnimationFrame(() => overlay.classList.add('is-closing'));
+                overlay.classList.add('is-active', 'is-loading');
             } else {
                 overlay.classList.add('is-visible');
             }
@@ -205,7 +214,7 @@
             hideTimer = null;
             if (!overlay || activeRequests > 0) return;
             overlay.classList.remove(usesGameLoader ? 'is-active' : 'is-visible');
-            if (usesGameLoader) overlay.classList.remove('is-closing');
+            if (usesGameLoader) overlay.classList.remove('is-closing', 'is-loading');
             overlay.setAttribute('aria-hidden', 'true');
             if (!usesGameLoader) window.personalToolsMatrixRain?.stop();
             lockPage(false);
@@ -213,7 +222,13 @@
         }
 
         function show(options = {}) {
+            if (activeRequests === 0) {
+                completedRequests = 0;
+                totalRequests = 0;
+            }
             activeRequests += 1;
+            totalRequests += 1;
+            updateProgress();
             setCopy(typeof options === 'string' ? { message: options } : options);
             if (!overlay) return;
             if (hideTimer) {
@@ -228,6 +243,8 @@
 
         function hide() {
             activeRequests = Math.max(0, activeRequests - 1);
+            completedRequests = Math.min(totalRequests, completedRequests + 1);
+            updateProgress();
             if (activeRequests > 0 || !overlay) return;
             if (showTimer) {
                 clearTimeout(showTimer);
@@ -240,6 +257,9 @@
 
         function reset() {
             activeRequests = 0;
+            completedRequests = 0;
+            totalRequests = 0;
+            updateProgress();
             if (showTimer) clearTimeout(showTimer);
             if (hideTimer) clearTimeout(hideTimer);
             showTimer = null;

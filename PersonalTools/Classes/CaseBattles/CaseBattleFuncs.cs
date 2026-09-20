@@ -50,61 +50,53 @@ public sealed class CaseBattleFuncs(
     IOptions<CaseBattleFeatureOptions> options,
     ILogger<CaseBattleFuncs> logger) : ICaseBattleFuncs
 {
+    private static readonly Guid[] BattleBotUserIds =
+    [
+        Guid.Parse("00000000-0000-0000-0000-000000000001"),
+        Guid.Parse("00000000-0000-0000-0000-000000000002"),
+        Guid.Parse("00000000-0000-0000-0000-000000000003")
+    ];
+
     public async Task<CaseBattleSummaryObj> Create(Guid userId, CaseBattleCreateRequestObj request, CancellationToken cancellationToken = default)
     {
         await EnsureFeatureEnabled(cancellationToken);
         List<string> cases = NormaliseCases(request.CaseKeys);
         await ValidateMode(request.Mode, cases.Count, cancellationToken);
         List<Guid> invitedUserIds = NormaliseInvitedUsers(request);
-        if (request.UseBot)
+        List<Guid> botUserIds = NormaliseBotUsers(request);
+        int requiredOpponents = CaseBattleModes.PlayerCount(request.Mode) - 1;
+        if (invitedUserIds.Count + botUserIds.Count != requiredOpponents || invitedUserIds.Any(id => id == userId))
+            throw new InvalidOperationException($"Choose exactly {requiredOpponents} opponent{(requiredOpponents == 1 ? string.Empty : "s")} using any mix of players and bots.");
+        if (botUserIds.Count != 0)
         {
-            if (request.Mode is not (CaseBattleModes.Duel or CaseBattleModes.FreeForAll3 or CaseBattleModes.FreeForAll4)) throw new InvalidOperationException("Battle Bot is unavailable for that battle mode.");
-            if (invitedUserIds.Count != 0) throw new InvalidOperationException("Choose Battle Bot or invited players, not both.");
+            if (request.Mode is not (CaseBattleModes.Duel or CaseBattleModes.FreeForAll3 or CaseBattleModes.FreeForAll4 or CaseBattleModes.Teams2v2)) throw new InvalidOperationException("Battle Bot is unavailable for that battle mode.");
             if (!(await data.GetBotStatus(cancellationToken)).Enabled) throw new InvalidOperationException("Battle Bot is not currently available.");
         }
-        else
-        {
-            ValidateInvitedUsers(userId, request.Mode, invitedUserIds);
-        }
-        if (!request.UseBot)
-        {
-            await ValidateOpponentUnlocks(userId, invitedUserIds, cases, cancellationToken);
-        }
+        await ValidateOpponentUnlocks(userId, invitedUserIds, cases, cancellationToken);
         await RequireOwnership(userId, cases, cancellationToken);
         Guid battleId = Guid.NewGuid();
         await data.Create(battleId, userId, request.Mode, cases, cancellationToken);
-        if (request.UseBot)
+        try
         {
-            try { await data.JoinBot(battleId, cancellationToken); }
-            catch
+            foreach (Guid botUserId in botUserIds)
             {
-                await data.Cancel(battleId, userId, CancellationToken.None);
-                throw;
-            }
-            // Bot joins use the same waiting-room lifecycle as human battles. The join procedure
-            // marks only the bot seat ready; the creator still confirms readiness in the lobby,
-            // which then owns the shared countdown and idempotent start request.
-        }
-        else
-        {
-            try
-            {
-                foreach (Guid invitedUserId in invitedUserIds)
-                {
-                    await data.SetInvite(battleId, userId, invitedUserId, cancellationToken);
-                }
-            }
-            catch
-            {
-                // Creation escrows cases in its own transaction. Unwind it if invitation
-                // validation loses a race so a failed request cannot strand the escrow.
-                await data.Cancel(battleId, userId, CancellationToken.None);
-                throw;
+                await data.JoinBot(battleId, botUserId, cancellationToken);
             }
             foreach (Guid invitedUserId in invitedUserIds)
             {
-                await PublishInvitation(invitedUserId, battleId, cancellationToken);
+                await data.SetInvite(battleId, userId, invitedUserId, cancellationToken);
             }
+        }
+        catch
+        {
+            // Creation escrows cases in its own transaction. Unwind it if any independently
+            // selected participant loses a race so the mixed lobby cannot be stranded.
+            await data.Cancel(battleId, userId, CancellationToken.None);
+            throw;
+        }
+        foreach (Guid invitedUserId in invitedUserIds)
+        {
+            await PublishInvitation(invitedUserId, battleId, cancellationToken);
         }
         logger.LogInformation("Case battle {BattleId} was created by {UserId}.", battleId, userId);
         return await Get(userId, battleId, cancellationToken);
@@ -306,11 +298,15 @@ public sealed class CaseBattleFuncs(
         if (request.InvitedUserId is Guid legacyId && legacyId != Guid.Empty) supplied = supplied.Append(legacyId);
         return supplied.Where(id => id != Guid.Empty).Distinct().ToList();
     }
-    private static void ValidateInvitedUsers(Guid ownerUserId, string mode, List<Guid> invitedUserIds)
+    private static List<Guid> NormaliseBotUsers(CaseBattleCreateRequestObj request)
     {
-        int requiredOpponents = CaseBattleModes.PlayerCount(mode) - 1;
-        if (requiredOpponents < 1 || invitedUserIds.Count != requiredOpponents || invitedUserIds.Any(id => id == ownerUserId))
-            throw new InvalidOperationException($"Choose exactly {requiredOpponents} other player{(requiredOpponents == 1 ? string.Empty : "s")} to invite.");
+        List<Guid> supplied = (request.BotUserIds ?? []).Where(id => id != Guid.Empty).Distinct().ToList();
+        // Preserve old clients that send the former all-bots flag during a rolling deployment.
+        if (request.UseBot && supplied.Count == 0)
+            supplied = BattleBotUserIds.Take(Math.Max(0, CaseBattleModes.PlayerCount(request.Mode) - 1)).ToList();
+        if (supplied.Any(id => !BattleBotUserIds.Contains(id)))
+            throw new InvalidOperationException("An invalid Battle Bot was selected.");
+        return supplied;
     }
     private async Task ValidateOpponentUnlocks(Guid ownerUserId, IEnumerable<Guid> invitedUserIds, List<string> cases, CancellationToken cancellationToken)
     {
@@ -354,7 +350,8 @@ public sealed class CaseBattleFuncs(
         {
             await PublishChanged(battleId, $"round-resolved:{round}", cancellationToken);
         }
-        await data.Settle(battleId, cancellationToken);
+        if (plan[0].Mode == CaseBattleModes.Teams2v2) await data.SettleTeams2v2(battleId, cancellationToken);
+        else await data.Settle(battleId, cancellationToken);
     }
 
     private Task PublishChanged(Guid battleId, string reason, CancellationToken cancellationToken) =>

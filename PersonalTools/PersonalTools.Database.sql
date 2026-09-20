@@ -3,6 +3,9 @@
 CREATE DATABASE IF NOT EXISTS PersonalTools CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE PersonalTools;
 SET FOREIGN_KEY_CHECKS=0;
+DROP TABLE IF EXISTS UserFriendRequests;
+DROP TABLE IF EXISTS UserFriends;
+DROP TABLE IF EXISTS UserLivePresence;
 DROP TABLE IF EXISTS CaseOpeningPriceSnapshotItems;
 DROP TABLE IF EXISTS CaseOpeningPriceSnapshots;
 DROP TABLE IF EXISTS CaseOpeningTradeUpRecipeHoldings;
@@ -42,8 +45,11 @@ DROP TABLE IF EXISTS UserSessions;
 DROP TABLE IF EXISTS Users;
 SET FOREIGN_KEY_CHECKS=1;
 
-CREATE TABLE Users (UserId CHAR(36) NOT NULL,Email VARCHAR(254) NOT NULL,DisplayName VARCHAR(100) NOT NULL,PasswordHash VARCHAR(512) NOT NULL,SteamId CHAR(17) NULL,IsActive TINYINT(1) NOT NULL DEFAULT 1,UserRole TINYINT UNSIGNED NOT NULL DEFAULT 1,FailedLoginAttempts INT UNSIGNED NOT NULL DEFAULT 0,LockoutUntilUtc DATETIME(6) NULL,LastFailedLoginUtc DATETIME(6) NULL,CreatedUtc DATETIME NOT NULL,PRIMARY KEY(UserId),UNIQUE KEY UX_Users_Email(Email),UNIQUE KEY UX_Users_SteamId(SteamId),KEY IX_Users_LockoutUntilUtc(LockoutUntilUtc));
+CREATE TABLE Users (UserId CHAR(36) NOT NULL,AccountId BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,Username VARCHAR(32) COLLATE utf8mb4_unicode_ci NULL,Email VARCHAR(254) NOT NULL,DisplayName VARCHAR(100) NOT NULL,PasswordHash VARCHAR(512) NOT NULL,SteamId CHAR(17) NULL,IsActive TINYINT(1) NOT NULL DEFAULT 1,UserRole TINYINT UNSIGNED NOT NULL DEFAULT 1,FailedLoginAttempts INT UNSIGNED NOT NULL DEFAULT 0,LockoutUntilUtc DATETIME(6) NULL,LastFailedLoginUtc DATETIME(6) NULL,CreatedUtc DATETIME NOT NULL,PRIMARY KEY(UserId),UNIQUE KEY UX_Users_AccountId(AccountId),UNIQUE KEY UX_Users_Username(Username),UNIQUE KEY UX_Users_Email(Email),UNIQUE KEY UX_Users_SteamId(SteamId),KEY IX_Users_LockoutUntilUtc(LockoutUntilUtc)) AUTO_INCREMENT=10000001;
 CREATE TABLE UserSessions (SessionId CHAR(36) NOT NULL,UserId CHAR(36) NOT NULL,TokenHash CHAR(64) NOT NULL,ExpiresUtc DATETIME NOT NULL,UserAgent VARCHAR(512) NOT NULL,CreatedUtc DATETIME NOT NULL,PRIMARY KEY(SessionId),KEY IX_UserSessions_UserId(UserId),KEY IX_UserSessions_ExpiresUtc(ExpiresUtc),CONSTRAINT FK_UserSessions_Users FOREIGN KEY(UserId) REFERENCES Users(UserId) ON DELETE CASCADE);
+CREATE TABLE UserLivePresence (UserId CHAR(36) NOT NULL,LastSeenUtc DATETIME(6) NOT NULL,PRIMARY KEY(UserId),KEY IX_UserLivePresence_LastSeen(LastSeenUtc),CONSTRAINT FK_UserLivePresence_User FOREIGN KEY(UserId) REFERENCES Users(UserId) ON DELETE CASCADE) ENGINE=InnoDB COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE UserFriends (UserId CHAR(36) NOT NULL,FriendUserId CHAR(36) NOT NULL,CreatedUtc DATETIME(6) NOT NULL DEFAULT UTC_TIMESTAMP(6),PRIMARY KEY(UserId,FriendUserId),KEY IX_UserFriends_Friend(FriendUserId),CONSTRAINT FK_UserFriends_User FOREIGN KEY(UserId) REFERENCES Users(UserId) ON DELETE CASCADE,CONSTRAINT FK_UserFriends_Friend FOREIGN KEY(FriendUserId) REFERENCES Users(UserId) ON DELETE CASCADE,CONSTRAINT CK_UserFriends_NotSelf CHECK(BINARY UserId<>BINARY FriendUserId)) ENGINE=InnoDB COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE UserFriendRequests (RequesterUserId CHAR(36) NOT NULL,RecipientUserId CHAR(36) NOT NULL,CreatedUtc DATETIME(6) NOT NULL DEFAULT UTC_TIMESTAMP(6),PRIMARY KEY(RequesterUserId,RecipientUserId),KEY IX_UserFriendRequests_Recipient(RecipientUserId,CreatedUtc),CONSTRAINT FK_UserFriendRequests_Requester FOREIGN KEY(RequesterUserId) REFERENCES Users(UserId) ON DELETE CASCADE,CONSTRAINT FK_UserFriendRequests_Recipient FOREIGN KEY(RecipientUserId) REFERENCES Users(UserId) ON DELETE CASCADE,CONSTRAINT CK_UserFriendRequests_NotSelf CHECK(BINARY RequesterUserId<>BINARY RecipientUserId)) ENGINE=InnoDB COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE QuickLinks (QuickLinkId CHAR(36) NOT NULL,UserId CHAR(36) NOT NULL,Title VARCHAR(100) NOT NULL,Url VARCHAR(2048) NOT NULL,IconClass VARCHAR(100) NULL,SortOrder INT NOT NULL DEFAULT 0,CreatedUtc DATETIME NOT NULL,UpdatedUtc DATETIME NOT NULL,PRIMARY KEY(QuickLinkId),KEY IX_QuickLinks_UserId_SortOrder(UserId,SortOrder),CONSTRAINT FK_QuickLinks_Users FOREIGN KEY(UserId) REFERENCES Users(UserId) ON DELETE CASCADE);
 CREATE TABLE Notes (NoteId CHAR(36) NOT NULL,UserId CHAR(36) NOT NULL,Title VARCHAR(200) NOT NULL,Body MEDIUMTEXT NOT NULL,SortOrder INT NOT NULL DEFAULT 0,CreatedUtc DATETIME NOT NULL,UpdatedUtc DATETIME NOT NULL,PRIMARY KEY(NoteId),KEY IX_Notes_UserId_SortOrder(UserId,SortOrder),CONSTRAINT FK_Notes_Users FOREIGN KEY(UserId) REFERENCES Users(UserId) ON DELETE CASCADE);
 CREATE TABLE TrackedSkins (SkinId CHAR(36) NOT NULL,UserId CHAR(36) NOT NULL,Name VARCHAR(200) NOT NULL,Weapon VARCHAR(100) NOT NULL,Exterior VARCHAR(100) NOT NULL,MarketHashName VARCHAR(255) NOT NULL,ExternalImageUrl VARCHAR(2048) NOT NULL,PurchasePrice DECIMAL(12,2) NOT NULL DEFAULT 0,CurrentPrice DECIMAL(12,2) NULL,PurchaseDate DATE NULL,Notes TEXT NOT NULL,CreatedUtc DATETIME NOT NULL,UpdatedUtc DATETIME NOT NULL,PRIMARY KEY(SkinId),KEY IX_TrackedSkins_UserId_UpdatedUtc(UserId,UpdatedUtc),CONSTRAINT FK_TrackedSkins_Users FOREIGN KEY(UserId) REFERENCES Users(UserId) ON DELETE CASCADE);
@@ -236,6 +242,77 @@ CREATE PROCEDURE sp_case_opening_upgrades_dev_set(IN p_user_id CHAR(36),IN p_ski
 CREATE PROCEDURE sp_case_opening_case_unlock_dev_set(IN p_user_id CHAR(36),IN p_case_key VARCHAR(80),IN p_unlock TINYINT(1)) BEGIN IF p_unlock=1 THEN INSERT IGNORE INTO CaseOpeningUnlockedCases(UserId,CaseKey,UnlockedUtc) VALUES(p_user_id,p_case_key,UTC_TIMESTAMP()); ELSE DELETE FROM CaseOpeningUnlockedCases WHERE UserId=p_user_id AND CaseKey=p_case_key AND CaseKey<>'kilowatt'; END IF; END$$
 CREATE PROCEDURE sp_case_opening_reset_dev(IN p_user_id CHAR(36)) BEGIN DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END; START TRANSACTION; DELETE FROM CaseOpeningBots WHERE UserId=p_user_id; DELETE FROM CaseOpeningBotServers WHERE UserId=p_user_id; DELETE FROM CaseOpeningTradeUps WHERE UserId=p_user_id; DELETE FROM CaseOpeningCollection WHERE UserId=p_user_id; DELETE FROM CaseOpeningHistory WHERE UserId=p_user_id; DELETE FROM CaseOpeningUnlockedCases WHERE UserId=p_user_id; INSERT INTO CaseOpeningUnlockedCases(UserId,CaseKey,UnlockedUtc) VALUES(p_user_id,'kilowatt',UTC_TIMESTAMP()); INSERT INTO CaseOpeningProgress(UserId,Stars,Xp,SkipAnimationUnlocked,MultiOpenLevel,UpdatedUtc) VALUES(p_user_id,0,0,0,0,UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE Stars=0,Xp=0,SkipAnimationUnlocked=0,MultiOpenLevel=0,UpdatedUtc=UTC_TIMESTAMP(); COMMIT; END$$
 
+DELIMITER ;
+
+-- Case Tycoon social profiles and accepted/pending friend relationships.
+DELIMITER //
+DROP PROCEDURE IF EXISTS sp_live_winners_presence_touch//
+CREATE PROCEDURE sp_live_winners_presence_touch(IN p_user_id CHAR(36)) BEGIN INSERT INTO UserLivePresence(UserId,LastSeenUtc) VALUES(p_user_id,UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE LastSeenUtc=VALUES(LastSeenUtc); END//
+DROP PROCEDURE IF EXISTS sp_social_profile_get//
+CREATE PROCEDURE sp_social_profile_get(IN p_viewer_user_id CHAR(36),IN p_target_user_id CHAR(36))
+BEGIN
+ SELECT u.UserId,u.AccountId,COALESCE(u.Username,CONCAT('player',u.AccountId)) Username,u.DisplayName,COALESCE(setting.SettingValue,'😎') Avatar,COALESCE(presence.LastSeenUtc>=UTC_TIMESTAMP(6)-INTERVAL 2 MINUTE,0) IsOnline,presence.LastSeenUtc,
+ EXISTS(SELECT 1 FROM UserFriends f WHERE BINARY f.UserId=BINARY p_viewer_user_id AND BINARY f.FriendUserId=BINARY u.UserId) IsFriend,
+ EXISTS(SELECT 1 FROM UserFriendRequests r WHERE BINARY r.RequesterUserId=BINARY p_viewer_user_id AND BINARY r.RecipientUserId=BINARY u.UserId) HasOutgoingFriendRequest,
+ EXISTS(SELECT 1 FROM UserFriendRequests r WHERE BINARY r.RequesterUserId=BINARY u.UserId AND BINARY r.RecipientUserId=BINARY p_viewer_user_id) HasIncomingFriendRequest
+ FROM Users u LEFT JOIN AppSettings setting ON BINARY setting.UserId=BINARY u.UserId AND setting.SettingKey='CaseProfileEmoji' LEFT JOIN UserLivePresence presence ON BINARY presence.UserId=BINARY u.UserId
+ WHERE BINARY u.UserId=BINARY p_target_user_id AND u.IsActive=1;
+END//
+DROP PROCEDURE IF EXISTS sp_social_friends_get//
+CREATE PROCEDURE sp_social_friends_get(IN p_user_id CHAR(36))
+BEGIN
+ SELECT u.UserId,u.AccountId,COALESCE(u.Username,CONCAT('player',u.AccountId)) Username,u.DisplayName,COALESCE(setting.SettingValue,'😎') Avatar,COALESCE(presence.LastSeenUtc>=UTC_TIMESTAMP(6)-INTERVAL 2 MINUTE,0) IsOnline,presence.LastSeenUtc,1 IsFriend,0 HasOutgoingFriendRequest,0 HasIncomingFriendRequest
+ FROM UserFriends f JOIN Users u ON BINARY u.UserId=BINARY f.FriendUserId LEFT JOIN AppSettings setting ON BINARY setting.UserId=BINARY u.UserId AND setting.SettingKey='CaseProfileEmoji' LEFT JOIN UserLivePresence presence ON BINARY presence.UserId=BINARY u.UserId
+ WHERE BINARY f.UserId=BINARY p_user_id AND u.IsActive=1 ORDER BY IsOnline DESC,u.DisplayName,u.AccountId LIMIT 200;
+END//
+DROP PROCEDURE IF EXISTS sp_social_friend_requests_get//
+CREATE PROCEDURE sp_social_friend_requests_get(IN p_user_id CHAR(36))
+BEGIN
+ SELECT u.UserId,u.AccountId,COALESCE(u.Username,CONCAT('player',u.AccountId)) Username,u.DisplayName,COALESCE(setting.SettingValue,'😎') Avatar,COALESCE(presence.LastSeenUtc>=UTC_TIMESTAMP(6)-INTERVAL 2 MINUTE,0) IsOnline,presence.LastSeenUtc,0 IsFriend,0 HasOutgoingFriendRequest,1 HasIncomingFriendRequest
+ FROM UserFriendRequests request JOIN Users u ON BINARY u.UserId=BINARY request.RequesterUserId LEFT JOIN AppSettings setting ON BINARY setting.UserId=BINARY u.UserId AND setting.SettingKey='CaseProfileEmoji' LEFT JOIN UserLivePresence presence ON BINARY presence.UserId=BINARY u.UserId
+ WHERE BINARY request.RecipientUserId=BINARY p_user_id AND u.IsActive=1 ORDER BY request.CreatedUtc DESC LIMIT 200;
+END//
+DROP PROCEDURE IF EXISTS sp_social_users_search//
+CREATE PROCEDURE sp_social_users_search(IN p_user_id CHAR(36),IN p_query VARCHAR(100),IN p_limit INT)
+BEGIN
+ SELECT u.UserId,u.AccountId,COALESCE(u.Username,CONCAT('player',u.AccountId)) Username,u.DisplayName,COALESCE(setting.SettingValue,'😎') Avatar,COALESCE(presence.LastSeenUtc>=UTC_TIMESTAMP(6)-INTERVAL 2 MINUTE,0) IsOnline,presence.LastSeenUtc,
+ EXISTS(SELECT 1 FROM UserFriends f WHERE BINARY f.UserId=BINARY p_user_id AND BINARY f.FriendUserId=BINARY u.UserId) IsFriend,
+ EXISTS(SELECT 1 FROM UserFriendRequests r WHERE BINARY r.RequesterUserId=BINARY p_user_id AND BINARY r.RecipientUserId=BINARY u.UserId) HasOutgoingFriendRequest,
+ EXISTS(SELECT 1 FROM UserFriendRequests r WHERE BINARY r.RequesterUserId=BINARY u.UserId AND BINARY r.RecipientUserId=BINARY p_user_id) HasIncomingFriendRequest
+ FROM Users u LEFT JOIN AppSettings setting ON BINARY setting.UserId=BINARY u.UserId AND setting.SettingKey='CaseProfileEmoji' LEFT JOIN UserLivePresence presence ON BINARY presence.UserId=BINARY u.UserId
+ WHERE u.IsActive=1 AND BINARY u.UserId<>BINARY p_user_id AND (COALESCE(u.Username,CONCAT('player',u.AccountId)) COLLATE utf8mb4_unicode_ci LIKE CONCAT('%',p_query,'%') COLLATE utf8mb4_unicode_ci OR u.DisplayName COLLATE utf8mb4_unicode_ci LIKE CONCAT('%',p_query,'%') COLLATE utf8mb4_unicode_ci OR BINARY CAST(u.AccountId AS CHAR)=BINARY TRIM(LEADING '#' FROM p_query))
+ ORDER BY IsFriend DESC,HasIncomingFriendRequest DESC,HasOutgoingFriendRequest DESC,IsOnline DESC,u.DisplayName LIMIT p_limit;
+END//
+DROP PROCEDURE IF EXISTS sp_social_friend_add//
+CREATE PROCEDURE sp_social_friend_add(IN p_user_id CHAR(36),IN p_friend_user_id CHAR(36))
+BEGIN
+ IF BINARY p_user_id=BINARY p_friend_user_id THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Choose another player.'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM Users WHERE BINARY UserId=BINARY p_friend_user_id AND IsActive=1) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='That player is unavailable.'; END IF;
+ IF EXISTS(SELECT 1 FROM UserFriends WHERE BINARY UserId=BINARY p_user_id AND BINARY FriendUserId=BINARY p_friend_user_id) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='You are already friends.'; END IF;
+ IF EXISTS(SELECT 1 FROM UserFriendRequests WHERE BINARY RequesterUserId=BINARY p_friend_user_id AND BINARY RecipientUserId=BINARY p_user_id) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='This player has already sent you a request. Accept it from your pending requests.'; END IF;
+ INSERT IGNORE INTO UserFriendRequests(RequesterUserId,RecipientUserId,CreatedUtc) VALUES(p_user_id,p_friend_user_id,UTC_TIMESTAMP(6));
+END//
+DROP PROCEDURE IF EXISTS sp_social_friend_request_accept//
+CREATE PROCEDURE sp_social_friend_request_accept(IN p_user_id CHAR(36),IN p_requester_user_id CHAR(36))
+BEGIN
+ DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END; START TRANSACTION;
+ DELETE FROM UserFriendRequests WHERE BINARY RequesterUserId=BINARY p_requester_user_id AND BINARY RecipientUserId=BINARY p_user_id;
+ IF ROW_COUNT()=0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='That friend request is no longer pending.'; END IF;
+ INSERT IGNORE INTO UserFriends(UserId,FriendUserId,CreatedUtc) VALUES(p_user_id,p_requester_user_id,UTC_TIMESTAMP(6)),(p_requester_user_id,p_user_id,UTC_TIMESTAMP(6));
+ DELETE FROM UserFriendRequests WHERE BINARY RequesterUserId=BINARY p_user_id AND BINARY RecipientUserId=BINARY p_requester_user_id; COMMIT;
+END//
+DROP PROCEDURE IF EXISTS sp_social_friend_request_deny//
+CREATE PROCEDURE sp_social_friend_request_deny(IN p_user_id CHAR(36),IN p_requester_user_id CHAR(36))
+BEGIN DELETE FROM UserFriendRequests WHERE BINARY RequesterUserId=BINARY p_requester_user_id AND BINARY RecipientUserId=BINARY p_user_id; IF ROW_COUNT()=0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='That friend request is no longer pending.'; END IF; END//
+DROP PROCEDURE IF EXISTS sp_social_friend_remove//
+CREATE PROCEDURE sp_social_friend_remove(IN p_user_id CHAR(36),IN p_friend_user_id CHAR(36))
+BEGIN
+ DELETE FROM UserFriends WHERE (BINARY UserId=BINARY p_user_id AND BINARY FriendUserId=BINARY p_friend_user_id) OR (BINARY UserId=BINARY p_friend_user_id AND BINARY FriendUserId=BINARY p_user_id);
+ DELETE FROM UserFriendRequests WHERE (BINARY RequesterUserId=BINARY p_user_id AND BINARY RecipientUserId=BINARY p_friend_user_id) OR (BINARY RequesterUserId=BINARY p_friend_user_id AND BINARY RecipientUserId=BINARY p_user_id);
+END//
+DROP PROCEDURE IF EXISTS sp_social_online_counts_get//
+CREATE PROCEDURE sp_social_online_counts_get(IN p_user_id CHAR(36))
+BEGIN SELECT (SELECT COUNT(*) FROM UserLivePresence p JOIN Users u ON BINARY u.UserId=BINARY p.UserId WHERE u.IsActive=1 AND p.LastSeenUtc>=UTC_TIMESTAMP(6)-INTERVAL 2 MINUTE) GlobalCount,(SELECT COUNT(*) FROM UserFriends f JOIN UserLivePresence p ON BINARY p.UserId=BINARY f.FriendUserId JOIN Users u ON BINARY u.UserId=BINARY f.FriendUserId WHERE BINARY f.UserId=BINARY p_user_id AND u.IsActive=1 AND p.LastSeenUtc>=UTC_TIMESTAMP(6)-INTERVAL 2 MINUTE) FriendsCount; END//
 DELIMITER ;
 
 -- Case-opening shop: permanent entitlement and repeatable case stock remain separate.

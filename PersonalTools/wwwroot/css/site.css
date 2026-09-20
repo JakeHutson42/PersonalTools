@@ -508,6 +508,12 @@ body.case-tycoon-page {
     padding: var(--pt-page-space,3.5rem) 0
 }
 
+/* Guest Case Tycoon has no Personal Tools navigation, so its own HUD starts at the same compact
+   safe-area position used by the installed game shell instead of reserving a missing header. */
+.case-guest-shell.case-tycoon-page .app-main {
+    padding-top: max(.5rem, env(safe-area-inset-top));
+}
+
 .app-footer {
     color: var(--pt-ink-soft);
     font-size: .84rem;

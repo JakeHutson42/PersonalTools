@@ -46,7 +46,7 @@
     const skipAnimationStorageKey = 'personalTools.caseOpeningSkipAnimation';
     let caseProgress = null;
     let dailyDropMayHaveCompleted = false;
-    let previousDailyDropPercentage = null;
+    let previousDailyDropState = null;
     let selectedProfileEmoji = '😎';
     const caseProfileImages = { 'avatar:operative':'/images/case-tycoon/avatars/operative.svg', 'avatar:vanguard':'/images/case-tycoon/avatars/vanguard.svg', 'avatar:synth':'/images/case-tycoon/avatars/synth.svg' };
     function renderCaseProfileAvatar($target, value) {
@@ -685,7 +685,6 @@
         const maxSpeed = Number(caseProgress?.maximumOpenSpeedLevel || 0);
         $('#caseShopUpgradeGrid').empty().append(
             shopUpgradeCard('open-speed', 'Faster opening', `Speed up your opening reel and multi-open reveals. Currently ${openSpeedMultiplierText(speedLevel)}.`, speedLevel >= maxSpeed, Number(caseProgress?.openSpeedUpgradeCost || 0)),
-            shopUpgradeCard('skip-animation', 'Skip animation', skipUnlocked ? 'Show your secure result immediately with a compact reveal.' : `Granted automatically at Faster opening level ${maxSpeed}.`, skipUnlocked, 0),
             shopUpgradeCard('multi-open', 'Multi case opening', `Unlock another simultaneous opening. Currently ${1 + multiLevel} at a time.`, multiLevel >= maxMulti, Number(caseProgress?.multiOpenCost || 0))
         );
     }
@@ -788,7 +787,9 @@
     function renderDailyDrop() {
         const daily = caseProgress?.dailyDrop || {};
         const required = Math.max(1, Number(daily.requiredXp || 100));
-        const percentage = Math.min(100, Math.max(0, Math.round((Number(daily.xp || 0) / required) * 100)));
+        const xp = Math.max(0, Number(daily.xp || 0));
+        const dropDate = String(daily.dropDate || '');
+        const percentage = Math.min(100, Math.max(0, Math.round((xp / required) * 100)));
         const label = percentage >= 100 ? '100% · Ready' : `${percentage}%`;
         $('#caseDailyDropFill').css('width', `${percentage}%`);
         $('#caseDailyDropText').text(label);
@@ -802,11 +803,15 @@
         $('#caseDailyDrop').toggleClass('has-preview', preview);
         $('#caseDailyDropRecall').toggleClass('d-none', !ready);
         $('.case-game-hud').toggleClass('has-daily-drop-ready', ready);
-        if (previousDailyDropPercentage !== null && percentage > previousDailyDropPercentage) {
-            const crossedMilestone = [25, 50, 75, 99].some(milestone => previousDailyDropPercentage < milestone && percentage >= milestone);
-            if (crossedMilestone) showDailyDropCarousel();
+        // The server refresh arrives after an opening. Compare the raw XP rather than the rounded
+        // percentage so every real gain plays the hand-off, including small gains at high targets.
+        // Matching the drop date prevents a new day's reset from being mistaken for progress.
+        if (previousDailyDropState !== null
+            && previousDailyDropState.dropDate === dropDate
+            && xp > previousDailyDropState.xp) {
+            showDailyDropCarousel();
         }
-        previousDailyDropPercentage = percentage;
+        previousDailyDropState = { dropDate, xp };
         if (ready && dailyDropMayHaveCompleted) {
             dailyDropMayHaveCompleted = false;
             window.setTimeout(openDailyDropModal, 250);
@@ -1364,6 +1369,7 @@
         return $.ajax(Object.assign({
             url: url,
             method: method || 'GET',
+            timeout: 30000,
             showToast: false,
             headers: { RequestVerificationToken: $('input[name="__RequestVerificationToken"]').first().val() }
         }, options || {}));
@@ -1845,9 +1851,17 @@
         });
     }
 
-    function itemCard(item, className) {
+    function itemCard(item, className, openingResult) {
         const gold = isGoldItem(item);
-        return $('<article>', { class: `${className} ${rarityClass(item)}` }).append(
+        const isWinner = openingResult != null;
+        const $copy = isWinner
+            ? $('<span>', { class: 'case-reel-winning-copy' }).append(
+                $('<strong>', { text: gold ? '★ Rare Special Item ★' : item.name }),
+                $('<small>', { text: item.wear || item.phase || '' }),
+                resultMarketText(openingResult) ? $('<b>', { text: resultMarketText(openingResult) }) : null
+            )
+            : $('<span>', { text: gold ? '★ Rare Special Item ★' : item.name });
+        return $('<article>', { class: `${className} ${rarityClass(item)}${isWinner ? ' is-winning-result' : ''}` }).append(
             $('<img>', {
                 src: gold ? caseData?.imageUrl : item.imageUrl,
                 alt: '',
@@ -1856,7 +1870,7 @@
                 fetchpriority: 'low',
                 referrerpolicy: 'no-referrer'
             }),
-            $('<span>', { text: gold ? '★ Rare Special Item ★' : item.name }),
+            $copy,
             statTrakBadge(item),
             specialVariantBadge(item)
         ).toggleClass('case-reel-gold-placeholder', gold);
@@ -2987,6 +3001,15 @@
 
     function renderSkillTree(summary) {
         skillTreeSummary = summary || { enabled: false, nodes: [] };
+        const retainedKinds = new Set(['opening', 'storage', 'bot-server', 'bot', 'bot-speed', 'daily-drop', 'trade-up-slot']);
+        const retainedFamilies = new Set(['Automatic restocking', 'Automatic selling', 'Automatic trade-ups', 'Recipe capacity']);
+        const retainedSocialUpgrades = new Set(['reaction-wheel-slots', 'victory-emote-slot', 'profile-showcase-slot']);
+        skillTreeSummary.nodes = (skillTreeSummary.nodes || []).filter(node =>
+            retainedKinds.has(String(node.purchaseKind || '').toLowerCase())
+            || retainedFamilies.has(String(node.family || ''))
+            || retainedSocialUpgrades.has(String(node.upgradeKey || '').toLowerCase()));
+        const retainedIds = new Set(skillTreeSummary.nodes.map(node => String(node.nodeId)));
+        skillTreeSummary.nodes.forEach(node => { node.prerequisiteNodeIds = (node.prerequisiteNodeIds || []).filter(id => retainedIds.has(String(id))); });
         const enabled = skillTreeSummary.enabled === true;
         $('#caseSkillTreeShell').toggleClass('d-none', !enabled);
         $('#caseLegacyUpgradeStoreContent').toggleClass('d-none', enabled);
@@ -3057,8 +3080,10 @@
         const $section = $('#caseSkillTreeAutomationControls');
         const $autoSell = $('#caseAutoSellPanel');
         const $autoBuy = $('#caseAutoBuyPanel');
+        const $bots = $('#caseBotUpgradePanel');
 
         if (!enabled) {
+            $bots.insertAfter('#caseBotUpgradePanelHome').removeClass('d-none');
             $autoSell.insertAfter('#caseAutoSellPanelHome').removeClass('d-none');
             $autoBuy.insertAfter('#caseAutoBuyPanelHome').removeClass('d-none');
             $('#caseAutomationSafeguardsPanel').insertAfter('#caseAutomationSafeguardsHome');
@@ -3072,10 +3097,11 @@
         const safeguardsVisible = !$('#caseAutomationSafeguardsPanel').hasClass('d-none');
         $autoSell.toggleClass('d-none', !autoSellUnlocked);
         $autoBuy.toggleClass('d-none', !autoBuyUnlocked);
+        $host.append($bots.removeClass('d-none'));
         if (autoSellUnlocked) $host.append($autoSell);
         if (autoBuyUnlocked) $host.append($autoBuy);
         if (safeguardsVisible) $host.append($('#caseAutomationSafeguardsPanel'));
-        $section.toggleClass('d-none', !autoSellUnlocked && !autoBuyUnlocked && !safeguardsVisible);
+        $section.removeClass('d-none');
     }
 
     function loadSkillTree(options) {
@@ -3121,51 +3147,6 @@
     }
 
     function renderInventoryUpgradeStore() {
-        const $grid = $('#caseInventoryUpgradeGrid').empty();
-        const $capacityGrid = $('#caseCapacityUpgradeGrid').empty();
-        const stars = Number(inventoryUpgrades?.activeBalanceMinor ?? activeBalance());
-        const level = Number(caseProgress?.level || 0);
-        const availableUpgrades = inventoryUpgrades?.availableUpgrades || [];
-        $('#caseCapacityUpgradeStatus').text(
-            `${Number(inventoryUpgrades?.bonusInventorySlots || 0).toLocaleString()} bonus slots unlocked`
-        );
-        const consolidatedCategories = new Set(['automation', 'bulk-sale', 'auto-sell', 'trade-up-unlock', 'trade-up-slots', 'trade-up-holding']);
-        availableUpgrades.forEach(function (upgrade) {
-            // Auto-buy and trade-up-recipe tiers each get one consolidated card inside their own
-            // panel instead of a generic row per tier - see renderAutoBuyPanel()/renderTradeUpRecipesPanel().
-            if (consolidatedCategories.has(String(upgrade.category || '').toLowerCase())) return;
-            const unlocked = upgrade.isUnlocked === true;
-            const prerequisiteKey = {
-                'inventory-slots-500': 'inventory-slots-250',
-                'inventory-slots-1000': 'inventory-slots-500'
-            }[String(upgrade.upgradeKey || '').toLowerCase()];
-            const prerequisiteUnlocked = !prerequisiteKey || availableUpgrades.some(item =>
-                String(item.upgradeKey || '').toLowerCase() === prerequisiteKey && item.isUnlocked === true);
-            const meetsLevel = level >= Number(upgrade.requiredLevel || 0);
-            const actionText = unlocked
-                ? 'Unlocked'
-                : !prerequisiteUnlocked
-                    ? 'Previous tier required'
-                    : !meetsLevel
-                        ? `Level ${Number(upgrade.requiredLevel || 0)} required`
-                        : `Unlock · ${formatCurrency(Number(upgrade.cost || 0), true)}`;
-            const $action = $('<button>', {
-                class: 'btn btn-outline-warning btn-sm js-unlock-inventory-upgrade', type: 'button',
-                'data-upgrade-key': upgrade.upgradeKey,
-                disabled: unlocked || !prerequisiteUnlocked || !meetsLevel || stars < Number(upgrade.cost || 0),
-                text: actionText
-            });
-            const $targetGrid = String(upgrade.category || '').toLowerCase() === 'capacity' ? $capacityGrid : $grid;
-            $targetGrid.append($('<div>', { class: 'col-12 col-md-6' }).append(
-                $('<article>', { class: `case-shop-row h-100${unlocked ? ' is-unlocked' : ''}` }).append(
-                    $('<div>').append($('<h3>', { class: 'h6 mb-1', text: upgrade.name }), $('<p>', { class: 'small-muted mb-1', text: upgrade.description }),
-                        $('<small>', { class: 'case-upgrade-level', text: `Level ${upgrade.requiredLevel}` })), $action)
-            ));
-        });
-
-        renderConsolidatedUpgradeTier('bulk-sale', $('#caseBulkSellUpgradeButton'), $('#caseBulkSellUpgradeDescription'), 'Sell more items in one confirmed sale.', 'Bulk-sale limit maxed');
-        $('#caseBulkSellStatus').text(`Current limit: ${Number(inventoryUpgrades?.bulkSellLimit || 100).toLocaleString()} items`);
-
         const autoSell = [
             ['covert', 'Covert', 'Rare', 'autoSellCovertUnlocked', 'autoSellCovertEnabled'],
             ['classified', 'Classified', 'Uncommon', 'autoSellClassifiedUnlocked', 'autoSellClassifiedEnabled'],
@@ -3204,7 +3185,8 @@
         renderTradeUpUpgradePanel();
         if (tradeUpRecipesLoaded) renderTradeUpRecipesPanel();
         positionSkillTreeAutomationControls();
-        const socialUnlocked = (inventoryUpgrades?.availableUpgrades || []).some(item => item.isUnlocked && String(item.category||'').toLowerCase() === 'social-qol');
+        const socialUnlocked = (inventoryUpgrades?.availableUpgrades || []).some(item =>
+            item.isUnlocked && ['reaction-wheel-slots', 'victory-emote-slot', 'profile-showcase-slot'].includes(String(item.upgradeKey || '').toLowerCase()));
         if (!automationPreferences && socialUnlocked) loadAutomationPreferences();
         else if (socialUnlocked) renderSocialPreferences(automationPreferences);
         $('#caseTradeUpHistoryPanel').addClass('d-none');
@@ -3888,7 +3870,10 @@
         $('#caseReelWindow').removeClass('has-multi-results has-scrollable-multi');
         $('#caseMultiResults').addClass('d-none').empty().removeAttr('data-open-count');
         $reel.removeClass('case-skip-reel case-multi-reel').empty().css('transform', 'translateX(0px)');
-        result.reel.forEach(item => $reel.append(itemCard(item, 'case-reel-item')));
+        result.reel.forEach((item, index) => {
+            const isWinner = index === result.winnerIndex;
+            $reel.append(itemCard(isWinner ? result.winner : item, 'case-reel-item', isWinner ? result : null));
+        });
         $idle.addClass('d-none');
         $result.addClass('d-none');
         const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -4150,11 +4135,7 @@
     function renderFinishedOpening(result) {
         const winner = result.winner;
         if (!isGoldItem(winner)) playReveal(winner);
-        $('#caseResultName').text(winner.name);
-        $('#caseResultMeta').text([winner.rarityName, winner.phase, winner.wear, winner.isStatTrak ? 'StatTrak™' : '', resultMarketText(result)].filter(Boolean).join(' · '));
-        $result.removeClass('case-rarity-mil-spec case-rarity-restricted case-rarity-classified case-rarity-covert case-rarity-rare-special')
-            .addClass(rarityClass(winner))
-            .removeClass('d-none');
+        $result.addClass('d-none');
         if (!isGoldItem(winner)) {
             runParticles(winner.rarityColor, 28);
             awardXp([result], resultImageOrigin(result));
@@ -4424,31 +4405,16 @@
         });
     }
 
-    function setDestinationLoading(destination, loading) {
-        const selector = `[data-case-destination-loader="${destination}"]`;
-        $(selector).remove();
-        $(`[data-case-destination-panel="${destination}"]`).attr('aria-busy', loading ? 'true' : 'false');
-        if (!loading) return;
-
-        const $loader = $('<div>', {
-            class: 'case-destination-loader case-tab-start',
-            'data-case-destination-loader': destination,
-            'data-case-destination-panel': destination,
-            'aria-label': `Loading ${destination}`,
-            role: 'status'
-        });
-        const $case = $('<span>', { class: 'case-destination-loader-case', 'aria-hidden': 'true' })
-            .append($('<i>'), $('<b>'));
-        $loader.append($case, $('<span>', { class: 'case-destination-loader-copy', text: 'Preparing your next operation…' }))
-            .insertBefore($(`[data-case-destination-panel="${destination}"]`).first());
-    }
-
     // Each destination asks for only the data it owns. Once loaded, its mounted DOM keeps the
     // user's filters and selections intact when they move around the simulator.
     function loadDestinationData(destination, options) {
         const settings = options || {};
         const requests = [];
-        const quietOptions = { showLoader: false };
+        const quietOptions = {
+            showLoader: true,
+            loaderTitle: 'Loading Case Tycoon',
+            loaderMessage: 'Preparing your next operation…'
+        };
         const supportsLiveRefresh = destination === 'shop' || destination === 'upgrades';
         const lastRefresh = Number(destinationRefreshedAt.get(destination) || 0);
         const refreshLiveData = supportsLiveRefresh
@@ -4499,13 +4465,9 @@
 
         if (requests.length === 0) return $.Deferred().resolve().promise();
 
-        setDestinationLoading(destination, true);
         return $.when.apply($, requests)
             .done(function () {
                 if (supportsLiveRefresh) destinationRefreshedAt.set(destination, Date.now());
-            })
-            .always(function () {
-                setDestinationLoading(destination, false);
             });
     }
 
@@ -4546,7 +4508,8 @@
             if (destination === 'tradeups') renderTradeUpWorkspace();
         });
         window.setTimeout(function () {
-            transition.classList.remove('is-active', 'is-closing');
+            transition.classList.remove('is-closing');
+            if (!transition.classList.contains('is-loading')) transition.classList.remove('is-active');
             $('.case-bottom-nav-link').prop('disabled', false);
         }, 650);
     }
@@ -6798,10 +6761,29 @@
     $('#caseProfileSocialTab').on('shown.bs.tab', () => loadSocial(false));
     $('#casePlayerProfile').on('shown.bs.offcanvas', () => { if ($('#caseProfileSocialTab').hasClass('active')) loadSocial(false); });
     $('.case-user-scope').on('click','button',function(){ $('.case-user-scope button').removeClass('active').attr('aria-pressed','false'); $(this).addClass('active').attr('aria-pressed','true'); loadSocial(false); applySocialCount($(this).data('user-scope')); });
-    $('#caseSocialSearch').on('input',function(){
-        clearTimeout(socialSearchTimer); const query = $(this).val().trim(), $results = $('#caseSocialResults');
-        if (query.length < 2) { $results.addClass('d-none').empty(); return; }
-        socialSearchTimer = setTimeout(() => request(`/api/social/search?query=${encodeURIComponent(query)}`,'GET',{showLoader:false,showToast:false}).done(items => $results.toggleClass('d-none',!items.length).html(items.length ? items.map(item => socialPlayerRow(item,false)).join('') : '')).fail(() => $results.removeClass('d-none').html('<p class="small-muted mb-0">Search is unavailable.</p>')),300);
+    let socialSearchRequest = null;
+    $('#caseSocialSearch').on('input search',function(){
+        clearTimeout(socialSearchTimer);
+        socialSearchRequest?.abort();
+        socialSearchRequest = null;
+        const query = String($(this).val() || '').trim(), $results = $('#caseSocialResults');
+        const unprefixedQuery = query.replace(/^[@#]/, '');
+        const canSearch = /^#?\d+$/.test(query) ? unprefixedQuery.length > 0 : unprefixedQuery.length >= 2;
+        if (!canSearch) { $results.addClass('d-none').empty(); return; }
+        socialSearchTimer = setTimeout(() => {
+            $results.removeClass('d-none').html('<p class="small-muted mb-0">Searching players…</p>');
+            socialSearchRequest = request(`/api/social/search?query=${encodeURIComponent(query)}`,'GET',{showLoader:false,showToast:false})
+                .done(items => {
+                    const players = Array.isArray(items) ? items : [];
+                    $results.html(players.length
+                        ? players.map(item => socialPlayerRow(item,false)).join('')
+                        : '<p class="small-muted mb-0">No players match that search.</p>');
+                })
+                .fail(response => {
+                    if (!requestWasAborted(response)) $results.removeClass('d-none').html('<p class="small-muted mb-0">Search is unavailable.</p>');
+                })
+                .always(() => { socialSearchRequest = null; });
+        },300);
     });
 
     $('#caseGuestAccessChangeButton').on('click', function () {

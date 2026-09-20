@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using PersonalTools.Classes;
 using PersonalTools.Classes.CaseOpening;
 using PersonalTools.Entities;
+using PersonalTools.Data.CaseOpening;
 using PersonalTools.Security;
 
 namespace PersonalTools.Controllers;
@@ -17,12 +18,14 @@ public sealed class AuthController : ControllerBase
 {
     private readonly IAuthFuncs _auth;
     private readonly ICaseOpeningFuncs _caseOpening;
+    private readonly ICaseOpeningData _caseOpeningData;
     private readonly ILogger<AuthController> _logger;
 
-    public AuthController(IAuthFuncs auth, ICaseOpeningFuncs caseOpening, ILogger<AuthController> logger)
+    public AuthController(IAuthFuncs auth, ICaseOpeningFuncs caseOpening, ICaseOpeningData caseOpeningData, ILogger<AuthController> logger)
     {
         _auth = auth;
         _caseOpening = caseOpening;
+        _caseOpeningData = caseOpeningData;
         _logger = logger;
     }
 
@@ -40,6 +43,13 @@ public sealed class AuthController : ControllerBase
 
             if (authentication.IsLockedOut)
             {
+                _logger.LogWarning(
+                    SecurityEventIds.LoginRejected,
+                    "Locked account sign-in rejected from {RemoteIp}; current user {UserId}; name {UserName}; agent {UserAgent}.",
+                    HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous",
+                    SecurityEventLoggingMiddleware.SafeValue(User.Identity?.Name, 100, "anonymous"),
+                    SecurityEventLoggingMiddleware.SafeValue(Request.Headers.UserAgent.ToString(), 240));
                 return StatusCode(StatusCodes.Status429TooManyRequests, new LoginResponse(
                     false,
                     "Too many incorrect sign-in attempts. Try again in a few minutes or ask an administrator to unlock the account.",
@@ -49,6 +59,13 @@ public sealed class AuthController : ControllerBase
             AppUser? user = authentication.User;
             if (user is null)
             {
+                _logger.LogWarning(
+                    SecurityEventIds.LoginRejected,
+                    "Sign-in rejected from {RemoteIp}; current user {UserId}; name {UserName}; agent {UserAgent}.",
+                    HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous",
+                    SecurityEventLoggingMiddleware.SafeValue(User.Identity?.Name, 100, "anonymous"),
+                    SecurityEventLoggingMiddleware.SafeValue(Request.Headers.UserAgent.ToString(), 240));
                 return Unauthorized(new LoginResponse(false, "Email or password is incorrect.", string.Empty));
             }
 
@@ -105,6 +122,7 @@ public sealed class AuthController : ControllerBase
     [HttpPost("logout")]
     public async Task<ActionResult<ApiResponse>> Logout()
     {
+        bool registeredAccount = User.HasClaim(AppAuthorizationPolicies.AccountTypeClaim, AppAuthorizationPolicies.RegisteredAccount);
         if (Guid.TryParse(User.FindFirstValue("session_id"), out Guid sessionId))
         {
             // Invalidate the server-side session before clearing the browser cookie so a copied
@@ -112,7 +130,66 @@ public sealed class AuthController : ControllerBase
             await _auth.DeleteSession(sessionId);
         }
 
-        await HttpContext.SignOutAsync();
+        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+        // Signing out of a full account returns this browser to its independently remembered
+        // Case Tycoon guest. The protected resume ticket is accepted only after its server-side
+        // session, current user record and the administrator guest-access switch all validate.
+        if (registeredAccount)
+        {
+            bool restoredGuest = false;
+            try
+            {
+                Microsoft.AspNetCore.Authentication.AuthenticateResult rememberedGuest =
+                    await HttpContext.AuthenticateAsync(AppAuthorizationPolicies.GuestResumeAuthenticationScheme);
+                string? guestUserId = rememberedGuest.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                string? guestSessionId = rememberedGuest.Principal?.FindFirstValue("session_id");
+                if (Guid.TryParse(guestUserId, out Guid parsedGuestUserId) &&
+                    Guid.TryParse(guestSessionId, out Guid parsedGuestSessionId) &&
+                    await _auth.IsSessionValid(parsedGuestSessionId, parsedGuestUserId) &&
+                    await _caseOpeningData.GetGuestAccessEnabled(HttpContext.RequestAborted))
+                {
+                    AppUser? guest = await _auth.GetUser(parsedGuestUserId);
+                    if (guest is { IsActive: true, IsGuest: true })
+                    {
+                        Claim[] claims =
+                        [
+                            new(ClaimTypes.NameIdentifier,guest.UserId.ToString("D")),
+                            new(ClaimTypes.Name,guest.DisplayName),
+                            new(ClaimTypes.Role,guest.Role.ToString()),
+                            new(AppAuthorizationPolicies.AccountTypeClaim,AppAuthorizationPolicies.GuestAccount),
+                            new("session_id",parsedGuestSessionId.ToString("D"))
+                        ];
+                        AuthenticationProperties properties = new()
+                        {
+                            IsPersistent = true,
+                            ExpiresUtc = rememberedGuest.Properties?.ExpiresUtc ?? DateTimeOffset.UtcNow.AddDays(180),
+                            AllowRefresh = false
+                        };
+                        await HttpContext.SignInAsync(
+                            CookieAuthenticationDefaults.AuthenticationScheme,
+                            new ClaimsPrincipal(new ClaimsIdentity(claims,CookieAuthenticationDefaults.AuthenticationScheme)),
+                            properties);
+                        restoredGuest = true;
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                // Registered sign-out must still succeed if the optional remembered guest cannot
+                // be restored because the database or guest feature is temporarily unavailable.
+                _logger.LogWarning(exception, "The remembered Case Tycoon guest could not be restored after sign-out.");
+            }
+
+            if (!restoredGuest)
+                await HttpContext.SignOutAsync(AppAuthorizationPolicies.GuestResumeAuthenticationScheme);
+        }
+        else
+        {
+            // Explicitly signing out while the guest itself is active means forget that guest.
+            await HttpContext.SignOutAsync(AppAuthorizationPolicies.GuestResumeAuthenticationScheme);
+        }
+
         return Ok(new ApiResponse(true, "Signed out."));
     }
 }

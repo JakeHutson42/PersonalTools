@@ -4,6 +4,8 @@
     const catalogue = document.querySelector('#caseBattleCreateCases');
     const selectedHost = document.querySelector('#caseBattleSelectedCases');
     const summary = document.querySelector('#caseBattleCreateSummary');
+    const costBreakdown = document.querySelector('#caseBattleCostBreakdown');
+    const buyLabel = document.querySelector('#caseBattleBuyAllLabel');
     const create = document.querySelector('#caseBattleCreate');
     const buy = document.querySelector('#caseBattleBuyAll');
     const opponent = document.querySelector('#caseBattleOpponent');
@@ -35,23 +37,34 @@
     let battleBot = null;
     let opponentRequestVersion = 0;
     let maxCases = 20;
+    let economyMode = 'stars';
     const escape = value => String(value || '').replace(/[&<>"']/g, character => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;' })[character]);
     const byKey = key => cases.find(item => item.caseKey === key);
     const requirements = () => selected.reduce((result, key) => { result[key] = (result[key] || 0) + 1; return result; }, {});
     const missingKeys = () => Object.entries(requirements()).flatMap(([key, needed]) => Array(Math.max(0, needed - Number(byKey(key)?.ownedQuantity || 0))).fill(key));
+    const selectedCost = keys => keys.reduce((total, key) => total + Number(byKey(key)?.purchaseCost || 0), 0);
+    const formatCost = value => economyMode === 'gbp'
+        ? new Intl.NumberFormat('en-GB', { style:'currency', currency:'GBP' }).format(Number(value || 0) / 100)
+        : '★' + Number(value || 0).toLocaleString();
     const request = (url, method, body) => fetch(url, { method, credentials: 'same-origin', headers: { 'Content-Type':'application/json', 'RequestVerificationToken':token }, body: body ? JSON.stringify(body) : undefined })
         .then(async response => response.ok ? response.json() : Promise.reject((await response.json()).message));
     const remaining = value => Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 1000));
     const initials = value => String(value || '?').trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join('').toUpperCase() || '?';
     const mode = () => modeInput?.value || 'duel';
-    const playerCount = () => ({ duel:2, 'ffa-3':3, 'ffa-4':4 }[mode()] || 2);
+    const playerCount = () => ({ duel:2, 'ffa-3':3, 'ffa-4':4, 'teams-2v2':4 }[mode()] || 2);
     const requiredOpponentCount = () => playerCount() - 1;
-    const botIdsForMode = () => Array.from({ length:requiredOpponentCount() }, (_, index) => 'battle-bot-' + (index + 1));
+    const botIdsForMode = () => [
+        '00000000-0000-0000-0000-000000000001',
+        '00000000-0000-0000-0000-000000000002',
+        '00000000-0000-0000-0000-000000000003'
+    ].slice(0, requiredOpponentCount());
+    const isBotId = id => botIdsForMode().includes(String(id));
     const hasRequiredOpponents = () => selectedOpponentIds.length === requiredOpponentCount();
     const sharedUnlockedCases = () => {
         if (!hasRequiredOpponents()) return null;
-        if (selectedOpponentIds.length && selectedOpponentIds.every(id => id.startsWith('battle-bot'))) return new Set(cases.filter(item => item.isUnlocked).map(item => String(item.caseKey).toLowerCase()));
-        const sets = selectedOpponentIds.map(id => opponentUnlockedCases.get(id));
+        const humanIds = selectedOpponentIds.filter(id => !isBotId(id));
+        if (!humanIds.length) return new Set(cases.filter(item => item.isUnlocked).map(item => String(item.caseKey).toLowerCase()));
+        const sets = humanIds.map(id => opponentUnlockedCases.get(id));
         if (sets.some(value => !value)) return null;
         return new Set([...sets[0]].filter(key => sets.every(value => value.has(key))));
     };
@@ -79,7 +92,14 @@
         animateSelectionLayout(previousPositions);
         if (selectionCount) { selectionCount.querySelector('b').textContent = selected.length; selectionCount.querySelector('small').textContent = '/ ' + maxCases + ' selected'; if (lastCount >= 0 && lastCount !== selected.length) { selectionCount.classList.remove('is-bumping'); void selectionCount.offsetWidth; selectionCount.classList.add('is-bumping'); } lastCount = selected.length; }
         const missing = missingKeys();
+        const perPlayerStake = selectedCost(selected);
+        const missingCost = selectedCost(missing);
+        const totalPot = perPlayerStake * playerCount();
         summary.textContent = selected.length ? selected.length + ' round' + (selected.length === 1 ? '' : 's') + ' · ' + (missing.length ? missing.length + ' case' + (missing.length === 1 ? '' : 's') + ' missing' : 'all cases owned') : 'Choose at least one case.';
+        if (costBreakdown) costBreakdown.textContent = selected.length
+            ? 'Your case contribution ' + formatCost(perPlayerStake) + ' · combined entry value ' + formatCost(totalPot) + (missing.length ? ' · buy missing for ' + formatCost(missingCost) : '')
+            : 'Your exact contribution will appear here.';
+        if (buyLabel) buyLabel.textContent = missing.length ? 'Buy missing · ' + formatCost(missingCost) : 'All cases owned';
         create.disabled = !selected.length || missing.length > 0 || !hasRequiredOpponents() || sharedCases === null;
         buy.disabled = buying || missing.length === 0;
         create.classList.toggle('is-ready-attention', selected.length === maxCases && !create.disabled);
@@ -146,14 +166,8 @@
         const card = event.target.closest('[data-opponent-id]');
         if (!card || opponent.disabled) return;
         const id = card.dataset.opponentId;
-        if (id.startsWith('battle-bot')) {
-            const botIds = botIdsForMode();
-            selectedOpponentIds = selectedOpponentIds.some(value => value.startsWith('battle-bot')) ? [] : botIds;
-        } else {
-            selectedOpponentIds = selectedOpponentIds.filter(value => !value.startsWith('battle-bot'));
-            if (selectedOpponentIds.includes(id)) selectedOpponentIds = selectedOpponentIds.filter(value => value !== id);
-            else if (selectedOpponentIds.length < requiredOpponentCount()) selectedOpponentIds.push(id);
-        }
+        if (selectedOpponentIds.includes(id)) selectedOpponentIds = selectedOpponentIds.filter(value => value !== id);
+        else if (selectedOpponentIds.length < requiredOpponentCount()) selectedOpponentIds.push(id);
         opponent.value = selectedOpponentIds[0] || '';
         await refreshOpponentUnlocks();
     });
@@ -224,7 +238,7 @@
     async function refreshOpponentUnlocks() {
         const version = ++opponentRequestVersion;
         render();
-        const humanIds = selectedOpponentIds.filter(id => !id.startsWith('battle-bot'));
+        const humanIds = selectedOpponentIds.filter(id => !isBotId(id));
         if (!humanIds.length) { render(); return; }
         try {
             const responses = await Promise.all(humanIds.map(id => opponentUnlockedCases.has(id) ? opponentUnlockedCases.get(id) : fetch('/api/case-battles/invitable-users/' + encodeURIComponent(id) + '/unlocked-cases', { credentials:'same-origin', cache:'no-store' }).then(response => response.ok ? response.json() : Promise.reject())));
@@ -246,13 +260,14 @@
         selectedOpponentIds = [];
         opponent.value = '';
         selected = [];
-        if (opponentHelp) opponentHelp.textContent = requiredOpponentCount() > 1 ? 'Select ' + requiredOpponentCount() + ' rivals. Only cases unlocked by all ' + playerCount() + ' players will be available.' : 'Your shared unlocked cases are checked as soon as you select a player.';
-        if (contributionCopy) contributionCopy.textContent = playerCount() > 2 ? 'All ' + playerCount() + ' players contribute one of every case below. The highest combined value wins the entire pot.' : 'Both players contribute one of every case below. Reorder the rounds before sending your invitation.';
+        if (opponentHelp) opponentHelp.textContent = mode() === 'teams-2v2' ? 'Select three participants. Teams are balanced at launch: you get a human teammate when available, otherwise a bot.' : requiredOpponentCount() > 1 ? 'Select ' + requiredOpponentCount() + ' rivals. Only cases unlocked by all ' + playerCount() + ' players will be available.' : 'Your shared unlocked cases are checked as soon as you select a player.';
+        if (contributionCopy) contributionCopy.textContent = mode() === 'teams-2v2' ? 'Both teams contribute one of every case. The higher team total wins, and each winning teammate receives half of the pot.' : playerCount() > 2 ? 'All ' + playerCount() + ' players contribute one of every case below. The highest combined value wins the entire pot.' : 'Both players contribute one of every case below. Reorder the rounds before sending your invitation.';
         render();
     }));
     create.addEventListener('click', () => {
-        const useBot = selectedOpponentIds.length > 0 && selectedOpponentIds.every(id => id.startsWith('battle-bot'));
-        request('/api/case-battles', 'POST', { mode:mode(), useBot, ...(useBot ? {} : { invitedUserIds:selectedOpponentIds }), caseKeys:selected })
+        const botUserIds = selectedOpponentIds.filter(isBotId);
+        const invitedUserIds = selectedOpponentIds.filter(id => !isBotId(id));
+        request('/api/case-battles', 'POST', { mode:mode(), botUserIds, invitedUserIds, caseKeys:selected })
             .then(battle => { const target = '/CaseOpening/Battles/Lobby/' + encodeURIComponent(battle.battleId); if (window.caseBattleTransition) window.caseBattleTransition.navigate(target); else window.location.assign(target); })
             .catch(message => personalToolsToast?.error(message || 'Unable to create the battle.'));
     });
@@ -260,9 +275,23 @@
         fetch('/api/case-opening/cases', { credentials:'same-origin', cache:'no-store' }).then(response => response.ok ? response.json() : Promise.reject()),
         fetch('/api/case-battles/invitable-users', { credentials:'same-origin', cache:'no-store' }).then(response => response.ok ? response.json() : Promise.reject()),
         fetch('/api/case-battles/bot-status', { credentials:'same-origin', cache:'no-store' }).then(response => response.ok ? response.json() : { enabled:false }),
-        fetch('/api/case-battles/timings', { credentials:'same-origin', cache:'no-store' }).then(response => response.ok ? response.json() : null)
+        fetch('/api/case-battles/timings', { credentials:'same-origin', cache:'no-store' }).then(response => response.ok ? response.json() : null),
+        fetch('/api/case-opening/progress', { credentials:'same-origin', cache:'no-store' }).then(response => response.ok ? response.json() : null)
     ]), { title:'Preparing your battle', message:'Loading cases and available opponents…' })
-        .then(([caseData, users, bot, settings]) => { cases = Array.isArray(caseData) ? caseData : []; opponents = Array.isArray(users) ? users : []; battleBot = bot || null; maxCases = Math.max(1, Number(settings?.maxCasesPerBattle || 20)); const botOption = bot?.enabled ? '<option value="battle-bot">Battle Bot · auto-ready</option>' : ''; opponent.innerHTML = '<option value="">Choose an opponent…</option>' + botOption + opponents.map(user => '<option value="' + escape(user.userId) + '">' + escape(user.displayName) + '</option>').join(''); opponent.disabled = !opponents.length && !bot?.enabled; [{ mode:'ffa-3', enabled:bot?.freeForAll3Enabled, label:'1v1v1', players:3 }, { mode:'ffa-4', enabled:bot?.freeForAll4Enabled, label:'1v1v1v1', players:4 }].forEach(option => { const button = modeButtons.find(candidate => candidate.dataset.battleMode === option.mode); if (button) { button.disabled = !option.enabled; button.title = option.enabled ? option.players + '-player winner-takes-all battle' : option.label + ' is disabled by an administrator'; } }); render(); })
+        .then(([caseData, users, bot, settings, progress]) => {
+            cases = Array.isArray(caseData) ? caseData : []; opponents = Array.isArray(users) ? users : []; battleBot = bot || null;
+            maxCases = Math.max(1, Number(settings?.maxCasesPerBattle || 20)); economyMode = String(progress?.economyMode || 'stars').toLowerCase();
+            const botOption = bot?.enabled ? '<option value="battle-bot">Battle Bot · auto-ready</option>' : '';
+            opponent.innerHTML = '<option value="">Choose an opponent…</option>' + botOption + opponents.map(user => '<option value="' + escape(user.userId) + '">' + escape(user.displayName) + '</option>').join(''); opponent.disabled = !opponents.length && !bot?.enabled;
+            [{ mode:'ffa-3', enabled:bot?.freeForAll3Enabled, label:'1v1v1', players:3 }, { mode:'ffa-4', enabled:bot?.freeForAll4Enabled, label:'1v1v1v1', players:4 }].forEach(option => { const button = modeButtons.find(candidate => candidate.dataset.battleMode === option.mode); if (button) { button.disabled = !option.enabled; button.title = option.enabled ? option.players + '-player winner-takes-all battle' : option.label + ' is disabled by an administrator'; } });
+            const parameters = new URLSearchParams(window.location.search), requestedMode = parameters.get('mode');
+            const requestedModeButton = modeButtons.find(button => button.dataset.battleMode === requestedMode && !button.disabled);
+            if (requestedModeButton) { modeInput.value = requestedMode; modeButtons.forEach(button => { const active = button === requestedModeButton; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); }); }
+            selected = (parameters.get('cases') || '').split(',').map(value => value.trim()).filter(key => byKey(key)?.isUnlocked).slice(0, maxCases);
+            selectedOpponentIds = (parameters.get('opponents') || '').split(',').map(value => value.trim()).filter(id => opponents.some(user => String(user.userId) === id) || isBotId(id)).slice(0, requiredOpponentCount());
+            opponent.value = selectedOpponentIds[0] || '';
+            refreshOpponentUnlocks();
+        })
         .catch(() => { summary.textContent = 'Cases or available users could not be loaded.'; opponent.innerHTML = '<option value="">No users available</option>'; });
     loadPendingCreated();
     loadIncomingInvitations();

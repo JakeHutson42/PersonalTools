@@ -1,9 +1,9 @@
 /* global personalToolsToast */
 (() => {
     'use strict';
-    const status = document.querySelector('#caseBattleStatus'), elapsed = document.querySelector('#caseBattleElapsed'), scoreboard = document.querySelector('#caseBattleScoreboard'), track = document.querySelector('#caseBattleCaseTrack'), arena = document.querySelector('#caseBattleArena'), actions = document.querySelector('#caseBattleActions'), results = document.querySelector('#caseBattleResults'), resultsSection = document.querySelector('#caseBattleResultsSection'), showcase = document.querySelector('#caseBattleShowcase'), winnerBackdrop = document.querySelector('#caseBattleWinnerBackdrop');
+    const status = document.querySelector('#caseBattleStatus'), elapsed = document.querySelector('#caseBattleElapsed'), scoreboard = document.querySelector('#caseBattleScoreboard'), track = document.querySelector('#caseBattleCaseTrack'), arena = document.querySelector('#caseBattleArena'), actions = document.querySelector('#caseBattleActions'), results = document.querySelector('#caseBattleResults'), resultsSection = document.querySelector('#caseBattleResultsSection'), showcase = document.querySelector('#caseBattleShowcase'), winnerBackdrop = document.querySelector('#caseBattleWinnerBackdrop'), backButton = document.querySelector('[data-case-battle-back]');
     const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
-    let battleId = document.querySelector('[data-case-battle-id]')?.dataset.caseBattleId || null, latestDetail = null, replaying = false, refreshTimer = 0, showcaseShown = false, showcaseDismissEnabled = false, battleCreatedAt = null, currentReady = false, readySequenceShown = false, autoStartScheduled = false, realtimeConnection = null, victoryEmoteKey = '', victoryEmoteSent = false;
+    let battleId = document.querySelector('[data-case-battle-id]')?.dataset.caseBattleId || null, latestDetail = null, replaying = false, refreshTimer = 0, showcaseShown = false, showcaseDismissEnabled = false, battlePresentationComplete = false, battleCreatedAt = null, currentReady = false, readySequenceShown = false, autoStartScheduled = false, realtimeConnection = null, victoryEmoteKey = '', victoryEmoteSent = false;
     let timings = { readyPauseMs:900, readyCountdownMs:3000, preSpinPauseMs:2500, spinDurationMs:5000, resultsPauseMs:1100, winnerIntroPauseMs:2500, winnerTallyDurationMs:4200, winnerVerdictPauseMs:1800, winnerTransferDurationMs:3500 };
     const caseImages = new Map();
     const caseNames = new Map();
@@ -22,6 +22,14 @@
     const profileAvatar = (player, initial) => profileImages[player.profileAvatar]
         ? '<img src="' + profileImages[player.profileAvatar] + '" alt="" loading="eager">'
         : '<span aria-hidden="true">' + escape(player.profileAvatar || initial) + '</span>';
+    function createUrl(detail, includeOpponents) {
+        const parameters = new URLSearchParams({ mode:detail.mode || 'duel', cases:(detail.caseKeys || []).join(',') });
+        if (includeOpponents) {
+            const currentUserId = String(document.body.dataset.userId || '');
+            parameters.set('opponents', (detail.participants || []).filter(player => String(player.userId) !== currentUserId).map(player => player.userId).join(','));
+        }
+        return '/CaseOpening/Battles/Create?' + parameters.toString();
+    }
     function showReaction(payload) { if (!reactionStage || !payload?.value) return; const reaction = document.createElement('span'); reaction.className = 'case-battle-floating-reaction' + (payload.kind === 'image' ? ' is-image' : ''); if (payload.kind === 'image') { const image=document.createElement('img'); image.src=payload.value; image.alt=''; reaction.append(image); } else reaction.textContent = payload.value; reaction.style.setProperty('--reaction-x', (1.1 + Math.random() * 4.5).toFixed(1) + 'rem'); reaction.style.setProperty('--reaction-drift', (10 + Math.random() * 32).toFixed(1) + 'vw'); reaction.style.setProperty('--reaction-sway', ((Math.random() * 14) - 7).toFixed(1) + 'vw'); reaction.style.setProperty('--reaction-peak', (42 + Math.random() * 18).toFixed(1) + 'vh'); reaction.style.setProperty('--reaction-turn', ((Math.random() * 52) - 26).toFixed(0) + 'deg'); reaction.style.setProperty('--reaction-duration', (2.15 + Math.random() * .7).toFixed(2) + 's'); reactionStage.append(reaction); window.setTimeout(() => reaction.remove(), 3100); }
     function showEffect(key) { if (!effectStage) return; effectStage.className='case-battle-effect-stage is-' + key; effectStage.replaceChildren(); const count=key==='ak-rain' ? 24 : 14; for(let i=0;i<count;i++){ const part=document.createElement('i'); part.className=key==='ak-rain' ? 'fa-solid fa-gun' : key==='gold-burst' ? 'fa-solid fa-star' : 'fa-solid fa-bolt'; part.style.setProperty('--effect-x',(Math.random()*100).toFixed(1)+'vw'); part.style.setProperty('--effect-delay',(Math.random()*1.1).toFixed(2)+'s'); part.style.setProperty('--effect-turn',((Math.random()*180)-90).toFixed(0)+'deg'); part.style.setProperty('--effect-colour',`hsl(${Math.floor(Math.random()*360)} 85% 62%)`); effectStage.append(part); } window.setTimeout(()=>{ effectStage.className='case-battle-effect-stage'; effectStage.replaceChildren(); },4000); }
     function loadReactions() {
@@ -39,9 +47,11 @@
 
     function renderScoreboard(detail, useReplayTotals) {
         scoreboard.dataset.players = String(detail.requiredPlayers || detail.participants?.length || 2);
+        scoreboard.dataset.mode = detail.mode || '';
         scoreboard.innerHTML = (detail.participants || []).map(player => {
             const initial = escape((player.displayName || '?').trim().charAt(0).toUpperCase());
-            return '<span class="case-battle-compact-player" data-player-id="' + escape(player.userId) + '"><span class="case-battle-compact-avatar">' + profileAvatar(player, initial) + '</span><strong>' + escape(player.displayName) + '</strong></span>';
+            const team = detail.mode === 'teams-2v2' ? '<small>T' + Number(player.team || 0) + '</small>' : '';
+            return '<span class="case-battle-compact-player" data-player-id="' + escape(player.userId) + '" data-team="' + Number(player.team || 0) + '" title="' + escape(player.displayName) + '" aria-label="' + escape(player.displayName) + '"><span class="case-battle-compact-avatar">' + profileAvatar(player, initial) + '</span><strong>' + escape(player.displayName) + '</strong>' + team + '</span>';
         }).join('');
     }
     function renderResultRails(detail) {
@@ -50,7 +60,8 @@
         results.innerHTML = (detail.participants || []).map(player => {
             const pulls = pullsFor(detail, player.userId);
             const cards = pulls.map(pull => '<article class="case-battle-result" style="--battle-rarity:' + escape(pull.rarityColor) + '"><img src="' + escape(pull.imageUrl) + '" alt="" loading="lazy"><span class="case-battle-item-name" title="' + escape(pull.itemName) + '">' + escape(pull.itemName) + '</span><small class="case-battle-item-wear">' + escape(pull.wear || 'Wear unavailable') + '</small><b>' + money(pull.lockedValue) + '</b></article>').join('');
-            return '<section class="case-battle-result-rail"><header><strong>' + escape(player.displayName) + '</strong><span>' + pulls.length + ' item' + (pulls.length === 1 ? '' : 's') + '</span></header><div class="case-battle-result-cards">' + (cards || '<span class="small-muted">Awaiting results</span>') + '</div></section>';
+            const team = detail.mode === 'teams-2v2' ? ' · Team ' + Number(player.team || 0) : '';
+            return '<section class="case-battle-result-rail"><header><strong>' + escape(player.displayName) + team + '</strong><span>' + pulls.length + ' item' + (pulls.length === 1 ? '' : 's') + '</span></header><div class="case-battle-result-cards">' + (cards || '<span class="small-muted">Awaiting results</span>') + '</div></section>';
         }).join('');
     }
     function slideTrackTo(index) {
@@ -74,7 +85,7 @@
         let html = '';
         if (detail.status === 'waiting') { html += '<button class="btn btn-outline-warning" type="button" data-battle-action="ready">' + (currentReady ? 'Not ready' : 'Ready up') + '</button>'; if (readyCount === detail.requiredPlayers && !readySequenceShown) html += '<button class="btn btn-warning" type="button" data-battle-action="start">Start battle</button>'; html += detail.isCreator ? '<button class="btn btn-outline-danger" type="button" data-battle-action="cancel"><i class="fa-solid fa-xmark me-1" aria-hidden="true"></i>Cancel invitation</button>' : '<button class="btn btn-outline-secondary" type="button" data-battle-action="leave">Leave battle</button>'; }
         if (detail.status === 'opening' && !detail.pulls?.length) html = '<button class="btn btn-warning" type="button" data-battle-action="start">Resume battle</button>';
-        if (detail.status === 'settled') html = '';
+        if (detail.status === 'settled') html = '<button class="btn btn-warning" type="button" data-battle-action="rematch"><i class="fa-solid fa-rotate me-1" aria-hidden="true"></i>Rematch</button><a class="btn btn-outline-warning" href="' + escape(createUrl(detail, true)) + '" data-case-battle-transition-link>Rematch &amp; edit</a><a class="btn btn-outline-secondary" href="' + escape(createUrl(detail, false)) + '" data-case-battle-transition-link>Challenge another player</a><a class="btn btn-outline-secondary" href="/CaseOpening/Battles" data-case-battle-transition-link>Battle hub</a>';
         actions.innerHTML = html;
         if (detail.status === 'waiting' && readyCount === detail.requiredPlayers) runReadySequence(detail);
         replayAvailable(detail);
@@ -253,64 +264,87 @@
         window.requestAnimationFrame(frame);
     }
     async function revealShowcase(detail) {
-        if (showcaseShown || detail.status !== 'settled' || !detail.winningUserId || shownRounds.size < detail.caseKeys.length) return;
+        if (showcaseShown || detail.status !== 'settled' || (!detail.winningUserId && !detail.winningTeam) || shownRounds.size < detail.caseKeys.length) return;
         showcaseShown = true;
         showcaseDismissEnabled = false;
         window.caseBattleAudio?.duckForReveal();
-        const winnerId = String(detail.winningUserId), reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const isTeamBattle = detail.mode === 'teams-2v2';
+        const winningPlayers = (detail.participants || []).filter(player => isTeamBattle ? Number(player.team) === Number(detail.winningTeam) : String(player.userId) === String(detail.winningUserId));
+        const winnerIds = new Set(winningPlayers.map(player => String(player.userId)));
+        const signatureOwner = [...winningPlayers].sort((left, right) => Number(right.totalValue || 0) - Number(left.totalValue || 0))[0];
+        const winnerId = String(signatureOwner?.userId || detail.winningUserId), reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const highlight = [...(detail.pulls || [])].filter(pull => String(pull.originalOwnerUserId) === winnerId).sort((left, right) => Number(right.lockedValue || 0) - Number(left.lockedValue || 0))[0];
-        const panels = (detail.participants || []).map(player => '<article class="case-battle-finalist" data-user-id="' + escape(player.userId) + '"><span class="case-battle-smoke" aria-hidden="true"></span><span class="case-battle-finalist-status"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i>Awaiting verdict</span><p class="eyebrow mb-1">Final total</p><strong>' + escape(player.displayName) + '</strong><b data-earnings>£0.00</b></article>').join('');
+        const panels = (detail.participants || []).map(player => '<article class="case-battle-finalist" data-user-id="' + escape(player.userId) + '"><span class="case-battle-smoke" aria-hidden="true"></span><span class="case-battle-finalist-status"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i>Awaiting verdict</span><p class="eyebrow mb-1">' + (isTeamBattle ? 'Team ' + Number(player.team) : 'Final total') + '</p><strong>' + escape(player.displayName) + '</strong><b data-earnings>£0.00</b></article>').join('');
         const sparks = Array.from({ length:28 }, (_, index) => '<i style="--spark:' + index + '"></i>').join('');
         showcase.innerHTML = '<button class="case-battle-winner-dismiss" type="button" data-winner-dismiss aria-label="Close winner reveal" hidden><i class="fa-solid fa-xmark" aria-hidden="true"></i></button><div class="case-battle-victory-effects" aria-hidden="true"><span class="case-battle-victory-flash"></span><span class="case-battle-victory-rings"></span><span class="case-battle-victory-fireworks">' + sparks + '</span></div><div class="case-battle-showcase-title"><p class="eyebrow mb-1">Battle complete</p><h2 class="h3 mb-0">Final verdict</h2><span>Calculating the winner…</span></div><div class="case-battle-victory-item">' + (highlight ? '<img src="' + escape(highlight.imageUrl) + '" alt=""><span><small>Signature pull</small><strong>' + escape(highlight.itemName) + '</strong></span>' : '') + '</div><div class="case-battle-finalists" data-finalists="' + (detail.participants || []).length + '">' + panels + '</div>';
         winnerBackdrop?.classList.remove('d-none');
         showcase.classList.remove('d-none');
         showcase.focus({ preventScroll:true });
         await wait(reduced ? 0 : timings.winnerIntroPauseMs);
-        const winner = showcase.querySelector('[data-user-id="' + CSS.escape(winnerId) + '"]');
-        const finalists = [...showcase.querySelectorAll('.case-battle-finalist')], losers = finalists.filter(panel => panel !== winner);
+        const finalists = [...showcase.querySelectorAll('.case-battle-finalist')];
+        const winners = finalists.filter(panel => winnerIds.has(panel.dataset.userId)), losers = finalists.filter(panel => !winnerIds.has(panel.dataset.userId));
         const valueFor = panel => Number((detail.participants || []).find(player => String(player.userId) === panel?.dataset.userId)?.totalValue || 0);
-        const winnerValue = valueFor(winner), finalWinnerValue = Number(detail.lockedPotValue || finalists.reduce((total, panel) => total + valueFor(panel), 0));
-        const winnerEarnings = winner?.querySelector('[data-earnings]');
+        const awardFor = panel => Number((detail.participants || []).find(player => String(player.userId) === panel?.dataset.userId)?.awardedValue || 0);
         const tallyDuration = reduced ? 0 : timings.winnerTallyDurationMs, transferDuration = reduced ? 0 : timings.winnerTransferDurationMs;
 
         showcase.querySelector('.case-battle-showcase-title span').textContent = 'Tallying the battle earnings…';
         await Promise.all(finalists.map(panel => new Promise(resolve => { animateEarnings(panel.querySelector('[data-earnings]'), 0, valueFor(panel), tallyDuration); window.setTimeout(resolve, tallyDuration); })));
         await wait(reduced ? 0 : timings.winnerVerdictPauseMs);
-        winner?.classList.add('is-winner');
+        winners.forEach(winner => winner.classList.add('is-winner'));
         losers.forEach(loser => loser.classList.add('is-loser'));
-        if (!victoryEmoteSent && victoryEmoteKey && winnerId === String(document.body.dataset.userId || '') && realtimeConnection?.state === window.signalR?.HubConnectionState.Connected) {
+        if (!victoryEmoteSent && victoryEmoteKey && winnerIds.has(String(document.body.dataset.userId || '')) && realtimeConnection?.state === window.signalR?.HubConnectionState.Connected) {
             victoryEmoteSent = true;
             realtimeConnection.invoke('SendReaction', battleId, victoryEmoteKey).catch(() => { victoryEmoteSent = false; });
         }
-        winner?.querySelector('.case-battle-finalist-status')?.replaceChildren('Winner');
+        winners.forEach(winner => winner.querySelector('.case-battle-finalist-status')?.replaceChildren(isTeamBattle ? 'Winning team' : 'Winner'));
         losers.forEach(loser => loser.querySelector('.case-battle-finalist-status')?.replaceChildren('Runner-up'));
-        showcase.querySelector('.case-battle-showcase-title span').textContent = (winner?.querySelector('strong')?.textContent || 'Winner') + ' takes the pot';
+        showcase.querySelector('.case-battle-showcase-title span').textContent = isTeamBattle ? 'Team ' + Number(detail.winningTeam) + ' splits the pot' : (winners[0]?.querySelector('strong')?.textContent || 'Winner') + ' takes the pot';
         const transferAnimation = Promise.all([
             ...losers.map(loser => new Promise(resolve => { animateEarnings(loser.querySelector('[data-earnings]'), valueFor(loser), 0, transferDuration); window.setTimeout(resolve, transferDuration); })),
-            new Promise(resolve => { animateEarnings(winnerEarnings, winnerValue, finalWinnerValue, transferDuration); window.setTimeout(resolve, transferDuration); })
+            ...winners.map(winner => new Promise(resolve => { animateEarnings(winner.querySelector('[data-earnings]'), valueFor(winner), awardFor(winner) || Number(detail.lockedPotValue || 0), transferDuration); window.setTimeout(resolve, transferDuration); }))
         ]);
         // Let the winner's final profit counter visibly begin before the celebration enters. This
         // keeps the neutral side-by-side tally from revealing the outcome ahead of the verdict.
         const celebrationDelay = Math.min(280, Math.max(40, Number(transferDuration || 0) * .12));
         await wait(reduced ? 0 : celebrationDelay);
-        winner?.classList.add('is-tallying-winner');
+        winners.forEach(winner => winner.classList.add('is-tallying-winner'));
         window.caseBattleAudio?.playWinnerReveal();
-        if (winner && !reduced) {
+        if (winners.length && !reduced) {
             const crownRain = document.createElement('span');
             crownRain.className = 'case-battle-crown-rain';
             crownRain.setAttribute('aria-hidden', 'true');
             crownRain.innerHTML = Array.from({ length:14 }, (_, index) => '<i class="fa-solid fa-crown" style="--crown-left:' + ((index * 37 + 9) % 94) + '%;--crown-delay:' + ((index * 113) % 900) + 'ms;--crown-duration:' + (1750 + ((index * 97) % 850)) + 'ms;--crown-size:' + (0.62 + ((index % 4) * 0.12)).toFixed(2) + 'rem"></i>').join('');
-            winner.prepend(crownRain);
+            winners[0].prepend(crownRain);
         }
         await transferAnimation;
-        winner?.classList.remove('is-tallying-winner');
+        battlePresentationComplete = true;
+        winners.forEach(winner => winner.classList.remove('is-tallying-winner'));
         showcaseDismissEnabled = true;
         const dismissButton = showcase.querySelector('[data-winner-dismiss]');
         if (dismissButton) dismissButton.hidden = false;
     }
     function load() { if (!battleId) { window.location.replace('/CaseOpening'); return Promise.resolve(); } return request('/api/case-battles/' + encodeURIComponent(battleId) + '/detail', 'GET').then(render).catch(() => { status.textContent = 'Unable to restore this battle.'; }); }
-    actions.addEventListener('click', event => { const button = event.target.closest('[data-battle-action]'); if (!button || !battleId) return; const action = button.dataset.battleAction; button.disabled = true; request('/api/case-battles/' + encodeURIComponent(battleId) + '/' + action, action === 'ready' ? 'PUT' : 'POST', action === 'ready' ? !currentReady : undefined).then(() => { if (action === 'cancel' || action === 'leave') { personalToolsToast?.success(action === 'cancel' ? 'Invitation cancelled and cases returned.' : 'You left the battle.'); window.location.assign('/CaseOpening'); return; } return load(); }).catch(message => { button.disabled = false; personalToolsToast?.error(message || 'The battle could not be updated.'); }); });
+    actions.addEventListener('click', event => {
+        const button = event.target.closest('[data-battle-action]'); if (!button || !battleId) return;
+        const action = button.dataset.battleAction; button.disabled = true;
+        if (action === 'rematch') {
+            const currentUserId = String(document.body.dataset.userId || '');
+            const opponentIds = (latestDetail?.participants || []).filter(player => String(player.userId) !== currentUserId).map(player => player.userId);
+            const botIds = opponentIds.filter(id => String(id).startsWith('00000000-0000-0000-0000-00000000000'));
+            const invitedUserIds = opponentIds.filter(id => !botIds.includes(id));
+            request('/api/case-battles', 'POST', { mode:latestDetail.mode, botUserIds:botIds, invitedUserIds, caseKeys:latestDetail.caseKeys || [] })
+                .then(battle => { const target = '/CaseOpening/Battles/Lobby/' + encodeURIComponent(battle.battleId); if (window.caseBattleTransition) window.caseBattleTransition.navigate(target); else window.location.assign(target); })
+                .catch(message => { button.disabled = false; personalToolsToast?.error(message || 'The rematch could not be created. Use “Rematch & edit” to review your cases.'); });
+            return;
+        }
+        request('/api/case-battles/' + encodeURIComponent(battleId) + '/' + action, action === 'ready' ? 'PUT' : 'POST', action === 'ready' ? !currentReady : undefined).then(() => { if (action === 'cancel' || action === 'leave') { personalToolsToast?.success(action === 'cancel' ? 'Invitation cancelled and cases returned.' : 'You left the battle.'); window.location.assign('/CaseOpening/Battles'); return; } return load(); }).catch(message => { button.disabled = false; personalToolsToast?.error(message || 'The battle could not be updated.'); });
+    });
     function dismissWinnerReveal() { if (!showcaseDismissEnabled) return; winnerBackdrop?.classList.add('d-none'); showcase?.classList.add('d-none'); resultsSection?.scrollIntoView({ behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'start' }); }
+    backButton?.addEventListener('click', event => {
+        if (battlePresentationComplete) return;
+        const leave = window.confirm('This battle is still in progress. Leave the battle screen? The battle will continue and you can return to it later.');
+        if (!leave) { event.preventDefault(); event.stopImmediatePropagation(); }
+    }, true);
     showcase?.addEventListener('click', event => { if (event.target.closest('[data-winner-dismiss]')) dismissWinnerReveal(); });
     winnerBackdrop?.addEventListener('click', dismissWinnerReveal);
     document.querySelector('#caseBattleAdminReplay')?.addEventListener('click', () => {

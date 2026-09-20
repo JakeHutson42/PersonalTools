@@ -26,7 +26,10 @@ public sealed class SocialProfileFuncs(ISocialProfileData data) : ISocialProfile
     public Task<List<SocialProfileObj>> Search(Guid userId, string query, CancellationToken cancellationToken = default)
     {
         string value = query.Trim();
-        if (value.Length is < 2 or > 100) throw new InvalidOperationException("Enter at least 2 characters of a username or name, or an account ID.");
+        if (value.StartsWith('@')) value = value[1..].TrimStart();
+        bool isAccountId = value.TrimStart('#').All(char.IsDigit) && value.TrimStart('#').Length > 0;
+        if (value.Length > 100 || (!isAccountId && value.Length < 2))
+            throw new InvalidOperationException("Enter at least 2 characters of a username or name, or an account ID.");
         return data.Search(userId, value, 20, cancellationToken);
     }
     public Task AddFriend(Guid userId, Guid friendUserId, CancellationToken cancellationToken = default)

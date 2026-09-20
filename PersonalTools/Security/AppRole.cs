@@ -14,6 +14,8 @@ public enum AppRole : byte
 
 public static class AppAuthorizationPolicies
 {
+    public const string GuestResumeAuthenticationScheme = "PersonalTools.CaseTycoonGuestResume";
+    public const string GuestResumeCookieName = "PersonalTools.CaseTycoonGuest";
     public const string AdminOnly = "PersonalTools.AdminOnly";
     public const string RegisteredUser = "PersonalTools.RegisteredUser";
     public const string CaseTycoonAccess = "PersonalTools.CaseTycoonAccess";
