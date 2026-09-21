@@ -1,0 +1,99 @@
+@page
+@model PersonalTools.Pages.Chess.IndexModel
+@{
+    ViewData["Title"] = "Chess";
+}
+@section Head {
+    <link rel="stylesheet" href="~/vendor/chess/board/package/assets/chessboard.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/pages/page-chess.css" asp-append-version="true" />
+}
+<main class="container py-4 chess-page" data-chess-page>
+    @Html.AntiForgeryToken()
+    <div class="chess-heading">
+        <div><p class="text-uppercase small mb-1">Play and learn</p><h1>Chess</h1><p>Play a friend or the computer, then learn from the moments that mattered.</p></div>
+        <div class="chess-create-actions chess-action-dock" aria-label="Chess game and practice controls">
+            <div class="chess-dock-links"><a class="btn btn-outline-secondary" href="#chessLearn">Learn</a><a class="btn btn-outline-secondary" asp-page="/Chess/Puzzles">Puzzles</a><a class="btn btn-outline-secondary" asp-page="/Chess/Practice">Practise</a><a class="btn btn-outline-secondary" asp-page="/Chess/Coach">Coach</a></div>
+            <label class="chess-difficulty-picker" for="chessDifficulty"><span id="chessDifficultyLabel">Pathfinder</span><select id="chessDifficulty" class="form-select" aria-label="Computer difficulty">
+                <optgroup label="Getting started"><option value="100">Sparrow · 100</option><option value="200">Squire · 200</option><option value="300">Lantern · 300</option><option value="400">Scout · 400</option><option value="500" selected>Pathfinder · 500</option><option value="600">Ember · 600</option><option value="700">Vanguard · 700</option></optgroup>
+                <optgroup label="Building strength"><option value="800">Knightfall · 800</option><option value="900">Ironclad · 900</option><option value="1000">Gambit · 1000</option><option value="1100">Rookwind · 1100</option><option value="1200">B_lits · 1200</option><option value="1300">Fusion · 1300</option><option value="1400">Arcane · 1400</option><option value="1500">Warden · 1500</option></optgroup>
+                <optgroup label="Challenge"><option value="1600">Onyx · 1600</option><option value="1700">Tempest · 1700</option><option value="1800">Dominion · 1800</option><option value="1900">Dragonfire · 1900</option><option value="2000">Monarch · 2000</option><option value="2100">Sovereign · 2100</option><option value="2200">Mythic · 2200</option><option value="2300">Legend · 2300</option><option value="2400">Titan · 2400</option></optgroup>
+            </select></label>
+            <select id="chessPlayMode" class="form-select chess-mode-picker" aria-label="Computer play mode"><option value="relaxed">Relaxed</option><option value="coach">Hints</option><option value="challenge" selected>Challenge</option></select>
+            <button class="btn chess-play-computer" type="button" id="chessNewAi">Play computer</button>
+            <button class="btn btn-outline-secondary chess-play-friend" type="button" id="chessNewFriend">Play a friend</button>
+        </div>
+    </div>
+    <p id="chessMessage" class="chess-message" role="status" aria-live="polite"></p>
+    <div class="chess-layout">
+        <section class="chess-main card" aria-label="Chess game">
+            <div class="card-body">
+                <div class="chess-game-heading"><div><h2 id="chessGameTitle" class="h5 mb-1">Choose a game</h2><p id="chessGameStatus" class="mb-2">Start a game to begin.</p><span id="chessTurnBadge" class="badge text-bg-secondary" role="status" aria-live="polite">No game selected</span></div><div class="chess-game-actions"><button type="button" id="chessImmersive" class="btn btn-sm btn-outline-secondary" aria-pressed="false">Immersive mode</button><button type="button" id="chessSound" class="btn btn-sm btn-outline-secondary" aria-pressed="true">Sound on</button><button type="button" id="chessAskHint" class="btn btn-sm btn-outline-secondary" hidden>Get a hint</button><button type="button" id="chessUndo" class="btn btn-sm btn-outline-secondary" hidden>Undo turn</button><button type="button" id="chessResign" class="btn btn-sm btn-outline-danger" hidden>Resign</button></div></div>
+                <div id="chessOutcome" class="chess-outcome" role="alert" hidden><span class="chess-outcome-symbol" aria-hidden="true">♚</span><div><strong id="chessOutcomeTitle">Game over</strong><span id="chessOutcomeDetail"></span></div></div>
+                <div id="chessInvite" class="chess-invite" hidden><p>Send this private link to a friend. They can join with their PersonalTools account.</p><div class="input-group"><input type="text" id="chessInviteLink" class="form-control" readonly aria-label="Invitation link" /><button type="button" id="chessCopyInvite" class="btn btn-outline-secondary">Copy</button></div></div>
+                <div id="chessJoin" class="chess-invite" hidden><p>You have been invited to play Black.</p><button type="button" id="chessJoinButton" class="btn btn-warning">Join game</button></div>
+                <div id="chessBoardStage" class="chess-board-stage">
+                    <div id="chessBoard" class="chess-board" aria-label="Chess board"></div>
+                    <div id="chessPreviewNotice" class="chess-preview-notice" hidden>Suggested move preview · not saved</div>
+                    <div id="chessOpening" class="chess-opening" aria-hidden="true" hidden>
+                        <div class="chess-door chess-door-left"><span class="chess-door-panel"></span></div>
+                        <div class="chess-door chess-door-right"><span class="chess-door-panel"></span></div>
+                        <span class="chess-door-seal" aria-hidden="true">♞</span>
+                    </div>
+                    <div id="chessMotionLayer" class="chess-motion-layer" aria-hidden="true"></div>
+                    <button id="chessSkipOpening" class="chess-skip-opening" type="button" aria-label="Skip board opening animation" hidden>Skip intro</button>
+                    <button id="chessExitImmersive" class="chess-exit-immersive" type="button" aria-label="Exit immersive mode" hidden>Exit</button>
+                </div>
+                <p id="chessMoveStrength" class="chess-move-strength" role="status" aria-live="polite" hidden></p>
+                <p id="chessPremoveNotice" class="chess-premove-notice" role="status" aria-live="polite" hidden><span></span><button id="chessCancelPremove" type="button">Cancel</button></p>
+                <section id="chessReview" class="chess-review" aria-labelledby="chessReviewTitle" hidden>
+                    <div class="chess-review-heading"><div><p class="text-uppercase small mb-1">After your game</p><h2 id="chessReviewTitle" class="h5 mb-1">Game review</h2><p id="chessReviewStatus" class="mb-0">Preparing your review…</p></div><span id="chessReviewConfidence" class="chess-review-confidence">Quick guide</span></div>
+                    <div id="chessEvaluationGraph" class="chess-evaluation-graph" aria-label="A simple White and Black position balance."></div>
+                    <div class="chess-review-controls" aria-label="Review navigation"><button type="button" id="chessReviewFirst" class="btn btn-sm btn-outline-secondary" aria-label="First move">First</button><button type="button" id="chessReviewPrevious" class="btn btn-sm btn-outline-secondary" aria-label="Previous move">Previous</button><span id="chessReviewMoveLabel" class="chess-review-move-label">Move —</span><button type="button" id="chessReviewNext" class="btn btn-sm btn-outline-secondary" aria-label="Next move">Next</button><button type="button" id="chessReviewLast" class="btn btn-sm btn-outline-secondary" aria-label="Last move">Last</button><button type="button" id="chessReviewReturn" class="btn btn-sm btn-outline-secondary">Return to game</button></div>
+                    <div id="chessReviewInsight" class="chess-review-insight" aria-live="polite"></div>
+                </section>
+                <p class="chess-board-guidance">Tap a piece to move it. While a friend is thinking, queue your next move. Right-drag to draw an arrow; right-click a square to highlight it.</p>
+            </div>
+        </section>
+        <aside class="chess-side">
+            <section class="card"><div class="card-body"><h2 class="h5">Your games</h2><div id="chessGames" class="chess-game-list" aria-live="polite">Loading…</div></div></section>
+            <section class="card chess-moves-card"><div class="card-body"><h2 class="h5">Moves</h2><p class="chess-move-key"><span class="best">Best</span><span class="good">Good</span><span class="mistake">Mistake</span><span class="blunder">Blunder</span></p><div id="chessMoves" class="chess-move-list" aria-live="polite">No moves yet.</div></div></section>
+        </aside>
+    </div>
+    <section id="chessLearn" class="chess-learn card mt-4" aria-labelledby="chessLearnTitle">
+        <div class="card-body">
+        <div class="chess-learn-heading"><div><p class="text-uppercase small mb-1">Step-by-step course</p><h2 id="chessLearnTitle" class="h4 mb-1">Learn chess</h2><p class="mb-0">Read a short idea, see it on the board, then try it yourself.</p></div><span id="chessLearnProgress" class="chess-learn-progress">Loading lessons…</span></div>
+        <section id="chessContinueLearning" class="chess-continue-learning" hidden aria-labelledby="chessContinueTitle"><div><p class="text-uppercase small mb-1">Continue learning</p><h3 id="chessContinueTitle" class="h5 mb-1"></h3><p id="chessContinueReason" class="mb-0"></p><p id="chessPrerequisite" class="chess-prerequisite mb-0" hidden></p></div><button id="chessContinueButton" type="button" class="btn btn-warning btn-sm">Continue</button></section>
+            <div id="chessLearnLevels" class="chess-learn-levels" role="group" aria-label="Lesson level"></div>
+            <div class="chess-learn-layout">
+                <nav id="chessLessonList" class="chess-lesson-list" aria-label="Chess lessons"></nav>
+                <div id="chessLessonPanel" class="chess-lesson-panel" hidden>
+                    <div class="chess-lesson-top"><div><p id="chessLessonCategory" class="text-uppercase small mb-1"></p><h3 id="chessLessonTitle" class="h5 mb-0"></h3></div><span id="chessLessonStepCount" class="chess-step-count"></span></div>
+                    <div class="chess-lesson-content"><div id="chessLessonBoard" class="chess-lesson-board" aria-label="Chess lesson board"></div><div class="chess-lesson-copy"><h4 id="chessStepTitle" class="h6"></h4><div id="chessStepText"></div><p id="chessStepFeedback" class="chess-step-feedback" role="status" aria-live="polite"></p><div class="chess-lesson-controls"><button type="button" id="chessLessonBack" class="btn btn-outline-secondary btn-sm">Back</button><button type="button" id="chessLessonHint" class="btn btn-outline-secondary btn-sm" hidden>Hint</button><button type="button" id="chessLessonNext" class="btn btn-warning btn-sm">Next</button></div></div></div>
+                    <section id="chessLessonMastery" class="chess-lesson-mastery" hidden aria-labelledby="chessMasteryTitle"><p class="text-uppercase small mb-1">Quick check</p><h4 id="chessMasteryTitle" class="h6">Check your understanding</h4><p id="chessMasteryQuestion"></p><div id="chessMasteryOptions" class="chess-mastery-options" role="group" aria-label="Mastery check answers"></div><p id="chessMasteryFeedback" class="chess-step-feedback" role="status"></p><div id="chessConfidence" class="chess-confidence" hidden><span>How confident do you feel?</span><button type="button" data-confidence="1">Need practice</button><button type="button" data-confidence="2">Getting it</button><button type="button" data-confidence="3">Confident</button></div></section>
+                </div>
+            </div>
+            <p class="small chess-lesson-credit mb-0 mt-3">Lesson material adapted from <a href="https://github.com/mourad-ghafiri/KarpaChess">KarpaChess</a> (MIT). Exercises stay on this site.</p>
+        </div>
+    </section>
+    <p class="chess-credits small mt-4">Board: <a href="https://github.com/shaack/cm-chessboard">cm-chessboard</a>. Chess pieces by <a href="https://en.wikipedia.org/wiki/User:Cburnett">Cburnett</a> and <a href="https://en.wikipedia.org/wiki/User:Rfc1394">Rfc1394</a>, adapted by <a href="https://shaack.com">Stefan Haack</a>, <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>. Computer opponent: <a href="https://github.com/nmrugg/stockfish.js">Stockfish.js</a> (GPLv3).</p>
+</main>
+<div class="modal fade" id="chessPromotionModal" tabindex="-1" aria-labelledby="chessPromotionTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content"><div class="modal-header"><h2 class="modal-title h5" id="chessPromotionTitle">Promote your pawn</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cancel promotion"></button></div>
+        <div class="modal-body"><p class="mb-3">Choose the piece your pawn becomes.</p><div class="chess-promotion-options" role="group" aria-label="Promotion piece">
+            <button type="button" class="btn btn-outline-secondary" data-chess-promotion="q" aria-label="Promote to queen"><span aria-hidden="true">♕</span> Queen</button>
+            <button type="button" class="btn btn-outline-secondary" data-chess-promotion="r" aria-label="Promote to rook"><span aria-hidden="true">♖</span> Rook</button>
+            <button type="button" class="btn btn-outline-secondary" data-chess-promotion="b" aria-label="Promote to bishop"><span aria-hidden="true">♗</span> Bishop</button>
+            <button type="button" class="btn btn-outline-secondary" data-chess-promotion="n" aria-label="Promote to knight"><span aria-hidden="true">♘</span> Knight</button>
+        </div></div>
+    </div></div>
+</div>
+<div class="modal fade" id="chessResultModal" tabindex="-1" aria-labelledby="chessResultTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content chess-result-dialog"><div class="modal-body text-center p-4">
+        <div id="chessResultSymbol" class="chess-result-symbol" aria-hidden="true">½–½</div>
+        <h2 id="chessResultTitle" class="h3 mb-2">Game over</h2>
+        <p id="chessResultDetail" class="mb-3"></p>
+        <p id="chessResultExplanation" class="small mb-4"></p>
+        <div class="chess-result-actions"><button type="button" id="chessResultUndo" class="btn btn-outline-secondary" hidden>Undo last turn</button><button type="button" class="btn btn-warning" data-bs-dismiss="modal">Review board</button></div>
+    </div></div></div>
+</div>
+@section Scripts { <script type="module" src="~/js/pages/page-chess.js" asp-append-version="true"></script><script type="module" src="~/js/pages/page-chess-lessons.js" asp-append-version="true"></script> }

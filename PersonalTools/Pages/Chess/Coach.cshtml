@@ -1,0 +1,10 @@
+@page
+@model PersonalTools.Pages.Chess.CoachModel
+@{ ViewData["Title"] = "Chess coach"; }
+@section Head { <link rel="stylesheet" href="~/vendor/chess/board/package/assets/chessboard.css" asp-append-version="true" /><link rel="stylesheet" href="~/css/pages/page-chess.css" asp-append-version="true" /> }
+<main class="container py-4 chess-page chess-coach-page" data-chess-coach-page>
+    <div class="chess-heading"><div><p class="text-uppercase small mb-1">Your practice</p><h1>Chess coach</h1><p>Practise the positions that were difficult in your own games.</p></div><div class="chess-create-actions"><a class="btn btn-outline-secondary" asp-page="/Chess/Index">Back to games</a></div></div>
+    <section class="chess-coach-signals" aria-label="Practice signals"><article><span>Puzzles due</span><strong id="chessCoachDue">0</strong></article><article><span>Lessons completed</span><strong id="chessCoachLessons">0</strong></article><article><span>Topics improving</span><strong id="chessCoachImproving">—</strong></article><article><span>Common error</span><strong id="chessCoachError">—</strong></article></section>
+    <section class="card chess-coach-practice"><div class="card-body"><div class="chess-practice-board-heading"><div><span id="chessCoachKind" class="chess-puzzle-theme">Personal practice</span><h2 id="chessCoachTitle" class="h4 mb-1">Your next practice position</h2><p id="chessCoachPrompt" class="mb-0">Finish a game review to add a position from one of your own games.</p></div><button id="chessCoachIdea" type="button" class="btn btn-outline-secondary btn-sm" hidden>Give me a clue</button></div><div id="chessCoachBoard" class="chess-practice-board" aria-label="Personal coach practice board"></div><p id="chessCoachFeedback" class="chess-puzzle-feedback" role="status"></p><div id="chessCoachQueue" class="chess-coach-queue"></div></div></section>
+</main>
+@section Scripts { <script type="module" src="~/js/pages/page-chess-coach.js" asp-append-version="true"></script> }

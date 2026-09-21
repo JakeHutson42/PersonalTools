@@ -69,6 +69,15 @@ namespace PersonalTools.Classes.Dashboard
                 },
                 new DashboardToolObj
                 {
+                    Title = "Chess",
+                    Description = "Play chess with a friend or challenge the computer.",
+                    IconClass = "fa-solid fa-chess-knight",
+                    PageUrl = "/Chess",
+                    ButtonText = "Play chess",
+                    Category = "Workspace",
+                },
+                new DashboardToolObj
+                {
                     Title = "Paste Bin",
                     Description = "Share text, code and files with signed-in Personal Tools users.",
                     IconClass = "fa-regular fa-paste",

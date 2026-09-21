@@ -991,15 +991,26 @@
 
     // Case-battle invitations are fetched from the server even when SignalR delivered the nudge.
     // That keeps the signed-in user's pending invitation authoritative across reconnects and tabs.
+    // The endpoint is registered-user-only; public and guest pages must not poll it.
+    if (!document.body.classList.contains('has-app-sidebar')) return;
     const invitationHost = document.createElement('div');
     invitationHost.className = 'case-battle-invitation-host';
     document.body.append(invitationHost);
     let inviteTimer = null;
+    let invitationRequestAllowed = true;
     function requestToken() { return document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''; }
     function clearInvitation() { window.clearInterval(inviteTimer); inviteTimer = null; delete invitationHost.dataset.signature; invitationHost.replaceChildren(); }
     function loadBattleInvitation() {
+        if (!invitationRequestAllowed) return Promise.resolve();
         return fetch('/api/case-battles/invitations/pending', { credentials: 'same-origin', cache: 'no-store' })
-            .then(response => response.ok ? response.json() : null)
+            .then(response => {
+                if (response.status === 401 || response.status === 403) {
+                    invitationRequestAllowed = false;
+                    clearInvitation();
+                    return null;
+                }
+                return response.ok ? response.json() : null;
+            })
             .then(invitations => { const items = Array.isArray(invitations) ? invitations : (invitations?.battleId ? [invitations] : []); if (items.length) renderBattleInvitations(items); else clearInvitation(); })
             .catch(() => {});
     }

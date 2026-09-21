@@ -37,6 +37,8 @@ using System.Threading.RateLimiting;
 using PersonalTools.Hubs;
 using PersonalTools.Classes.CaseBattles;
 using PersonalTools.Data.CaseBattles;
+using PersonalTools.Classes.ChessGames;
+using PersonalTools.Data.ChessGames;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -59,6 +61,9 @@ builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(d
 builder.Services.AddRazorPages();
 builder.Services.Configure<PersonalTools.Entities.CaseBattles.CaseBattleFeatureOptions>(builder.Configuration.GetSection("CaseBattles"));
 builder.Services.AddSignalR();
+builder.Services.AddScoped<ChessGameService>();
+builder.Services.AddScoped<ChessLessonService>();
+builder.Services.AddScoped<IChessGameData, ChessGameData>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddControllersWithViews(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute())).AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddMemoryCache();
@@ -66,6 +71,7 @@ builder.Services.AddRateLimiter(options =>
 {
     const string loginPolicy = "login";
     const string caseBattleWritePolicy = "case-battles-write";
+    const string chessMovePolicy = "chess-move";
     const string guestRegistrationPolicy = "guest-registration";
 
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -85,6 +91,18 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 12,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            }));
+    // Chess has two writes per human/AI turn; keep its routine play separate from
+    // the stricter case-battle purchase and invitation write budget.
+    options.AddPolicy(chessMovePolicy, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 90,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
                 AutoReplenishment = true,
@@ -476,5 +494,6 @@ app.MapControllers();
 app.MapHub<LiveWinnersHub>("/hubs/live-winners");
 app.MapHub<SocialPresenceHub>("/hubs/social-presence");
 app.MapHub<CaseBattleHub>("/hubs/case-battles");
+app.MapHub<ChessHub>("/hubs/chess");
 
 app.Run();

@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Gera.Chess" Version="1.2.0" />
     <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
     <PackageReference Include="MySqlConnector" Version="2.4.0" />
     <PackageReference Include="Mapster" Version="7.4.0" />

@@ -1,0 +1,25 @@
+@page
+@model PersonalTools.Pages.Chess.PuzzlesModel
+@{
+    ViewData["Title"] = "Chess tactics";
+}
+@section Head {
+    <link rel="stylesheet" href="~/vendor/chess/board/package/assets/chessboard.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/pages/page-chess.css" asp-append-version="true" />
+}
+<main class="container py-4 chess-page chess-puzzles-page" data-chess-puzzles-page>
+    <div class="chess-heading">
+        <div><p class="text-uppercase small mb-1">Daily practice</p><h1>Chess tactics</h1><p>Five short puzzles: new ideas plus anything you missed before.</p></div>
+        <div class="chess-create-actions"><a class="btn btn-outline-secondary" asp-page="/Chess/Index">Back to games</a><button id="chessPuzzleReset" type="button" class="btn btn-outline-secondary">Choose five puzzles</button></div>
+    </div>
+    <section class="chess-puzzle-shell card" aria-label="Tactics trainer">
+        <div class="card-body">
+            <div class="chess-puzzle-top"><div><span id="chessPuzzleTheme" class="chess-puzzle-theme">Loading puzzle…</span><h2 id="chessPuzzleTitle" class="h4 mb-1">Tactics trainer</h2><p id="chessPuzzleMeta" class="mb-0"></p></div><div class="chess-puzzle-progress"><strong id="chessPuzzleCount">—</strong><span>today</span></div></div>
+            <div class="chess-puzzle-layout"><div><div id="chessPuzzleBoard" class="chess-puzzle-board" aria-label="Chess tactics board"></div><p id="chessPuzzleTurn" class="chess-puzzle-turn" role="status" aria-live="polite"></p></div>
+                <aside class="chess-puzzle-panel"><h3 class="h6">Need a hand?</h3><p id="chessPuzzleHint" class="chess-puzzle-hint">First, look for checks, captures, and threats.</p><button id="chessPuzzleHintButton" type="button" class="btn btn-outline-secondary btn-sm">Give me a clue</button><button id="chessPuzzleSolution" type="button" class="btn btn-outline-secondary btn-sm">Show the answer</button><div id="chessPuzzleFeedback" class="chess-puzzle-feedback" role="status" aria-live="polite"></div><div class="chess-puzzle-actions"><button id="chessPuzzleAgain" type="button" class="btn btn-outline-secondary btn-sm" hidden>Practise tomorrow</button><button id="chessPuzzleNext" type="button" class="btn btn-warning btn-sm" hidden>Next puzzle</button></div></aside>
+            </div>
+            <p class="chess-puzzle-credit small mb-0">Curated CC0 Lichess puzzle snapshot. Positions and every solution line are checked in this browser before practice begins.</p>
+        </div>
+    </section>
+</main>
+@section Scripts { <script type="module" src="~/js/pages/page-chess-puzzles.js" asp-append-version="true"></script> }
