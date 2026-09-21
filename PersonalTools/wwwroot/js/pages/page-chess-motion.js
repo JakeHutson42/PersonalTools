@@ -59,10 +59,10 @@ export function createChessMotion(board, stage, opening, layer, skipButton) {
         flights.forEach(({ flight, x, y }, index) => {
             window.anime.animate(flight, {
                 translateX: [0, x], translateY: [0, y], scale: [.45, 1], opacity: [.25, 1],
-                duration: 660, delay: index * 18, ease: 'out(3)'
+                duration: 980, delay: index * 28, ease: 'out(3)'
             });
         });
-        openingTimer = window.setTimeout(() => { if (run === openingRun) finishOpening(); }, 660 + (flights.length - 1) * 18 + 40);
+        openingTimer = window.setTimeout(() => { if (run === openingRun) finishOpening(); }, 980 + (flights.length - 1) * 28 + 80);
     }
 
     function playOpening() {
@@ -82,10 +82,10 @@ export function createChessMotion(board, stage, opening, layer, skipButton) {
         left.style.transform = right.style.transform = '';
         left.style.opacity = right.style.opacity = '1';
         seal.style.opacity = '1';
-        window.anime.animate(left, { rotateY: [0, -104], opacity: [1, .7], duration: 950, ease: 'inOut(3)' });
-        window.anime.animate(right, { rotateY: [0, 104], opacity: [1, .7], duration: 950, ease: 'inOut(3)' });
-        window.anime.animate(seal, { scale: [1, 1.18], opacity: [1, 0], duration: 320, ease: 'in(2)' });
-        openingTimer = window.setTimeout(() => deployPieces(run), 930);
+        window.anime.animate(left, { rotateY: [0, -104], opacity: [1, .7], duration: 1450, ease: 'inOut(3)' });
+        window.anime.animate(right, { rotateY: [0, 104], opacity: [1, .7], duration: 1450, ease: 'inOut(3)' });
+        window.anime.animate(seal, { scale: [1, 1.18], opacity: [1, 0], duration: 520, ease: 'in(2)' });
+        openingTimer = window.setTimeout(() => deployPieces(run), 1410);
     }
 
     function captureSnapshot(move) {
@@ -118,8 +118,8 @@ export function createChessMotion(board, stage, opening, layer, skipButton) {
         const ring = document.createElement('span');
         ring.className = 'chess-capture-ring';
         effect.append(ring);
-        window.anime.animate(ghost, { translateY: [0, -effect.clientHeight * .3], rotate: [0, 16], scale: [1, .72], opacity: [1, 0], duration: 560, ease: 'out(3)' });
-        window.anime.animate(ring, { scale: [.35, 1.6], opacity: [.95, 0], duration: 560, ease: 'out(3)' });
+        window.anime.animate(ghost, { translateY: [0, -effect.clientHeight * .3], rotate: [0, 16], scale: [1, .72], opacity: [1, 0], duration: 780, ease: 'out(3)' });
+        window.anime.animate(ring, { scale: [.35, 1.6], opacity: [.95, 0], duration: 780, ease: 'out(3)' });
         const radius = effect.clientWidth * .65;
         for (let i = 0; i < 8; i++) {
             const spark = document.createElement('span');
@@ -128,10 +128,10 @@ export function createChessMotion(board, stage, opening, layer, skipButton) {
             const angle = i * Math.PI / 4 + Math.PI / 8;
             window.anime.animate(spark, {
                 translateX: [0, Math.cos(angle) * radius], translateY: [0, Math.sin(angle) * radius],
-                rotate: [0, 120], scale: [1, .2], opacity: [1, 0], duration: 510, ease: 'out(3)'
+                rotate: [0, 120], scale: [1, .2], opacity: [1, 0], duration: 720, ease: 'out(3)'
             });
         }
-        window.setTimeout(() => effect.remove(), 650);
+        window.setTimeout(() => effect.remove(), 860);
     }
 
     skipButton.addEventListener('click', finishOpening);

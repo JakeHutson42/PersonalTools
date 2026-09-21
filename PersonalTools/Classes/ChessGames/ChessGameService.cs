@@ -109,6 +109,7 @@ public sealed class ChessGameService(IChessGameData data)
         await data.Resign(id, userId, ct);
         return await Get(id, userId, ct);
     }
+    public Task Delete(Guid id, Guid userId, CancellationToken ct) => data.Delete(id, userId, ct);
 
     private static ChessBoard LoadBoard(string pgn) => string.IsNullOrWhiteSpace(pgn)
         ? new ChessBoard { AutoEndgameRules = AutoEndgameRules.All }

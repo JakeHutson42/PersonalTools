@@ -12,7 +12,7 @@ if (root) {
     const board = new Chessboard($('chessBoard'), {
         position: FEN.start,
         assetsUrl: '/vendor/chess/board/package/assets/',
-        style: { animationDuration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 280, cssClass: 'chess-club' }
+        style: { animationDuration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 460, cssClass: 'chess-club' }
     });
     const motion = createChessMotion(board, $('chessBoardStage'), $('chessOpening'), $('chessMotionLayer'), $('chessSkipOpening'));
     const outcomeMotion = createChessOutcome(board, $('chessBoardStage'), $('chessResultModal'));
@@ -28,7 +28,25 @@ if (root) {
     let busy = false;
     let undoing = false;
     let promotionMove = null;
-    const promotionModal = window.bootstrap.Modal.getOrCreateInstance($('chessPromotionModal'));
+    // Bootstrap returns a half-created component when it is asked to initialise a
+    // missing element.  Do not let an unavailable modal take down the board.
+    function chessModal(id) {
+        const element = $(id);
+        const Modal = window.bootstrap?.Modal;
+        if (!element || !Modal) return null;
+        const existing = Modal.getInstance?.(element);
+        if (existing?._config) return existing;
+        try {
+            existing?.dispose?.();
+            return new Modal(element, { backdrop: true, keyboard: true, focus: true });
+        } catch (error) {
+            console.error(`Chess modal \"${id}\" could not be initialised.`, error);
+            return null;
+        }
+    }
+    const promotionModal = chessModal('chessPromotionModal');
+    const confirmModal = chessModal('chessConfirmModal');
+    let confirmResolver = null;
     let connection = null;
     let engine = null;
     let engineReady = false;
@@ -38,36 +56,77 @@ if (root) {
     let aiRetryKey = null;
     let aiRetryCount = 0;
     let selectedSquare = null;
+    let hintState = null;
     let previewState = null;
     let premove = null;
     let annotationStart = null;
     let annotations = { arrows: [], squares: [] };
     let immersive = false;
+    let reviewFocus = false;
     const soundKey = 'personaltools.chess.sound-enabled.v1';
     let soundEnabled = (() => { try { return localStorage.getItem(soundKey) !== 'false'; } catch { return true; } })();
     let audioContext = null;
+    let audioUnlocked = false;
 
-    function ensureAudio() {
-        if (!soundEnabled || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
-        try { audioContext ||= new AudioContext(); if (audioContext.state === 'suspended') audioContext.resume(); return audioContext; } catch { return null; }
+    async function unlockAudio() {
+        if (!soundEnabled) return null;
+        try { const AudioContextConstructor = window.AudioContext || window.webkitAudioContext; if (!AudioContextConstructor) return null; audioContext ||= new AudioContextConstructor(); if (audioContext.state === 'suspended') await audioContext.resume(); audioUnlocked = audioContext.state === 'running'; return audioContext; } catch { return null; }
     }
     function playSound(kind) {
-        const context = ensureAudio(); if (!context) return;
+        const context = audioContext; if (!soundEnabled || !audioUnlocked || !context) return;
         const now = context.currentTime, tones = kind === 'capture' ? [[140,.08],[86,.16]] : kind === 'start' ? [[392,.1],[587,.16],[784,.22]] : kind === 'notice' ? [[660,.09],[880,.14]] : [[250,.07],[340,.09]];
         tones.forEach(([frequency, duration], index) => { const oscillator = context.createOscillator(), gain = context.createGain(); oscillator.type = kind === 'capture' ? 'triangle' : 'sine'; oscillator.frequency.setValueAtTime(frequency, now + index * .045); gain.gain.setValueAtTime(.0001, now + index * .045); gain.gain.exponentialRampToValueAtTime(.055, now + index * .045 + .012); gain.gain.exponentialRampToValueAtTime(.0001, now + index * .045 + duration); oscillator.connect(gain).connect(context.destination); oscillator.start(now + index * .045); oscillator.stop(now + index * .045 + duration + .02); });
     }
-    function updateSoundButton() { const button = $('chessSound'); if (!button) return; button.textContent = soundEnabled ? 'Sound on' : 'Sound off'; button.setAttribute('aria-pressed', String(soundEnabled)); }
+    function updateSoundButton() { const button = $('chessSound'); if (!button) return; button.textContent = soundEnabled ? '♪' : '×'; button.classList.toggle('muted', !soundEnabled); button.setAttribute('aria-pressed', String(soundEnabled)); button.setAttribute('aria-label', soundEnabled ? 'Sound on' : 'Sound off'); button.title = soundEnabled ? 'Sound on' : 'Sound off'; }
     function updateDifficultyStyle() {
         const select = $('chessDifficulty'), dock = root.querySelector('.chess-action-dock'); if (!select || !dock) return;
         const rating = Number(select.value), name = select.selectedOptions[0]?.textContent?.split(' · ')[0] || 'Computer';
         dock.dataset.difficultyBand = rating < 800 ? 'gentle' : rating < 1400 ? 'steady' : rating < 1900 ? 'bold' : 'legendary';
         $('chessDifficultyLabel').textContent = name;
+        $('chessDifficultyRating').textContent = rating;
+        $('chessDifficultyMenu')?.querySelectorAll('[role="option"]').forEach(option => {
+            const selected = Number(option.dataset.rating) === rating;
+            option.setAttribute('aria-selected', String(selected)); option.classList.toggle('selected', selected);
+        });
+    }
+    function closeDifficultyMenu() { const menu = $('chessDifficultyMenu'), toggle = $('chessDifficultyToggle'); if (!menu || !toggle) return; menu.hidden = true; toggle.setAttribute('aria-expanded', 'false'); }
+    function setupDifficultyMenu() {
+        const select = $('chessDifficulty'), menu = $('chessDifficultyMenu'), toggle = $('chessDifficultyToggle'); if (!select || !menu || !toggle) return;
+        let currentGroup = '';
+        [...select.options].forEach(option => {
+            const group = option.parentElement?.label || '';
+            if (group !== currentGroup) { currentGroup = group; const heading = document.createElement('span'); heading.className = 'chess-difficulty-group'; heading.textContent = group; menu.append(heading); }
+            const item = document.createElement('button'); item.type = 'button'; item.className = 'chess-difficulty-option'; item.dataset.rating = option.value; item.setAttribute('role', 'option'); item.setAttribute('aria-selected', String(option.selected));
+            const name = document.createElement('span'); name.textContent = option.textContent?.split(' · ')[0] || 'Computer'; const rating = document.createElement('small'); rating.textContent = option.value; item.append(name, rating);
+            item.addEventListener('click', () => { select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); closeDifficultyMenu(); toggle.focus(); }); menu.append(item);
+        });
+        toggle.addEventListener('click', () => { const willOpen = menu.hidden; closeDifficultyMenu(); if (willOpen) { menu.hidden = false; toggle.setAttribute('aria-expanded', 'true'); menu.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }); } });
+        document.addEventListener('click', event => { if (!$('chessDifficultyPicker')?.contains(event.target)) closeDifficultyMenu(); });
+        toggle.addEventListener('keydown', event => { if (event.key === 'Escape') closeDifficultyMenu(); });
     }
     function setImmersive(value) {
         immersive = value; root.classList.toggle('chess-immersive', immersive);
         $('chessImmersive').textContent = immersive ? 'Exit immersive' : 'Immersive mode'; $('chessImmersive').setAttribute('aria-pressed', String(immersive));
         $('chessExitImmersive').hidden = !immersive;
+        $('chessExitImmersive').textContent = 'Exit immersive';
         requestAnimationFrame(() => board?.view?.redraw?.());
+    }
+    function setReviewFocus(value) {
+        reviewFocus = value; root.classList.toggle('chess-review-focus', value);
+        $('chessExitImmersive').hidden = !value;
+        $('chessExitImmersive').textContent = 'Exit review';
+        requestAnimationFrame(() => board?.view?.redraw?.());
+    }
+    async function openReview() {
+        if (!game || game.status !== 'finished') return;
+        if (window.matchMedia('(max-width: 700px)').matches) {
+            setReviewFocus(true);
+            try { await root.requestFullscreen?.(); } catch { /* The focused in-page review remains available. */ }
+        } else $('chessReview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    async function exitFocusedView() {
+        if (reviewFocus) { if (document.fullscreenElement) await document.exitFullscreen?.(); else setReviewFocus(false); return; }
+        toggleImmersive();
     }
     async function toggleImmersive() {
         if (immersive) { if (document.fullscreenElement) await document.exitFullscreen?.(); else setImmersive(false); return; }
@@ -84,6 +143,18 @@ if (root) {
     });
 
     function message(value) { $('chessMessage').textContent = value || ''; }
+    function confirmWithModal(title, detail, action) {
+        return new Promise(resolve => {
+            if (!confirmModal) {
+                message('This confirmation window is not available. Please refresh the page and try again.');
+                resolve(false);
+                return;
+            }
+            confirmResolver = resolve;
+            $('chessConfirmTitle').textContent = title; $('chessConfirmMessage').textContent = detail; $('chessConfirmAccept').textContent = action;
+            confirmModal.show();
+        });
+    }
     async function api(path, method = 'GET', body) {
         try {
             return await window.jQuery.ajax({
@@ -125,7 +196,7 @@ if (root) {
     }
     function clearPremove() { premove = null; renderPremoveNotice(); }
     function clearHighlights() {
-        selectedSquare = null;
+        selectedSquare = null; hintState = null;
         $('chessBoard').querySelector('.chess-move-markers')?.remove();
     }
     function endPreview() {
@@ -200,6 +271,10 @@ if (root) {
         group.setAttribute('pointer-events', 'none');
         board.view.markersTopLayer.append(group);
         marker(group, selectedSquare, 'chess-source-ring', .42);
+        if (hintState?.gameId === game?.gameId && hintState.from === selectedSquare) {
+            if (hintState.stage === 2) marker(group, hintState.to, 'chess-hint-destination', .3);
+            return;
+        }
         const targets = new Map();
         for (const move of game?.legalMoves || []) {
             if (move.from === selectedSquare) targets.set(move.to, (targets.get(move.to) || false) || move.capture);
@@ -246,6 +321,7 @@ if (root) {
         const mode = game ? aiModes[game.gameId] || 'challenge' : 'challenge';
         hint.hidden = game?.mode !== 'ai' || mode !== 'coach' || game.status !== 'active';
         hint.disabled = busy || !canMove();
+        if (hint.hidden || !hintState || hintState.gameId !== game?.gameId) hint.textContent = 'Get a hint';
     }
     function highlightMoves(from) {
         clearHighlights();
@@ -276,7 +352,8 @@ if (root) {
                 $('chessPromotionModal').querySelectorAll('[data-chess-promotion]').forEach(button => {
                     button.querySelector('span').textContent = symbols[button.dataset.chessPromotion];
                 });
-                promotionModal.show();
+                promotionModal?.show();
+                if (!promotionModal) message('The promotion picker could not be opened. Please refresh the page and try again.');
                 return false;
             }
             return true;
@@ -302,11 +379,23 @@ if (root) {
     }, true);
     $('chessCancelPremove')?.addEventListener('click', clearPremove);
     $('chessImmersive')?.addEventListener('click', toggleImmersive);
-    $('chessExitImmersive')?.addEventListener('click', toggleImmersive);
-    $('chessSound')?.addEventListener('click', () => { soundEnabled = !soundEnabled; try { localStorage.setItem(soundKey, String(soundEnabled)); } catch { /* Sound still works for this visit. */ } if (soundEnabled) playSound('notice'); updateSoundButton(); });
+    $('chessExitImmersive')?.addEventListener('click', exitFocusedView);
+    $('chessReviewOpen')?.addEventListener('click', openReview);
+    $('chessLearnToggle')?.addEventListener('click', () => {
+        const content = $('chessLearnContent');
+        const button = $('chessLearnToggle');
+        if (!content || !button) return;
+        const opening = !content.classList.contains('show');
+        content.classList.toggle('show', opening);
+        button.classList.toggle('collapsed', !opening);
+        button.setAttribute('aria-expanded', String(opening));
+    });
+    root.addEventListener('pointerdown', () => { unlockAudio(); }, { passive: true });
+    $('chessSound')?.addEventListener('click', async () => { soundEnabled = !soundEnabled; try { localStorage.setItem(soundKey, String(soundEnabled)); } catch { /* Sound still works for this visit. */ } if (soundEnabled) { await unlockAudio(); playSound('notice'); } updateSoundButton(); });
     $('chessDifficulty')?.addEventListener('change', updateDifficultyStyle);
-    document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && immersive) setImmersive(false); });
+    document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) { if (immersive) setImmersive(false); if (reviewFocus) setReviewFocus(false); } });
     updateSoundButton();
+    setupDifficultyMenu();
     updateDifficultyStyle();
     if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(() => {
         if (selectedSquare) drawMoveMarkers();
@@ -347,8 +436,8 @@ if (root) {
         const list = $('chessGames'); list.replaceChildren();
         if (!games.length) { list.textContent = 'No games yet.'; return; }
         for (const item of games) {
-            const button = document.createElement('button'); button.type = 'button';
-            button.className = 'chess-game-item';
+            const row = document.createElement('div'); row.className = 'chess-game-history-row';
+            const button = document.createElement('button'); button.type = 'button'; button.className = 'chess-game-item';
             const active = game?.gameId === item.gameId;
             button.classList.toggle('active', active);
             button.setAttribute('aria-pressed', String(active));
@@ -360,7 +449,10 @@ if (root) {
             date.dateTime = item.updatedUtc;
             date.textContent = new Date(item.updatedUtc).toLocaleDateString();
             meta.append(status, date); button.append(title, meta);
-            button.addEventListener('click', () => openGame(item.gameId)); list.append(button);
+            button.addEventListener('click', () => openGame(item.gameId));
+            const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'chess-game-delete'; remove.setAttribute('aria-label', `Delete ${title.textContent}`); remove.textContent = 'Delete';
+            const canDelete = item.mode === 'ai' || item.status === 'waiting'; remove.disabled = !canDelete; remove.title = canDelete ? 'Delete game' : 'Friend games remain available to both players';
+            if (canDelete) remove.addEventListener('click', () => deleteGame(item)); row.append(button, remove); list.append(row);
         }
     }
     function renderMoves(moves) {
@@ -425,6 +517,7 @@ if (root) {
         renderTurn(item);
         renderOutcome(item, outcome);
         $('chessResign').hidden = item.status !== 'active';
+        $('chessReviewOpen').hidden = item.status !== 'finished';
         updateUndo();
         updateAiMode();
         $('chessInvite').hidden = item.status !== 'waiting';
@@ -474,9 +567,26 @@ if (root) {
     async function openGame(id) {
         try {
             message(''); render(await api(`/${id}`));
-            history.replaceState(null, '', `/Chess?game=${encodeURIComponent(id)}`);
+            history.replaceState(null, '', '/Chess');
             if (connection?.state === 'Connected') await connection.invoke('JoinGame', id);
         } catch (error) { message(error.message); }
+    }
+    async function deleteGame(item) {
+        if (!await confirmWithModal('Delete saved game', `Delete this saved ${item.mode === 'ai' ? 'computer' : 'friend'} game? This cannot be undone.`, 'Delete game')) return;
+        try {
+            await api(`/${item.gameId}`, 'DELETE');
+            if (game?.gameId === item.gameId) resetToFreshBoard();
+            await refreshList();
+            window.personalToolsToast?.success('Game deleted.');
+        } catch (error) { message(error.message); }
+    }
+    function resetToFreshBoard() {
+        game = null; moveQualities = new Map(); moveListSignature = null; clearPremove(); clearHighlights(); endPreview(); analysis.stop(); outcomeMotion.cancel();
+        board.setPosition(FEN.start, false).catch(() => {});
+        $('chessGameTitle').textContent = 'Start a new game'; $('chessGameStatus').textContent = 'Choose the computer or a friend to begin.';
+        $('chessTurnBadge').className = 'badge text-bg-secondary'; $('chessTurnBadge').textContent = 'Fresh board';
+        $('chessOutcome').hidden = true; $('chessInvite').hidden = true; $('chessJoin').hidden = true; $('chessReviewOpen').hidden = true; $('chessResign').hidden = true; $('chessUndo').hidden = true; $('chessAskHint').hidden = true;
+        $('chessMoves').textContent = 'No moves yet.'; $('chessReview').hidden = true; history.replaceState(null, '', '/Chess');
     }
     async function submitMove(from, to, promotion, source = 'player') {
         if (!game || busy) return;
@@ -599,14 +709,29 @@ if (root) {
     $('chessAskHint')?.addEventListener('click', () => {
         if (!game || game.mode !== 'ai' || (aiModes[game.gameId] || 'challenge') !== 'coach' || !canMove()) return;
         const candidate = game.legalMoves?.find(move => move.capture) || game.legalMoves?.[0];
-        message(candidate ? `Hint: pause here and calculate ${candidate.from}–${candidate.to} first. Look for checks, captures, and threats.` : 'Hint: pause and list checks, captures, and threats before moving.');
+        if (!candidate) { message('Hint: pause and list checks, captures, and threats before moving.'); return; }
+        const button = $('chessAskHint');
+        if (hintState?.gameId === game.gameId && hintState.from === candidate.from && hintState.to === candidate.to && hintState.stage === 1) {
+            hintState.stage = 2; selectedSquare = candidate.from; drawMoveMarkers();
+            button.textContent = 'Hint revealed'; button.disabled = true;
+            message('Hint: the highlighted piece can move to the marked destination square.');
+            return;
+        }
+        clearHighlights(); hintState = { gameId: game.gameId, from: candidate.from, to: candidate.to, stage: 1 }; selectedSquare = candidate.from; drawMoveMarkers();
+        button.textContent = 'Show destination';
+        message('Hint: start by looking at the highlighted piece. Press “Show destination” when you want the next step.');
     });
     $('chessResultUndo')?.addEventListener('click', undoTurn);
+    $('chessResultClose')?.addEventListener('click', () => chessModal('chessResultModal')?.hide());
+    $('chessResultReview')?.addEventListener('click', () => {
+        chessModal('chessResultModal')?.hide();
+        openReview();
+    });
     $('chessPromotionModal').addEventListener('hidden.bs.modal', () => { promotionMove = null; });
     $('chessPromotionModal').querySelectorAll('[data-chess-promotion]').forEach(button => button.addEventListener('click', () => {
         const selected = promotionMove;
         promotionMove = null;
-        promotionModal.hide();
+        promotionModal?.hide();
         if (selected && game?.gameId === selected.gameId && game.version === selected.version)
             submitMove(selected.from, selected.to, button.dataset.chessPromotion);
         else message('The game changed while choosing a promotion. Try again.');
@@ -616,8 +741,10 @@ if (root) {
         try { const id = new URLSearchParams(location.search).get('join'); const item = await api(`/${id}/join`, 'POST'); await refreshList(); await openGame(item.gameId); window.personalToolsToast?.success('Challenge joined.'); }
         catch (error) { message(error.message); }
     });
+    $('chessConfirmAccept').addEventListener('click', () => { const resolve = confirmResolver; confirmResolver = null; confirmModal?.hide(); resolve?.(true); });
+    $('chessConfirmModal').addEventListener('hidden.bs.modal', () => { const resolve = confirmResolver; confirmResolver = null; resolve?.(false); });
     $('chessResign').addEventListener('click', async () => {
-        if (!game || !window.confirm('Resign this game?')) return;
+        if (!game || !await confirmWithModal('Resign game', 'Resign this game? The result will be saved to your history.', 'Resign game')) return;
         try { render(await api(`/${game.gameId}/resign`, 'POST')); await refreshList(); window.personalToolsToast?.info('Game resigned.'); } catch (error) { message(error.message); }
     });
     async function init() {
@@ -629,8 +756,7 @@ if (root) {
                 $('chessJoin').hidden = false; $('chessGameTitle').textContent = 'Friend challenge';
                 $('chessGameStatus').textContent = 'Join to play Black.';
             } else {
-                const selected = params.get('game') || games[0]?.gameId;
-                if (selected) await openGame(selected);
+                resetToFreshBoard();
             }
             await connect();
             window.setInterval(() => { refreshGame().catch(() => {}); refreshList().catch(() => {}); }, 10000);

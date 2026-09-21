@@ -34,6 +34,8 @@ public sealed class ChessController(ChessGameService games, ChessLessonService l
     public Task<ActionResult<ChessLessonCompletion>> CompleteLesson(string key, CancellationToken ct) => Run(() => lessons.Complete(UserId, key, ct));
     [HttpPost("{id:guid}/resign"), EnableRateLimiting("case-battles-write")]
     public Task<ActionResult<ChessGameDto>> Resign(Guid id, CancellationToken ct) => Run(async () => { var game = await games.Resign(id, UserId, ct); await Notify(id, ct); return game; });
+    [HttpDelete("{id:guid}"), EnableRateLimiting("chess-history-write")]
+    public Task<ActionResult<bool>> Delete(Guid id, CancellationToken ct) => Run(async () => { await games.Delete(id, UserId, ct); return true; });
     private Task Notify(Guid id, CancellationToken ct) => hub.Clients.Group(ChessHub.Group(id)).SendAsync("ChessChanged", ct);
     private async Task<ActionResult<T>> Run<T>(Func<Task<T>> operation)
     {

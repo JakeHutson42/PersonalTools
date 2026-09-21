@@ -72,6 +72,7 @@ builder.Services.AddRateLimiter(options =>
     const string loginPolicy = "login";
     const string caseBattleWritePolicy = "case-battles-write";
     const string chessMovePolicy = "chess-move";
+    const string chessHistoryWritePolicy = "chess-history-write";
     const string guestRegistrationPolicy = "guest-registration";
 
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -103,6 +104,18 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 90,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            }));
+    // History cleanup is independent of match creation and turn writes, so deleting several
+    // old computer games never exhausts the stricter case-battle write budget.
+    options.AddPolicy(chessHistoryWritePolicy, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
                 AutoReplenishment = true,

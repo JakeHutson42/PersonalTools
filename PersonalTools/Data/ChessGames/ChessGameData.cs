@@ -16,6 +16,7 @@ public interface IChessGameData
     Task<List<string>> CompletedLessons(Guid userId, CancellationToken ct);
     Task CompleteLesson(Guid userId, string lessonKey, CancellationToken ct);
     Task Resign(Guid id, Guid userId, CancellationToken ct);
+    Task Delete(Guid id, Guid userId, CancellationToken ct);
 }
 
 public sealed class ChessGameData(IMariaDbDataAccess db) : IChessGameData
@@ -47,6 +48,8 @@ public sealed class ChessGameData(IMariaDbDataAccess db) : IChessGameData
         await db.ExecuteSP("sp_chess_lesson_complete", P(("p_user_id", userId), ("p_lesson_key", lessonKey)), ct);
     public async Task Resign(Guid id, Guid userId, CancellationToken ct) =>
         await db.ExecuteSP("sp_chess_game_resign", P(("p_game_id", id), ("p_user_id", userId)), ct);
+    public async Task Delete(Guid id, Guid userId, CancellationToken ct) =>
+        await db.ExecuteSP("sp_chess_game_delete", P(("p_game_id", id), ("p_user_id", userId)), ct);
 
     private static ChessGameDto MapGame(MySqlDataReader r) => new(r.GetGuid("GameId"), r.GetGuid("WhiteUserId"),
         N(r,"BlackUserId") ? null : r.GetGuid("BlackUserId"), S(r,"Mode"), S(r,"Status"),

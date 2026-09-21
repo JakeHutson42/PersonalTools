@@ -69,7 +69,20 @@ export function describeChessOutcome(game) {
 }
 
 export function createChessOutcome(board, stage, modalElement) {
-    const modal = modalElement && window.bootstrap?.Modal.getOrCreateInstance(modalElement);
+    const Modal = window.bootstrap?.Modal;
+    let modal = null;
+    if (modalElement && Modal) {
+        const existing = Modal.getInstance?.(modalElement);
+        try {
+            if (existing?._config) modal = existing;
+            else {
+                existing?.dispose?.();
+                modal = new Modal(modalElement, { backdrop: true, keyboard: true, focus: true });
+            }
+        } catch (error) {
+            console.error('Chess result modal could not be initialised.', error);
+        }
+    }
     const shown = new Set();
     let current = null;
     let timers = [];
@@ -111,7 +124,7 @@ export function createChessOutcome(board, stage, modalElement) {
             const a = center(from), b = center(to);
             const line = svgElement('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y,
                 class: 'chess-outcome-arrow', 'marker-end': `url(#${markerId})` });
-            line.style.setProperty('--arrow-delay', `${Math.min(index * 75, 700)}ms`);
+            line.style.setProperty('--arrow-delay', `${Math.min(index * 120, 960)}ms`);
             group.append(line);
         });
         for (const square of outcome.covered) {
@@ -143,8 +156,8 @@ export function createChessOutcome(board, stage, modalElement) {
         ghost.append(svg); stage.append(ghost);
         hiddenKing.style.visibility = 'hidden';
         window.anime.animate(ghost, { rotate: [0, piece[0] === 'w' ? -65 : 65], translateY: [0, target.height * .3],
-            scale: [1, .72], opacity: [1, 0], duration: 680, ease: 'inOut(3)' });
-        schedule(() => { hiddenKing?.style.removeProperty('visibility'); hiddenKing = null; ghost?.remove(); ghost = null; }, 720);
+            scale: [1, .72], opacity: [1, 0], duration: 520, ease: 'inOut(3)' });
+        schedule(() => { hiddenKing?.style.removeProperty('visibility'); hiddenKing = null; ghost?.remove(); ghost = null; }, 560);
     }
     function showPrompt() {
         if (!current || !modal) return;
@@ -170,15 +183,17 @@ export function createChessOutcome(board, stage, modalElement) {
         if (shown.has(key)) return;
         shown.add(key);
         const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const arrowFinish = 1150 + Math.min(Math.max(outcome.arrows.length - 1, 0) * 120, 960);
         if (!reduced) {
-            if (outcome.kind === 'checkmate') schedule(fallKing, 460);
+            if (outcome.kind === 'checkmate') schedule(fallKing, arrowFinish + 120);
             else schedule(() => {
                 const flourish = document.createElement('div'); flourish.className = 'chess-result-flourish';
                 flourish.textContent = '½–½'; stage.append(flourish);
                 schedule(() => flourish.remove(), 820);
             }, 460);
         }
-        schedule(showPrompt, reduced ? 120 : outcome.kind === 'checkmate' ? 1250 : 1100);
+        // Let every attack arrow complete, then hold the fallen king briefly before the modal takes focus.
+        schedule(showPrompt, reduced ? 120 : outcome.kind === 'checkmate' ? arrowFinish + 760 : 1100);
     }
     function hideOverlay() {
         timers.forEach(id => window.clearTimeout(id)); timers = [];
